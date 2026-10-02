@@ -245,6 +245,30 @@ AI_HINTS = {
 }
 
 
+def check_weather(cfg: dict, transport=None) -> list[Result]:
+    """Hjemmets placering sat? Svarer DMI? Henter frisk (uden om cachen) – én lille forespørgsel."""
+    import datetime as _dt
+
+    import weather
+    if not cfg.get("weather", {}).get("enabled", True):
+        return [Result(SKIP, "Vejr (DMI)", "slået fra i config.toml ([weather] enabled = false)")]
+    out = Path(cfg.get("output", "web/family.json")).parent
+    home = weather.load_home(out)
+    if not home:
+        return [Result(WARN, "Vejr: hjem", "ikke sat – overblikket er uden vejr",
+                       "Åbn http://localhost:8080 i browseren på pc'en, der kører appen, tryk på \"Vejr: hjem\" "
+                       "og derefter \"Brug min placering som hjem\".")]
+    res = [Result(OK, "Vejr: hjem", "sat (afrundet til ca. 1 km)")]
+    try:
+        rows = weather.fetch(home["lat"], home["lon"], transport)
+    except weather.WeatherUnavailable as e:
+        return res + [Result(WARN, "Vejr (DMI)", str(e), "Overblikket er uden vejr, indtil DMI svarer igen. "
+                             "Tjek internetforbindelsen; DMI's status: dmi.dk.")]
+    days = weather.summarize(rows, _dt.datetime.now(weather.TZ))
+    first = f" – {days[0]['ugedag']}: {weather.short_text(days[0])}" if days else ""
+    return res + [Result(OK, "Vejr (DMI)", f"svarer – {len(days)} dag{'e' if len(days) != 1 else ''} med vejr{first}")]
+
+
 def check_assistant(cfg: dict, client=None) -> Result:
     """Med mode = "ai" (eller "claude") sendes ÉN lille forespørgsel uden familiedata, så nøgle og model prøves for alvor."""
     import ai
@@ -275,6 +299,7 @@ async def run_checks(cfg: dict, settings, notify: bool = True) -> list[Result]:
     res += await check_aula(cfg, people) if settings.use_aula else [Result(SKIP, "Aula", "slået fra")]
     res += await check_google_write(cfg)
     res.append(await check_push(settings, notify))
+    res.extend(check_weather(cfg))
     res.append(check_assistant(cfg))
     res += check_data(cfg)
     return res
