@@ -2,8 +2,7 @@
 aula==1.12.0            # uofficiel Aula-klient; kræver Python 3.14. Fastlåst, fordi en ny version kan ændre adfærd uden varsel
 icalendar>=6
 recurring-ical-events>=3
-httpx
-anthropic               # kun nødvendig, hvis familieassistenten bruger Claude (assistant.provider = "claude")
+httpx                   # Aula-klienten og sprogmodellen (ai.py: Gemini eller Claude over almindelig HTTPS)
 fastapi
 uvicorn
 tzdata
