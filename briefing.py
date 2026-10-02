@@ -28,8 +28,10 @@ TZ = ZoneInfo("Europe/Copenhagen")
 log = logging.getLogger("familieplanner.briefing")
 DAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
 
-# Telefonnumre og mailadresser har assistenten ikke brug for
-_PII = re.compile(r"\b(?:\+?45[\s-]?)?(?:\d[\s-]?){8}\b|[\w.+-]+@[\w-]+\.[\w.]+")
+# CPR-numre, telefonnumre og mailadresser har assistenten ikke brug for.
+# CPR: ddmmåå-xxxx, ddmmåå xxxx eller ddmmååxxxx med gyldig dag og måned (så fx et ordrenummer ikke rammes for tit).
+_CPR = r"\b(?:0[1-9]|[12]\d|3[01])(?:0[1-9]|1[0-2])\d{2}[\s-]?\d{4}\b"
+_PII = re.compile(_CPR + r"|\b(?:\+?45[\s-]?)?(?:\d[\s-]?){8}\b|[\w.+-]+@[\w-]+\.[\w.]+")
 
 
 def _scrub(text: str | None, limit: int) -> str:
