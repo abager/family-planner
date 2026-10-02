@@ -52,7 +52,8 @@ PRIV_COOKIE = "fp_private"
 # Filer med personlige data eller nøgler må aldrig udleveres af den statiske del – uanset hvor datamappen ligger
 DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json",
               "session.key", "google_service_account.json", ".env",
-              "ai_cache.json", "ai_usage.json"}
+              "ai_cache.json", "ai_usage.json",
+              "home_location.json", "weather_cache.json"}
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
 log = logging.getLogger("familieplan.server")
