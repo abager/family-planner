@@ -1,6 +1,5 @@
-"""Kalenderforslag i appen: uden server (Google-link), med server (direkte oprettelse), lærte regler og ændringer (aflysning/flytning)."""
+"""Kalenderforslag i appen: uden server (kan ikke oprette), med server (direkte oprettelse), lærte regler og ændringer (aflysning/flytning)."""
 import datetime as dt
-import urllib.parse as up
 
 
 NOW = dt.datetime(2026, 10, 1, 10, 0)
@@ -30,12 +29,14 @@ def test_suggestions_show_up_as_a_badge_a_banner_and_cards(make_page):
     page.click("#v-sugg")
     titles = [page.locator(".suggwrap > .sg h3").nth(i).inner_text() for i in range(page.locator(".suggwrap > .sg").count())]
     assert len(titles) == 3 and any("Lejrskole" in t for t in titles)
-    assert card(page, "Lejrskole").locator('[data-sg="create"]').inner_text() == "Åbn i Google Kalender"       # uden server: via link
+    btn = card(page, "Lejrskole").locator('[data-sg="create"]')
+    assert btn.inner_text() == "Opret i kalender" and btn.is_disabled()                             # uden server: kan ikke oprette
+    assert "kører med serveren" in page.inner_text(".sintro .snote")
 
 
 def test_the_dialog_is_prefilled_and_validated(make_page):
-    page, *_ = make_page(now=NOW, fixed=True)
-    page.click("#v-sugg")
+    page, fake, _ = make_page(now=NOW, fixed=True)
+    to_server(page, fake)
     card(page, "Lejrskole").locator('[data-sg="edit"]').click()
     assert page.input_value("#evTitle") == "Hugo: Lejrskole" and page.input_value("#evDate") == "12/10/2026" and page.input_value("#evEnd") == "16/10/2026"
     assert page.is_checked("#evAll") and not page.locator("#evTimes").is_visible()
@@ -53,25 +54,54 @@ def test_the_dialog_is_prefilled_and_validated(make_page):
     assert "slut" in page.inner_text("#evErr").lower() and page.evaluate("evDlg.open")
 
 
-def test_creating_without_a_server_opens_a_prefilled_google_link_and_moves_the_card(make_page):
+def test_without_a_server_nothing_is_created_or_marked_as_created(make_page):
     page, _, opened = make_page(now=NOW, fixed=True)
     page.click("#v-sugg")
+    card(page, "Lejrskole").locator('[data-sg="edit"]').click()
+    assert page.locator("#evOk").is_disabled() and "kører med serveren" in page.inner_text("#evMode")
+    assert page.locator("#evMode.warn").count() == 1 and not page.is_visible("#evTarget")
+    page.keyboard.press("Escape")
+    assert opened.links == [] and not any(s.startswith("Oprettet") for s in sections(page))      # intet åbnes, intet markeres som oprettet
+
+
+def test_with_a_server_but_no_calendar_writing_the_reason_is_shown(make_page):
+    page, fake, _ = make_page(now=NOW, fixed=True)
+    fake.cal.update(enabled=False, problem="flere Google-kalendere – sæt write = true på den, aftaler skal oprettes i")
+    to_server(page, fake)
+    assert card(page, "Zoo").locator('[data-sg="create"]').is_disabled()
+    assert "write = true" in page.inner_text(".sintro .snote") and "Sæt direkte oprettelse op" in page.inner_text(".sintro .snote")
+    card(page, "Zoo").locator('[data-sg="edit"]').click()
+    assert page.locator("#evOk").is_disabled() and "write = true" in page.inner_text("#evMode")
+
+
+def test_all_day_and_timed_suggestions_are_sent_as_entered(make_page):
+    page, fake, opened = make_page(now=NOW, fixed=True)
+    to_server(page, fake)
     card(page, "Lejrskole").locator('[data-sg="edit"]').click()
     page.fill("#evTitle", "Hugo: Lejrskole (rettet)")
     page.check("#evAll")
     page.click("#evOk")
-    page.wait_for_timeout(300)
-    u = up.urlparse(opened.links[-1])
-    q = up.parse_qs(u.query)
-    assert u.netloc == "calendar.google.com" and q["action"] == ["TEMPLATE"] and q["text"] == ["Hugo: Lejrskole (rettet)"] and q["dates"] == ["20261012/20261017"] and q["ctz"] == ["Europe/Copenhagen"]
-    assert sections(page)[0].startswith("Oprettet")
-    # tidsfastsat forslag
+    page.wait_for_timeout(400)
+    b = fake.posts("/api/calendar/events")[-1]
+    assert (b["title"], b["date"], b["end_date"], b["all_day"]) == ("Hugo: Lejrskole (rettet)", "2026-10-12", "2026-10-16", True)
     card(page, "Zoo").locator('[data-sg="create"]').click()
     assert page.input_value("#evSt") == "08:30" and page.input_value("#evEn") == "14:00" and page.input_value("#evLoc") == "Zoo"
     page.click("#evOk")
-    page.wait_for_timeout(300)
-    q = up.parse_qs(up.urlparse(opened.links[-1]).query)
-    assert q["dates"] == ["20261008T083000/20261008T140000"] and q["location"] == ["Zoo"]
+    page.wait_for_timeout(400)
+    b = fake.posts("/api/calendar/events")[-1]
+    assert (b["start_time"], b["end_time"], b["location"]) == ("08:30", "14:00", "Zoo") and opened.links == []
+
+
+def test_the_dialog_shows_which_calendar_and_who_the_event_goes_to(make_page):
+    page, fake, _ = make_page(now=NOW, fixed=True)
+    to_server(page, fake)
+    card(page, "Zoo").locator('[data-sg="edit"]').click()
+    t = page.inner_text("#evTarget")
+    assert "Oprettes i Familiekalender" in t and "Tildeles: Carla, Leo" in t
+    page.fill("#evTitle", "Tur til Zoo")
+    assert "Hele familien (intet navn i titlen)" in page.inner_text("#evTarget")
+    page.fill("#evTitle", "Hugo + Leopard-klubben")                                          # "Leo" i "Leopard" er ikke Leo
+    assert page.inner_text("#evTarget").endswith("Tildeles: Hugo")
 
 
 def test_dismiss_and_undo_and_the_choice_is_remembered_after_reload(make_page):

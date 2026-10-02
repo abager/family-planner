@@ -11,7 +11,8 @@ class FakeServer:
         self.briefing: dict | None = None
         self.server = False                             # False = ingen /api/status (statisk brug)
         self.mark_read = True
-        self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "created": {}, "dismissed": [], "applied": [], "by_source": {}}
+        self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
+                    "default_people": ["family"], "created": {}, "dismissed": [], "applied": [], "by_source": {}}
         self.learned: list[dict] = []
         self.fail_event = False
         self.fail_change = None                         # fx 403 for aflys/flyt

@@ -214,3 +214,15 @@ def test_mark_read_validates_ids(env):
     assert env.post("/api/messages/read", {"ids": ["msg:12", "msg:abc-9"]}).json() == {"enabled": True, "queued": 2}
     for bad in ({"ids": []}, {"ids": ["../x"]}, {"ids": ["msg:1"] * 51}, {"ids": "msg:1"}, {}):
         assert env.post("/api/messages/read", bad).status_code == 400
+
+
+def test_calendar_state_names_the_target_calendar_and_its_default_people(env):
+    cal = env.c.get("/api/calendar").json()
+    assert cal["enabled"] and cal["calendar_name"] == "Familiekalender" and cal["default_people"] == ["family"]
+
+
+def test_created_events_without_end_time_are_marked_in_the_app(env, google):
+    env.post("/api/calendar/events", {**EVENT, "start_time": "14:00", "end_time": "", "all_day": False})
+    (ev,) = family_events(env)
+    assert ev["appCreated"] and ev["endInferred"]
+    assert next(iter(google.live().values()))["extendedProperties"]["private"]["endInferred"] == "1"

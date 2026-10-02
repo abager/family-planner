@@ -12,7 +12,11 @@ PARSE = [("12/10", "2026-10-12"), ("12.10.2026", "2026-10-12"), ("12-10-26", "20
          ("31/2", None), ("32/1", None), ("0/5", None), ("12/13", None), ("abc", None), ("12/10/1999", None), ("29/2/2027", None), ("12345", None), ("1.", None)]
 
 
-def open_dialog(page):
+def open_dialog(page, fake=None):
+    if fake:                                    # med server: kun her kan dialogen gemme
+        fake.use_demo(page)
+        page.reload()
+        page.wait_for_timeout(600)
     page.click("#v-sugg")
     page.wait_for_timeout(250)
     page.locator(".suggwrap > .sg").first.locator('[data-sg="edit"]').click()
@@ -35,8 +39,8 @@ def test_typing_shows_the_weekday_and_normalises_on_leaving_the_field(make_page)
 
 
 def test_an_unreadable_date_is_marked_and_blocks_saving(make_page):
-    page, *_ = make_page(now=NOW, fixed=True)
-    open_dialog(page)
+    page, fake, _ = make_page(now=NOW, fixed=True)
+    open_dialog(page, fake)
     page.fill("#evDate", "31/2")
     page.press("#evDate", "Tab")
     assert page.get_attribute("#evDate", "aria-invalid") == "true" and page.locator("#evDateHint.bad").count() == 1
@@ -124,15 +128,16 @@ def test_enter_in_a_date_field_does_not_submit_the_form(make_page):
     assert page.evaluate("evDlg.open") and page.input_value("#evDate") == "15/11/2026"
 
 
-def test_a_typed_date_ends_up_in_the_google_link(make_page):
-    page, _, opened = make_page(now=NOW, fixed=True)
-    open_dialog(page)
+def test_a_typed_date_ends_up_in_the_created_event(make_page):
+    page, fake, opened = make_page(now=NOW, fixed=True)
+    open_dialog(page, fake)
     page.fill("#evDate", "14/10/2026")
     page.fill("#evEnd", "16 okt")
     page.check("#evAll")
     page.click("#evOk")
-    page.wait_for_timeout(300)
-    assert "dates=20261014%2F20261017" in opened.links[-1] and opened.errors == []
+    page.wait_for_timeout(400)
+    b = fake.posts("/api/calendar/events")[-1]
+    assert (b["date"], b["end_date"], b["all_day"]) == ("2026-10-14", "2026-10-16", True) and opened.errors == []
 
 
 @pytest.mark.parametrize("device", ["iPhone 13"])

@@ -478,6 +478,9 @@ body.kiosk .tl .t{font-size:1em}
 .rule .meta{display:block;font-size:.82rem}
 .rule .ract{display:flex;gap:8px;flex-wrap:wrap}
 .evnote{margin:0 0 8px;font-size:.82rem;color:var(--muted)}
+.evnote.warn{color:var(--text);background:color-mix(in srgb,#D9971E 14%,var(--surface));border:1px solid color-mix(in srgb,#D9971E 40%,var(--line));border-radius:10px;padding:8px 12px}
+.evtarget{margin:0 0 10px;font-size:.88rem}
+.evtarget b{font-weight:700}
 .everr{margin:0 0 8px;color:#C23A15;font-weight:700;min-height:1.2em}
 .evbtns{display:flex;gap:10px;flex-wrap:wrap;position:sticky;bottom:-22px;background:var(--surface);padding:12px 0 2px;margin-top:8px;border-top:1px solid var(--line)}
 #evDlg .evbtns button{margin:0}
@@ -725,6 +728,7 @@ button,a,.chip,.pill{touch-action:manipulation}
       </div>
     </fieldset>
     <p class="evnote" id="evMode"></p>
+    <p class="evtarget" id="evTarget" aria-live="polite"></p>
     <p class="everr" id="evErr" role="alert"></p>
     <div class="evbtns"><button type="submit" class="btn primary" id="evOk">Opret i kalender</button><button type="button" class="btn" id="evCancel">Annullér</button></div>
   </form>
@@ -1790,21 +1794,25 @@ window.addEventListener("resize",()=>{ if(state.kiosk) fitKiosk(); });
 // Med serveren og en servicekonto oprettes aftalen direkte i familiekalenderen. Uden åbnes Google Kalender med aftalen udfyldt.
 const CAL_LOCAL_KEY="fp-cal-local";
 state.cal={loaded:false,enabled:false,problem:null,calendar_id:null,created:{},dismissed:[],applied:[],bySource:{},learned:[]};
-const localCal=()=>{ try{ return {created:{},dismissed:[],...JSON.parse(localStorage.getItem(CAL_LOCAL_KEY)||"{}")}; }catch{ return {created:{},dismissed:[]}; } };
-const saveLocalCal=()=>{ try{ localStorage.setItem(CAL_LOCAL_KEY,JSON.stringify({created:state.cal.created,dismissed:state.cal.dismissed})); }catch{} };
+// Uden server huskes kun afviste forslag på enheden. Oprettet er en aftale først, når serveren har lagt den i familiekalenderen.
+const localCal=()=>{ try{ return {dismissed:[],...JSON.parse(localStorage.getItem(CAL_LOCAL_KEY)||"{}")}; }catch{ return {dismissed:[]}; } };
+const saveLocalCal=()=>{ try{ localStorage.setItem(CAL_LOCAL_KEY,JSON.stringify({dismissed:state.cal.dismissed})); }catch{} };
+const NO_WRITE_HELP="Se README: «Sæt direkte oprettelse op».";
+const calProblem=()=>state.server ? `Oprettelse i familiekalenderen er ikke sat op${state.cal.problem?` (${state.cal.problem})`:""}. ${NO_WRITE_HELP}`
+                                  : "Aftaler kan kun oprettes, når appen kører med serveren (server.py).";
 async function loadCal(){
   if(state.server){
     try{
       const r=await fetch("api/calendar",{cache:"no-store"});
       if(r.status===401){ toLogin(); return; }
       if(r.ok){
-        const j=await r.json(); Object.assign(state.cal,{loaded:true,enabled:!!j.enabled,problem:j.problem,calendar_id:j.calendar_id,created:j.created||{},dismissed:j.dismissed||[],applied:j.applied||[],bySource:j.by_source||{}});
+        const j=await r.json(); Object.assign(state.cal,{loaded:true,enabled:!!j.enabled,problem:j.problem,calendar_id:j.calendar_id,calendar_name:j.calendar_name||"familiekalenderen",defaultPeople:j.default_people||["family"],created:j.created||{},dismissed:j.dismissed||[],applied:j.applied||[],bySource:j.by_source||{}});
         try{ const l=await fetch("api/learned",{cache:"no-store"}); if(l.ok) state.cal.learned=(await l.json()).rules||[]; }catch{}
         return;
       }
     }catch{}
   }
-  const l=localCal(); Object.assign(state.cal,{loaded:true,enabled:false,problem:null,created:l.created,dismissed:l.dismissed});
+  const l=localCal(); Object.assign(state.cal,{loaded:true,enabled:false,problem:null,created:{},dismissed:l.dismissed});
 }
 // En aktivitet er "oprettet", hvis dens eget id er det – eller hvis noget fra samme kilde og dag er (fx oprettet manuelt, før en lært regel fandt den)
 const srcIds=o=>[...(o.sources||[]).map(x=>x.id),...(o.source?[o.source.id]:[])];
@@ -1840,17 +1848,6 @@ async function calPost(path, body){
   let j={}; try{ j=await r.json(); }catch{}
   if(!r.ok) throw new Error(j.error||`Fejl ${r.status}`);
   return j;
-}
-function gcalLink(p){
-  const pad=n=>String(n).padStart(2,"0"), d=iso=>iso.replace(/-/g,"");
-  const next=iso=>{ const x=new Date(iso+"T12:00"); x.setDate(x.getDate()+1); return `${x.getFullYear()}${pad(x.getMonth()+1)}${pad(x.getDate())}`; };
-  const t=(iso,hm)=>`${d(iso)}T${hm.replace(":","")}00`;
-  let dates;
-  if(p.all_day) dates=`${d(p.date)}/${next(p.end_date||p.date)}`;
-  else { const end=p.end_time||`${pad((+p.start_time.slice(0,2)+1)%24)}:${p.start_time.slice(3,5)}`; dates=`${t(p.date,p.start_time)}/${t(p.end_date||p.date,end)}`; }
-  const q=new URLSearchParams({action:"TEMPLATE",text:p.title,dates,details:p.description||"",location:p.location||"",ctz:"Europe/Copenhagen"});
-  if(state.cal.calendar_id) q.set("src",state.cal.calendar_id);
-  return "https://calendar.google.com/calendar/render?"+q.toString();
 }
 
 const evEl=id=>document.getElementById(id);
@@ -2009,10 +2006,13 @@ function openEvDialog(o){
   evEl("evLearn").classList.toggle("hidden",!cands.length);
   evEl("evLearnOn").checked=true; evEl("evLearnCustom").value=""; evEl("evLearnBody").style.display="";
   evEl("evLearnChips").innerHTML=cands.map(c=>`<label class="lchip${c.default?" on":""}"><input type="checkbox" data-kind="${esc(c.kind)}" data-text="${esc(c.text)}" data-anchor="${esc(c.anchor)}"${c.default?" checked":""}> ${esc(c.text)}${c.kind==="phrase"?" <small>(vending)</small>":""}</label>`).join("");
-  autoTick();
-  evEl("evMode").textContent = state.cal.enabled ? "Aftalen oprettes i familiens Google Kalender."
-    : "Google Kalender åbnes med aftalen udfyldt – du vælger kalender og gemmer dér." + (state.cal.problem && state.server ? ` (Direkte oprettelse: ${state.cal.problem}.)` : "");
-  evEl("evOk").textContent = o.kind==="move" ? "Flyt aftalen" : state.cal.enabled ? "Opret i kalender" : "Åbn i Google Kalender";
+  autoTick(); updateTarget();
+  evEl("evMode").textContent = state.cal.enabled ? "" : calProblem();
+  evEl("evMode").hidden = state.cal.enabled;
+  evEl("evTarget").hidden = !state.cal.enabled;
+  evEl("evMode").classList.toggle("warn", !state.cal.enabled);
+  evEl("evOk").textContent = o.kind==="move" ? "Flyt aftalen" : "Opret i kalender";
+  evEl("evOk").disabled = !state.cal.enabled;
   syncAll(); document.getElementById("detail").open && document.getElementById("detail").close();
   evEl("evDlg").showModal();
 }
@@ -2029,6 +2029,18 @@ function autoTick(){
   });
 }
 evEl("evTitle").addEventListener("input",autoTick);
+// Hvem aftalen tildeles, regnes som på serveren: navne og aliasser i titlen (ellers kalenderens standard, typisk hele familien)
+const reEsc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+function peopleInTitle(title){
+  return (state.data?.people||[]).filter(p=>(p.aliases?.length?p.aliases:[p.name]).some(a=>new RegExp(`(?<![\\p{L}\\p{N}_])${reEsc(a)}(?![\\p{L}\\p{N}_])`,"iu").test(title)));
+}
+function updateTarget(){
+  const found=peopleInTitle(evEl("evTitle").value), def=state.cal.defaultPeople||["family"];
+  const who = found.length ? found.map(p=>p.name).join(", ")
+    : def.includes("family") ? "Hele familien (intet navn i titlen)" : def.map(id=>person(id)?.name||id).join(", ")+" (intet navn i titlen)";
+  evEl("evTarget").innerHTML=`${evOpt?.kind==="move"?"Flyttes i":"Oprettes i"} <b>${esc(state.cal.calendar_name||"familiekalenderen")}</b> · Tildeles: <b>${esc(who)}</b>`;
+}
+evEl("evTitle").addEventListener("input",updateTarget);
 async function learnFrom(p){
   // Returnerer en tekst til beskeden; fejl her må aldrig fortryde, at aftalen er oprettet
   if(!evEl("evLearnOn").checked || evEl("evLearn").classList.contains("hidden")) return "";
@@ -2072,7 +2084,8 @@ evEl("evForm").addEventListener("submit",async e=>{
     finally{ ok.disabled=false; ok.textContent="Flyt aftalen"; }
     return;
   }
-  if(state.cal.enabled){
+  if(!state.cal.enabled) return err(calProblem());
+  {
     ok.disabled=true; ok.textContent="Opretter …";
     try{
       const j=await calPost("api/calendar/events",p);
@@ -2081,11 +2094,6 @@ evEl("evForm").addEventListener("submit",async e=>{
       evEl("evDlg").close(); toast("Oprettet i familiekalenderen ✓"+more,more?8000:4500); afterCalChange(); setTimeout(load,1500);
     }catch(x){ err(x.message); }
     finally{ ok.disabled=false; ok.textContent="Opret i kalender"; }
-  } else {
-    window.open(gcalLink(p),"_blank","noopener");                       // skal ske direkte i klikket, ellers blokerer iOS det
-    state.cal.created[evKey]={html_link:null,local:true}; saveLocalCal();
-    const more=await learnFrom(p);
-    evEl("evDlg").close(); toast("Google Kalender er åbnet – husk at gemme aftalen dér."+more,more?8000:4500); afterCalChange();
   }
 });
 function afterCalChange(){ updateBadge(); if(state.view==="sugg") renderSugg(); else if(state.view==="mail"){ state.mail.readerKey=null; renderMail(); } else render(); }
@@ -2097,6 +2105,7 @@ document.addEventListener("click",e=>{
 async function calAct(kind,key){
   try{
     if(state.server){ await calPost("api/calendar/"+kind,{key}); }
+    else if(kind==="remove") return;                                    // uden server findes der ingen oprettede aftaler
     if(kind==="dismiss"){ if(!state.cal.dismissed.includes(key)) state.cal.dismissed.push(key); }
     if(kind==="restore"){ state.cal.dismissed=state.cal.dismissed.filter(k=>k!==key); }
     if(kind==="remove"){ delete state.cal.created[key]; }
@@ -2152,8 +2161,8 @@ function sgCard(s,mode){
     ${who?`<div class="sgwho">${who}</div>`:""}
     <p class="sgsrc">${src?`Fra ${esc(src.label)} «${esc(src.title)}»${src.date?` · ${esc(fmtDay(src.date))}`:""} <button class="linklike" data-src="${esc(src.type)}|${esc(src.id)}">Vis</button> · `:""}<span>${esc(s.reason||"")}</span></p>
     <div class="sgact">${
-      mode==="new" ? `<button class="btn primary" data-sg="create">${state.cal.enabled?"Opret i kalender":"Åbn i Google Kalender"}</button><button class="btn" data-sg="edit">Rediger</button><button class="btn" data-sg="dismiss">Afvis</button>`
-      : mode==="created" ? `<span class="done" style="color:#0E6B5B;font-weight:700;display:inline-flex;gap:6px;align-items:center">${icon("check")} ${calEntry(s)?.local?"Åbnet i Google Kalender":"I kalenderen"}</span>${calEntry(s)?.html_link?`<a class="btn" href="${esc(calEntry(s).html_link)}" target="_blank" rel="noopener">Åbn i Google Kalender</a>`:""}${state.server&&state.cal.enabled?`<button class="btn" data-sg="remove">Fjern fra kalender</button>`:`<button class="btn" data-sg="remove">Fortryd</button>`}`
+      mode==="new" ? `<button class="btn primary" data-sg="create"${state.cal.enabled?"":" disabled"}>Opret i kalender</button><button class="btn" data-sg="edit">Rediger</button><button class="btn" data-sg="dismiss">Afvis</button>`
+      : mode==="created" ? `<span class="done" style="color:#0E6B5B;font-weight:700;display:inline-flex;gap:6px;align-items:center">${icon("check")} I kalenderen</span>${calEntry(s)?.html_link?`<a class="btn" href="${esc(calEntry(s).html_link)}" target="_blank" rel="noopener">Åbn i Google Kalender</a>`:""}${state.cal.enabled?`<button class="btn" data-sg="remove">Fjern fra kalender</button>`:""}`
       : `<button class="btn" data-sg="restore">Fortryd afvisning</button>`}</div>
   </article>`;
 }
@@ -2165,7 +2174,7 @@ function renderSugg(){
   const nw=by("new"), cr=by("created"), ap=by("applied"), di=by("dismissed");
   root.innerHTML=`<div class="sintro"><h2>Forslag til kalenderen</h2>
     <p>Aktiviteter fra ugeplan, opslag og beskeder, der ser ud til at fortjene en plads i familiekalenderen: lejrskole, ture, test, møder, invitationer og lignende. Fødselsdage i klassen og temadage bliver i Aula.</p>
-    ${state.cal.enabled ? "" : `<p class="snote">${state.server ? `Direkte oprettelse er ikke sat op${state.cal.problem?` (${esc(state.cal.problem)})`:""}. ` : ""}Knappen åbner Google Kalender med aftalen udfyldt, så du vælger kalender og gemmer dér.</p>`}</div>
+    ${state.cal.enabled ? "" : `<p class="snote warn">${esc(calProblem())}</p>`}</div>
     ${nw.length ? nw.map(s=>sgCard(s,"new")).join("") : `<p class="empty">Ingen nye forslag lige nu. Nye aktiviteter dukker op her, når data opdateres.</p>`}
     ${cr.length?`<details class="sdone"><summary>Oprettet (${cr.length})</summary>${cr.map(s=>sgCard(s,"created")).join("")}</details>`:""}
     ${ap.length?`<details class="sdone"><summary>Behandlet (${ap.length})</summary>${ap.map(s=>sgCard(s,"applied")).join("")}</details>`:""}

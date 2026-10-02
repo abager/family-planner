@@ -725,7 +725,9 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
 
     @app.get("/api/calendar")
     async def cal_state():
-        return {"enabled": gcal.enabled, "problem": gcal.problem, "calendar_id": gcal.calendar_id, "calendar_name": gcal.calendar_name, **store.public_state()}
+        wcal = next((g for g in cfg.get("google", []) if sugg.is_write_calendar(cfg, g)), {})
+        return {"enabled": gcal.enabled, "problem": gcal.problem, "calendar_id": gcal.calendar_id, "calendar_name": gcal.calendar_name,
+                "default_people": wcal.get("default_people", ["family"]), **store.public_state()}
 
     def change_target(body: dict) -> tuple[str, dict] | JSONResponse:
         """Den aftale, en aflysning/flytning gælder: skal være oprettet af appen og stadig findes."""

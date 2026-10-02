@@ -83,7 +83,7 @@ class People:
         return next((p["id"] for p in self.people if p.get("aula_self")), None)
 
     def public(self) -> list[dict]:
-        keys = ("id", "name", "role", "color", "note", "icon")
+        keys = ("id", "name", "role", "color", "note", "icon", "aliases")      # aliases: så appen kan vise, hvem en ny aftale tildeles
         return [{k: p[k] for k in keys if k in p} for p in self.people]
 
 
