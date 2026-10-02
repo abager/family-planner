@@ -294,7 +294,7 @@ Kør derefter testene (næste afsnit), før du bygger billedet igen.
 ## Test
 
 ```
-pip install -r requirements-dev.txt            # eller: uv pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt   # eller: uv pip install -r requirements.txt -r requirements-dev.txt
 python -m playwright install chromium          # kun til browsertestene
 pytest                                         # alt
 pytest --ignore=tests/browser                  # kun serverdelen (hurtig, uden browser)

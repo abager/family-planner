@@ -9,3 +9,14 @@ aula_dump.json
 weekplan.json
 aula_feed.json
 __pycache__/
+
+# Tilstand, som serveren skriver ved siden af family.json (familiens data – aldrig i git)
+web/server_state.json
+web/suggestions_state.json
+web/learned_rules.json
+private_messages.json
+
+# Udvikling
+.venv/
+.pytest_cache/
+node_modules/

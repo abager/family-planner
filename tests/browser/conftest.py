@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -35,6 +36,8 @@ def browser(pw):
     try:
         b = pw.chromium.launch()
     except Exception as e:  # noqa: BLE001
+        if os.environ.get("FAMILIEPLAN_REQUIRE_BROWSER"):  # sat i CI: en manglende Chromium skal fejle, ikke springes over
+            pytest.fail(f"Chromium kunne ikke startes: {str(e)[:200]}")
         pytest.skip(f"Chromium er ikke installeret (python -m playwright install chromium): {str(e)[:80]}")
     yield b
     b.close()

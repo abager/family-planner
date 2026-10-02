@@ -15,3 +15,15 @@ requirements-dev.*
 requirements.in
 pytest.ini
 *.zip
+web/server_state.json
+web/suggestions_state.json
+web/learned_rules.json
+private_messages.json
+.venv/
+.pytest_cache/
+node_modules/
+.git/
+.github/
+.pre-commit-config.yaml
+CLAUDE.md
+CHANGELOG.md

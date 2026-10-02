@@ -1,0 +1,141 @@
+# CLAUDE.md – Familieplanner
+
+Context for Claude (and any other developer) working in this repo. Read this first; keep it up to date when
+architecture, conventions or status change. The user-facing documentation is README.md (in Danish).
+
+## What this is
+
+A self-hosted family planner for one Danish family (two parents, three children). It pulls school data from
+Aula (calendar, timetable, weekly plans from Meebook, homework from Min Uddannelse, messages, posts, gallery)
+and family events from Google Calendar (iCal), turns them into one overview, and serves it as a PWA to phones,
+tablets and a kiosk screen. It can also write suggested events back to Google Calendar via a service account.
+
+## Language and conventions
+
+- **All UI text, README, code comments, docstrings and commit-facing docs are Danish.** Keep it that way.
+  This file and CHANGELOG.md are in English.
+- **Rules, not a language model.** Recognition of homework, actions, activities, cancellations etc. is done with
+  explicit, explainable rules (`homework.py`, `messages.py`, `activities.py`, `schedule.py`). The only optional
+  LLM use is `briefing.py` with `[assistant] mode = "claude"`, which only *phrases* already-extracted facts.
+  The default is `mode = "offline"` (`offline_briefing.py`). Don't introduce LLM-based extraction.
+- **Time is an argument.** Code that depends on "now" takes the time as a parameter so tests don't depend on clocks
+  (see `ops.py`). Keep that pattern.
+- **Degrade, don't break.** If Aula or a Google calendar fails, the previous data for that source is kept and the UI
+  shows a warning. A failing source must never produce an empty calendar.
+- Python 3.14 is required (the `aula` client needs it). Frontend is plain HTML/CSS/JS, no build step.
+
+## Privacy rules (non-negotiable)
+
+- Private message threads (parents ↔ school) are **never** written to `family.json`. Their content lives in
+  `private_messages.json` next to the Aula tokens (outside the served folder) and is only returned by the server
+  after a separate code (`FAMILIEPLAN_PRIVATE_CODE`). See `private.py`.
+- Private threads are never sent to an LLM and never produce tasks or events.
+- `server.py` has `DENY_NAMES`: state, tokens and config must never be servable. Add any new state file there.
+- Never commit config, tokens, fetched data or state files. `.gitignore` and the `no-family-data` pre-commit hook
+  enforce this; if you add a new state file, add it to `.gitignore`, `.dockerignore`, the hook in
+  `.pre-commit-config.yaml` and `DENY_NAMES`.
+- Tests use invented data and simulated services only. Never write tests that touch real Aula, real Google
+  Calendar or real family data.
+
+## Architecture
+
+One process (`server.py`, FastAPI + uvicorn) does three things: schedules fetching (every 15 min by day, less at
+night), serves the app and data behind a shared family password (session cookie, CSRF, lockout), and offers an
+`/auth` page for MitID login via QR code when the Aula login expires.
+
+Data flow:
+
+```
+Aula (unofficial `aula` client) ─┐
+Google Calendar (iCal)          ─┼─> fetch_family.py ─> analysis modules ─> web/family.json ─> web/index.html
+familie_regler.md (free text)   ─┘                                     └─> private_messages.json (secrets/)
+                                                 briefing.py / offline_briefing.py ─> web/briefing*.json
+```
+
+| Module | Responsibility |
+|---|---|
+| `server.py` | Web server, auth, API routes (`/api/...`), scheduler, MitID login page, `--selftest` entry |
+| `fetch_family.py` | Fetching from Aula and Google, merging, assigning events to people, writing `family.json` |
+| `homework.py` | Homework / "remember" / practical info from Meebook weekly plans |
+| `messages.py` | Message analysis: which child, actions with deadlines, events, private threads |
+| `activities.py` | Finds activities worth a calendar entry; cancellations and moves |
+| `schedule.py` | Timetable cleanup: subject names, teacher abbreviations, hidden support lessons |
+| `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister") |
+| `suggestions.py` | Calendar suggestions state and Google Calendar writes (service account); learned rules |
+| `private.py` | Storage and gating of private threads |
+| `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
+| `selftest.py` | Checks a real setup end-to-end (Aula login, Google write, ntfy, permissions) |
+| `web/index.html` | The whole frontend (~170 KB, inline CSS/JS). Contains demo data used when no server is present |
+
+Runtime files (all git-ignored; in Docker they live in the `/data` volume):
+`config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
+`private_messages.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
+`web/suggestions_state.json`, `web/learned_rules.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
+`weekplan.json`.
+
+## Commands
+
+```bash
+# Environment (Python 3.14)
+uv venv --python 3.14 .venv
+uv pip install -r requirements.txt -r requirements-dev.txt
+python -m playwright install chromium        # for browser tests
+
+# Tests – always run before committing
+pytest                                       # everything
+pytest --ignore=tests/browser                # server side only, fast (~20 s)
+
+# Run locally
+FAMILIEPLAN_PASSWORD=... python server.py --host 127.0.0.1 --port 8080
+python server.py --selftest --no-notify      # against a real setup
+
+# Pre-commit (once per clone)
+pre-commit install
+```
+
+Dependencies: edit `requirements.in` / `requirements-dev.in`, then regenerate the locked files with the
+`uv pip compile` commands in README ("Opdatér afhængigheder"). `aula` is pinned on purpose (unofficial client);
+don't bump it without testing against the real service.
+
+Root-level `activities_test.py`, `homework_test.py`, `messages_test.py` are manual debug scripts that run the
+recognisers against the user's own dumped files. They are not part of pytest.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and on pull requests: the full pytest suite including
+Playwright browser tests and the axe-core accessibility test (`FAMILIEPLAN_REQUIRE_BROWSER=1` makes a missing
+Chromium fail instead of skip), a Docker image build with an import smoke test, and a gitleaks scan of the full
+history.
+
+## Status (keep this section current)
+
+Version: **v0.7.0** (first version in git; previously developed as zip files).
+
+Known gaps and open work:
+
+- Aula login, pagination, mark-as-read and Google Calendar writes have **only been tested against simulations**.
+  First real run should be `python server.py --selftest`.
+- The Docker image had never been built before CI was added.
+- Accessibility: low contrast on past lessons and the blue accent in dark mode; missing `<main>`/`<nav>` landmarks
+  (whitelisted in `tests/browser/test_a11y.py` as `KNOWN`; remove from the list once fixed).
+- Homework is only fetched from Min Uddannelse; Meebook/EasyIQ homework not supported.
+- README "Kom i gang" still describes the old `fetch_family.py` + `python -m http.server` flow; `server.py` is now
+  the normal way to run it.
+- `web/index.html` demo data uses the family's real first names; replace with invented names before the repo is
+  ever made public.
+
+Planned restructuring (do in small steps, tests green after each):
+
+1. Move to `pyproject.toml` + `uv.lock` (replacing the four requirements files) and add a `justfile`
+   (`setup`, `test`, `run`, `selftest`, `docker`).
+2. Split `web/index.html` into separate CSS and ES-module JS files (no build step).
+3. Move modules into a package (`src/familieplanner/`); move root debug scripts to `tools/`.
+4. Split `fetch_family.py`, `server.py` and `activities.py` by responsibility.
+5. Shorten README to overview + quick start; move detailed sections into `docs/`.
+
+## Working agreements
+
+- Small, focused commits; one refactor per commit.
+- Update `CHANGELOG.md` (under "Unreleased") for user-visible changes, and this file when status or architecture
+  changes.
+- Releases are git tags (`v0.8.0`, …), not zip files.

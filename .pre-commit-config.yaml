@@ -1,0 +1,49 @@
+# Kører før hver commit og stopper den, hvis noget hemmeligt eller familiens data er ved at komme med.
+# Opsætning (én gang):  uv tool install pre-commit   (eller: pip install pre-commit)
+#                       pre-commit install
+# Kør på alt manuelt:   pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks            # API-nøgler, tokens, private nøgler
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=600]     # web/index.html er ~170 KB; billeder og dumps skal ikke i git
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+
+  - repo: local
+    hooks:
+      - id: no-family-data
+        name: Ingen familiedata, config eller Aula-login i git
+        language: fail
+        entry: >-
+          Disse filer indeholder familiens data eller login og må ikke committes.
+          Kør "git rm --cached <fil>" og tjek .gitignore:
+        files: >-
+          (?x)^(
+            config\.toml|
+            \.env|
+            secrets/.*|
+            data/.*|
+            web/media/.*|
+            web/family\.json|
+            web/briefing.*\.json|
+            web/server_state\.json|
+            web/suggestions_state\.json|
+            web/learned_rules\.json|
+            .*private_messages\.json|
+            .*aula_tokens\.json|
+            .*google_service_account\.json|
+            .*session\.key|
+            aula_dump\.json|
+            aula_feed\.json|
+            weekplan\.json
+          )$
