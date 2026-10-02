@@ -786,7 +786,8 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
             return JSONResponse({"error": str(e)}, status_code=e.status)
         store.set(tkey, "created", **{**{k: v for k, v in t.items() if k not in ("status", "at")}, "event": ev, "date": payload["date"]})
         store.set(body["key"], "applied")
-        patch_family(event_id=t["event_id"], replace={"start": ev["start"], "end": ev["end"], "allDay": ev["allDay"], "title": ev["title"], "location": ev.get("location")})
+        patch_family(event_id=t["event_id"], replace={"start": ev["start"], "end": ev["end"], "allDay": ev["allDay"], "title": ev["title"], "location": ev.get("location"),
+                                                       "endInferred": bool(ev.get("endInferred"))})
         runner.trigger()
         return {"status": "applied", "html_link": res.get("html_link")}
 
@@ -817,7 +818,8 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         people = fetch_family.People(cfg["people"])
         patch_family(add={"id": f"gc:{res['id']}", "title": ev["title"], "start": ev["start"], "end": ev["end"], "allDay": ev["allDay"],
                           "people": people.in_text(ev["title"]) or ["family"], "source": "google", "calendar": "Familiekalender",
-                          "location": ev.get("location"), "notes": ev.get("notes"), "pending": True})
+                          "location": ev.get("location"), "notes": ev.get("notes"), "pending": True, "appCreated": True,
+                          **({"endInferred": True} if ev.get("endInferred") else {})})
         runner.trigger()                                  # opdatér data hurtigt, så andre enheder også ser den
         return {"status": "created", "already": res.get("already", False), "html_link": res.get("html_link")}
 

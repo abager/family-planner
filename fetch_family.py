@@ -47,6 +47,11 @@ def to_local(value) -> tuple[dt.datetime, bool]:
     raise ValueError(f"Ukendt datotype: {value!r}")
 
 
+def lesson_minutes(cfg: dict) -> int:
+    """En lektions længde, når skolen ikke selv har angivet sluttid (standard 45 min)."""
+    return int(cfg.get("aula", {}).get("lesson_minutes", schedule.LESSON_MINUTES))
+
+
 def iso(d: dt.datetime) -> str:
     return d.astimezone(TZ).isoformat(timespec="minutes")
 
@@ -168,11 +173,15 @@ async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.da
                     continue
                 s, all_day = to_local(comp.decoded("DTSTART"))
                 e_raw = comp.decoded("DTEND") if comp.get("DTEND") else None
-                e = to_local(e_raw)[0] if e_raw else s + (dt.timedelta(days=1) if all_day else dt.timedelta(hours=1))
+                dur = comp.decoded("DURATION") if comp.get("DURATION") else None
+                e = to_local(e_raw)[0] if e_raw else s + dur if dur else s + (dt.timedelta(days=1) if all_day else dt.timedelta(0))
+                inferred = not all_day and e <= s              # ingen sluttid i kalenderen: vis kun starttidspunktet
+                if inferred:
+                    e = s + dt.timedelta(hours=1)              # kun så aftalen har en plads på dagen
                 title = str(comp.get("SUMMARY", "(uden titel)"))
                 who = people.in_text(title) or cal_cfg.get("default_people", ["family"])
                 uid = str(comp.get("UID", title))
-                events.append({
+                events.append({**({"endInferred": True} if inferred else {}),
                     "id": f"g:{uid}:{s.isoformat()}",
                     "title": title,
                     "start": iso(s),
@@ -408,7 +417,8 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
         subj_map = cfg.get("subjects", {})
         for (who, day), evs in lessons.items():
             evs.sort(key=lambda x: x.start_datetime)
-            lesson_list = schedule.build_lessons(evs, TZ, subj_map, acfg.get("hidden_subjects"), acfg.get("secondary_subjects"))
+            lesson_list = schedule.build_lessons(evs, TZ, subj_map, acfg.get("hidden_subjects"), acfg.get("secondary_subjects"),
+                                                 lesson_minutes=lesson_minutes(cfg))
             if not lesson_list:
                 continue
             subs = any(l["substitute"] for l in lesson_list)
@@ -1069,7 +1079,8 @@ def created_events(store, events: list[dict], people: People) -> list[dict]:
             continue
         out.append({"id": f"gc:{eid}", "title": ev["title"], "start": ev["start"], "end": ev["end"], "allDay": ev["allDay"],
                     "people": people.in_text(ev["title"]) or ["family"], "source": "google", "calendar": "Familiekalender",
-                    "location": ev.get("location"), "notes": ev.get("notes"), "pending": True})
+                    "location": ev.get("location"), "notes": ev.get("notes"), "pending": True, "appCreated": True,
+                    **({"endInferred": True} if ev.get("endInferred") else {})})
     return out
 
 
@@ -1110,12 +1121,12 @@ def analyse_messages(cfg: dict, msgs: list[dict], events: list[dict]) -> tuple[l
             if e["start"]:
                 s_ = dt.datetime.combine(day, dt.time.fromisoformat(e["start"]), TZ)
                 e_ = dt.datetime.combine(day, dt.time.fromisoformat(e["end"]), TZ) if e["end"] else s_ + dt.timedelta(hours=1)
-                all_day = False
+                all_day, inferred = False, not e["end"]
             else:
                 s_ = dt.datetime.combine(day, dt.time(0, 0), TZ)
                 e_ = dt.datetime.combine(day + dt.timedelta(days=4 if e["allWeek"] else 0), dt.time(23, 59), TZ)
-                all_day = True
-            new_events.append({"id": f"{m['id']}:e{i}", "title": e["title"], "start": iso(s_), "end": iso(e_),
+                all_day, inferred = True, False
+            new_events.append({**({"endInferred": True} if inferred else {}), "id": f"{m['id']}:e{i}", "title": e["title"], "start": iso(s_), "end": iso(e_),
                                "allDay": all_day, "people": r["people"], "source": "besked",
                                "location": e["location"], "notes": f"Fra beskeden \"{m.get('subject')}\":\n{e['source_sentence']}"})
     return tasks, new_events
@@ -1200,7 +1211,8 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         "albums": extra["albums"],
         "suggestions": suggestions_list,
         "health": health,
-        "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 17))},
+        "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 17)),
+                     "lessonMinutes": lesson_minutes(cfg)},
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(".tmp")

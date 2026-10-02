@@ -298,6 +298,16 @@ R_HOLD = _rx(r"\b(udsat\w*|udskudt\w*|udskydes)\b")
 R_MOVE = _rx(r"\b(flyttes|flyttet|rykkes|rykket|rykker|ændres\s+til|ændret\s+til|ligger\s+nu)\b")
 R_ANAPHORA = _rx(r"\b(det|den|turen|mødet|testen|prøven|arrangementet|lejrskolen|forestillingen|stævnet|turneringen|samtalen)\b")
 R_EVENING = _rx(r"\bom\s+(?:aftenen|eftermiddagen)\b|\bi\s+aften\b")
+# En aftale i skoletiden ("3. lektion", "i matematiktimen" er for usikkert): uden sluttid varer den en lektion
+R_LESSON = re.compile(r"\b(?:\d\.\s*)?(?:lektion(?:en|er|erne)?|modul(?:et|er)?)\b", re.I)
+
+
+def lesson_end_time(st: str | None, en: str | None, text: str, cat: str | None = None, minutes: int = 45) -> str | None:
+    """Sluttid for en aktivitet med starttid men uden sluttid, når den ligger i en lektion (eller er en test/prøve)."""
+    if not st or en or not (R_LESSON.search(text or "") or cat == "test"):
+        return en
+    import schedule
+    return schedule.lesson_end(st, minutes)
 R_UNSURE = _rx(r"\b(måske|eventuelt|evt\.|hvis\s+vejret|forbehold|ikke\s+afklaret)")
 R_PARENTS = _rx(r"forældre\w*\s+(?:er\s+)?(?:velkomne|inviteret|indkaldt)|\bkom\s+og\b|\binviterer\b|alle\s+er\s+velkomne|pårørende|familie\w*\s+(?:er\s+)?velkomne|\bindkald")
 R_BDAY = _rx(r"fødselsdag\w*|børnefødselsdag\w*")
@@ -490,6 +500,7 @@ def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | No
             if st and R_EVENING.search(s) and int(st[:2]) < 12:        # "kl. 7 om aftenen" er 19.00
                 st = f"{int(st[:2]) + 12:02d}{st[2:]}"
                 en = f"{int(en[:2]) + 12:02d}{en[2:]}" if en and int(en[:2]) < 12 else en
+            en = lesson_end_time(st, en, s, key)
             loc = find_location(s) or (find_location(info[i + 1]["s"]) if i + 1 < len(info) else None)
             if key == "arrangement" and not (R_PARENTS.search(ctx) or (st and st >= "15:00")):
                 continue                                               # skolens interne show o.l. er ikke et familieanliggende
@@ -543,6 +554,7 @@ def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | No
         if not st:
             continue                                                  # kræver mindst et starttidspunkt
         ev = " ".join(g["sents"])
+        en = lesson_end_time(st, en, ev)
         theme = R_THEME.search(ev)
         options.append({"start": g["start"], "end": g["end"], "start_time": st, "end_time": en, "location": g["loc"],
                         "evidence": ev, "idx": g["idx"], "theme": _cap(_norm_word(theme[0])) if theme else None})

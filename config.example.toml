@@ -22,6 +22,7 @@ homework_min_confidence = "middel"   # "høj" = kun sikre lektier, "lav" = vis o
 hide_private = true     # skjul teksten i private samtaler med skolen, til man trykker "Vis"
 hidden_subjects = ["INK", "Inklusion", "PS"]   # INK = støttelærer til en anden elev, PS = klassepædagogen – vises ikke i skemaet
 secondary_subjects = []                  # timer der vises som "samtidig", men aldrig er timens hovedfag
+lesson_minutes = 45     # en lektions længde, når skolen ikke har angivet sluttid
 images_per_item = 8     # max billeder der hentes per opslag/besked (gemmes i web/media)
 fetch_gallery = true    # billeder fra Aulas galleri
 gallery_albums = 8      # antal nyeste albums

@@ -274,6 +274,7 @@ class GoogleCalendar:
     async def patch(self, event_id: str, payload: dict) -> dict:
         """Flytter/retter en eksisterende aftale (dato, tid, sted). Titlen beholdes, medmindre en ny gives."""
         body = build_event(payload)
+        body["extendedProperties"] = {"private": {"endInferred": "1" if end_inferred(payload) else "0"}}   # Google fletter private-felterne
         r = await self._call("PATCH", self._url("/" + event_id), json=body)
         if r.status_code == 404:
             raise CalendarError("Aftalen findes ikke længere i Google Kalender – måske er den slettet dér.", 404)
@@ -317,7 +318,7 @@ def app_event(payload: dict, event_id: str) -> dict:
         end = dt.datetime.fromisoformat(body["end"]["dateTime"]).replace(tzinfo=tz)
         all_day = False
     return {"title": body["summary"], "start": start.isoformat(timespec="minutes"), "end": end.isoformat(timespec="minutes"),
-            "allDay": all_day, "location": body.get("location"), "notes": body["description"] or None}
+            "allDay": all_day, "location": body.get("location"), "notes": body["description"] or None, **({"endInferred": True} if end_inferred(payload) else {})}
 
 
 # ---------------------------------------------------------------- lærte regler

@@ -59,9 +59,21 @@ def _location(ev) -> str | None:
     return ev.location or (raw.get("primaryResourceText") or "").strip() or None
 
 
+LESSON_MINUTES = 45      # en skolelektion, når skolen ikke har angivet sluttid ([aula] lesson_minutes)
+
+
+def lesson_end(start: str, minutes: int = LESSON_MINUTES) -> str:
+    """'08:00' → '08:45'."""
+    h, m = map(int, start.split(":"))
+    t = h * 60 + m + minutes
+    return f"{t // 60 % 24:02d}:{t % 60:02d}"
+
+
 def build_lessons(evs, local_tz, custom_subjects: dict[str, str] | None = None,
-                  hidden_codes: list[str] | None = None, secondary_codes: list[str] | None = None) -> list[dict]:
-    """evs: kalenderlektioner for ét barn på én dag. Returnerer ét punkt pr. tidsrum."""
+                  hidden_codes: list[str] | None = None, secondary_codes: list[str] | None = None,
+                  lesson_minutes: int = LESSON_MINUTES) -> list[dict]:
+    """evs: kalenderlektioner for ét barn på én dag. Returnerer ét punkt pr. tidsrum.
+    En lektion uden brugbar sluttid (slut = start) får lesson_minutes og markeres endInferred."""
     hidden = {c.upper() for c in (hidden_codes if hidden_codes is not None else HIDDEN_DEFAULT)}
     secondary = {c.upper() for c in (secondary_codes if secondary_codes is not None else DEFAULT_SECONDARY)}
     slots: dict[tuple[str, str], list] = {}
@@ -90,6 +102,8 @@ def build_lessons(evs, local_tz, custom_subjects: dict[str, str] | None = None,
         items.sort(key=lambda i: i["code"].upper() in secondary)     # stabil: almindelige fag først
         first, *others = items
         lesson = {"start": start, "end": end, **{k: first[k] for k in ("title", "teacher", "substitute", "location", "hasNote", "id")}}
+        if end <= start:
+            lesson["end"], lesson["endInferred"] = lesson_end(start, lesson_minutes), True
         if others:                        # flere timer samtidig (fx holddeling)
             lesson["alt"] = [{"title": o["title"], "teacher": o["teacher"], "location": o["location"]} for o in others]
             lesson["hasNote"] = lesson["hasNote"] or any(o["hasNote"] for o in others)
@@ -98,10 +112,10 @@ def build_lessons(evs, local_tz, custom_subjects: dict[str, str] | None = None,
 
 
 def schedule_summary(lessons: list[dict]) -> str:
-    """Tekstversion til notes/søgning: '08.00 Dansk (vikar: Jeppe L.)'."""
+    """Tekstversion til notes/søgning: '08.00–08.45 Dansk (vikar: Jeppe L.)'."""
     lines = []
     for l in lessons:
-        line = f"{l['start'].replace(':', '.')} {l['title']}"
+        line = f"{l['start'].replace(':', '.')}{'–' + l['end'].replace(':', '.') if l.get('end') else ''} {l['title']}"
         if l.get("substitute"):
             line += f" (vikar: {l['substitute']})"
         lines.append(line)
