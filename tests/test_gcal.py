@@ -25,7 +25,8 @@ def test_all_day_range_uses_an_exclusive_end_and_a_legal_id(cfg, google):
     r = run(S.GoogleCalendar(cfg).create("sg_aaaaaaaaaaaa", LEJRSKOLE))
     sent = next(l[2] for l in google.log if l[0] == "insert")
     assert sent["start"] == {"date": "2026-10-12"} and sent["end"] == {"date": "2026-10-17"}
-    assert set(sent["id"]) <= set("0123456789abcdefghijklmnopqrstuv") and sent["reminders"]["overrides"][0]["minutes"] == 1440
+    assert set(sent["id"]) <= set("0123456789abcdefghijklmnopqrstuv")
+    assert "reminders" not in sent          # påmindelser ville kun gælde servicekontoen; familien bruger kalenderens standard
     assert r["already"] is False and r["html_link"].startswith("https://www.google.com/calendar/event")
 
 
@@ -95,3 +96,40 @@ def test_patching_a_deleted_event_says_so(cfg, google):
     with pytest.raises(S.CalendarError) as e:
         run(g.patch(r["id"], {**ZOO, "date": "2026-11-04"}))
     assert e.value.status == 404 and "findes ikke" in str(e.value)
+
+
+# ---------------------------------------------------------------- hvilken kalender der skrives til
+def _cals(*entries):
+    return {"calendar_write": {"enabled": True}, "google": list(entries)}
+
+
+ICAL = "https://calendar.google.com/calendar/ical/{}/private-x/basic.ics"
+
+
+def test_a_single_google_calendar_is_the_write_target():
+    cid, name, why = S.write_target(_cals({"name": "Familie", "ical_url": ICAL.format("fam%40group.calendar.google.com")}))
+    assert (cid, name, why) == ("fam@group.calendar.google.com", "Familie", None)
+
+
+def test_with_several_calendars_the_one_marked_write_wins():
+    cfg = _cals({"name": "Arbejde", "ical_url": ICAL.format("work")}, {"name": "Familie", "ical_url": ICAL.format("fam"), "write": True})
+    assert S.write_target(cfg)[:2] == ("fam", "Familie")
+    assert S.is_write_calendar(cfg, cfg["google"][1]) and not S.is_write_calendar(cfg, cfg["google"][0])
+
+
+def test_several_calendars_without_a_choice_are_never_guessed():
+    cid, _, why = S.write_target(_cals({"name": "Arbejde", "ical_url": ICAL.format("work")}, {"name": "Familie", "ical_url": ICAL.format("fam")}))
+    assert cid is None and "write = true" in why
+
+
+def test_an_explicit_calendar_id_wins_and_gets_its_name():
+    cfg = _cals({"name": "Familie", "ical_url": ICAL.format("fam")})
+    cfg["calendar_write"]["calendar_id"] = "fam"
+    assert S.write_target(cfg)[:2] == ("fam", "Familie")
+
+
+def test_the_reason_is_shown_when_no_calendar_can_be_chosen(tmp_path):
+    cfg = _cals({"name": "A", "ical_url": ICAL.format("a")}, {"name": "B", "ical_url": ICAL.format("b")})
+    cfg["calendar_write"]["service_account_file"] = str(tmp_path / "missing.json")
+    g = S.GoogleCalendar(cfg)
+    assert not g.enabled and "write = true" in g.problem

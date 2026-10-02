@@ -59,8 +59,8 @@ def cfg(tmp_path, monkeypatch, google, ntfy, ical):
     c["output"] = str(tmp_path / "web" / "family.json")
     (tmp_path / "web").mkdir()
     c["aula"]["token_file"] = str(tmp_path / "secrets" / "aula_tokens.json")
-    c["google"] = [{"name": "Familiekalender", "ical_url": f"{ical.url}/family.ics", "default_people": ["family"]}]
-    c["calendar_write"] = {"enabled": True, "service_account_file": str(google.sa_file), "api_base": google.api, "calendar_id": FAMILY_CAL, "reminder_minutes": [1440]}
+    c["google"] = [{"name": "Familiekalender", "ical_url": f"{ical.url}/family.ics", "calendar_id": FAMILY_CAL, "write": True, "default_people": ["family"]}]
+    c["calendar_write"] = {"enabled": True, "service_account_file": str(google.sa_file), "api_base": google.api, "read_via_api": False}
     c["assistant"] = {"mode": "offline"}
     c["server"] = {"aula": True, "notify_ntfy": ntfy.url, "public_url": "https://familieplan.example.dk", "stale_alert_hours": 4}
     return c

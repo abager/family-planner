@@ -45,6 +45,7 @@ week_min_minutes_between = 360     # ugeoverblik
 name = "Familiekalender"
 ical_url = "https://calendar.google.com/calendar/ical/.../basic.ics"
 default_people = ["family"]
+write = true             # appen opretter aftaler i denne kalender (kræver [calendar_write] nedenfor)
 
 # Personerne. aula_name bruges til at matche børnene i Aula (fornavn er nok).
 [[people]]
@@ -124,12 +125,14 @@ max_age_days = 120              # hvor gamle beskeder der gennemsøges
 max_rule_matches = 25           # lærte ord, der står i flere sætninger end dette, afvises som for almindelige
 # disabled_categories = ["arrangement"]    # lejrskole, møde, test, turnering, lukket, omlagt, tur, arrangement, fødselsdag
 
-# Oprettelse i Google Kalender fra appen. Uden dette åbner "Føj til kalender" Google Kalender med aftalen udfyldt (se README)
+# Oprettelse i Google Kalender direkte fra appen via en servicekonto (se README: "Sæt direkte oprettelse op").
+# Aftalerne oprettes i den [[google]]-kalender, der har write = true (eller den eneste). Uden dette kan der ikke oprettes aftaler fra appen.
+# Påmindelser: sæt standardunderretninger for familiekalenderen hos hver forælder i Google Kalender – appen kan ikke sætte dem for jer.
 [calendar_write]
 enabled = false
-# calendar_id = "…@group.calendar.google.com"   # udledes ellers af iCal-adressen ovenfor
+# calendar_id = "…@group.calendar.google.com"   # kun nødvendig, hvis den ikke kan udledes af iCal-adressen
 service_account_file = "secrets/google_service_account.json"
-reminder_minutes = [1440]       # påmindelse dagen før; [] = kalenderens standard
+read_via_api = true             # læs skrivekalenderen via Googles API i stedet for iCal: ændringer ses med det samme
 
 # Dagsvisningen skifter til næste dag efter dette klokkeslæt (gælder overblik, skema, aftaler, vigtig info, kiosk og aftenpush)
 [display]

@@ -120,6 +120,33 @@ def calendar_id_from_ical(url: str) -> str | None:
     return unquote(m[1]) if m else None
 
 
+def write_target(cfg: dict) -> tuple[str | None, str, str | None]:
+    """Den kalender, appen opretter aftaler i: (kalender-id, visningsnavn, problem).
+
+    Rækkefølge: [calendar_write] calendar_id → den [[google]]-kalender med write = true → den eneste [[google]]-kalender.
+    Er der flere Google-kalendere og ingen er valgt, gættes der ikke – ellers kunne aftaler havne i en forkert kalender."""
+    c = cfg.get("calendar_write", {})
+    cals = cfg.get("google", [])
+    cal_id = lambda g: g.get("calendar_id") or calendar_id_from_ical(g.get("ical_url", ""))
+    if c.get("calendar_id"):
+        name = next((g.get("name", "Google") for g in cals if cal_id(g) == c["calendar_id"]), "Familiekalender")
+        return c["calendar_id"], name, None
+    marked = [g for g in cals if g.get("write")]
+    if len(marked) > 1:
+        return None, "", "flere [[google]]-kalendere har write = true – vælg én"
+    chosen = marked[0] if marked else (cals[0] if len(cals) == 1 else None)
+    if chosen is None:
+        return None, "", ("flere Google-kalendere – sæt write = true på den, aftaler skal oprettes i" if cals else "ingen [[google]]-kalender i config")
+    cid = cal_id(chosen)
+    return cid, chosen.get("name", "Google"), None if cid else "kalender-id kan ikke udledes af iCal-adressen – sæt calendar_id"
+
+
+def is_write_calendar(cfg: dict, g: dict) -> bool:
+    """Er denne [[google]]-kalender den, appen skriver til? Bruges til at læse den via API og til selvtesten."""
+    cid, _, _ = write_target(cfg)
+    return bool(cid) and (g.get("calendar_id") or calendar_id_from_ical(g.get("ical_url", ""))) == cid
+
+
 # ---------------------------------------------------------------- Google Kalender
 class CalendarError(Exception):
     def __init__(self, message: str, status: int = 502):
@@ -166,6 +193,11 @@ def build_event(p: dict) -> dict:
     return body
 
 
+def end_inferred(p: dict) -> bool:
+    """Har brugeren ikke angivet en sluttid? Så får Google en tænkt sluttid, men appen viser kun starttidspunktet."""
+    return not p.get("all_day") and not p.get("end_time")
+
+
 def event_id_for(key: str, version: int = 0) -> str:
     """Selvvalgt, deterministisk id (base32hex: 0-9, a-v). Samme forslag kan derfor aldrig oprettes to gange."""
     return "fp" + hashlib.sha1(f"{key}:{version}".encode()).hexdigest()
@@ -179,12 +211,12 @@ class GoogleCalendar:
         c = cfg.get("calendar_write", {})
         self.key_file = Path(c.get("service_account_file", "secrets/google_service_account.json"))
         self.api = str(c.get("api_base", self.API)).rstrip("/")
-        self.reminders = [int(x) for x in c.get("reminder_minutes", [])]
-        cal = c.get("calendar_id") or next((calendar_id_from_ical(g.get("ical_url", "")) for g in cfg.get("google", [])), None)
+        self.reminders_ignored = bool(c.get("reminder_minutes"))       # forældet indstilling, se create(); selvtesten advarer
+        cal, self.calendar_name, why = write_target(cfg)
         self.calendar_id = cal
         self.enabled = bool(c.get("enabled")) and bool(cal) and self.key_file.exists()
         self.problem = None if self.enabled else (
-            "slået fra" if not c.get("enabled") else "mangler kalender-id" if not cal else f"nøglefilen {self.key_file} findes ikke")
+            "slået fra" if not c.get("enabled") else why or "mangler kalender-id" if not cal else f"nøglefilen {self.key_file} findes ikke")
         self._creds = None
         self._lock = asyncio.Lock()
 
@@ -226,9 +258,9 @@ class GoogleCalendar:
         body = build_event(payload)
         eid = event_id_for(key, version)
         body["id"] = eid
-        body["extendedProperties"] = {"private": {"familieplan": key}}
-        body["reminders"] = ({"useDefault": False, "overrides": [{"method": "popup", "minutes": m} for m in self.reminders]}
-                             if self.reminders else {"useDefault": True})
+        body["extendedProperties"] = {"private": {"familieplan": key, **({"endInferred": "1"} if end_inferred(payload) else {})}}
+        # Ingen "reminders": hos Google gælder de kun for den bruger, der opretter aftalen – her servicekontoen, ikke familien.
+        # Hver forælder får i stedet sine egne standardunderretninger for familiekalenderen (se README).
         r = await self._call("POST", self._url(), json=body)
         if r.status_code == 409:                                    # id'et findes: tjek om aftalen stadig er der
             g = await self._call("GET", self._url("/" + eid))

@@ -168,7 +168,15 @@ async def check_google_write(cfg: dict) -> list[Result]:
     try:
         created = await g.create("st_" + secrets.token_hex(6), payload)
         await g.delete(created["id"])
-        return [Result(OK, "Skrivning til Google Kalender", f"kan oprette og slette aftaler i {g.calendar_id}")]
+        out = [Result(OK, "Skrivning til Google Kalender", f"kan oprette og slette aftaler i «{g.calendar_name}» ({g.calendar_id})")]
+        if g.reminders_ignored:
+            out.append(Result(WARN, "Påmindelser", "reminder_minutes virker ikke og ignoreres",
+                              "Google giver kun påmindelser til den, der opretter aftalen (servicekontoen). Fjern reminder_minutes, og sæt i stedet "
+                              "standardunderretninger for familiekalenderen hos hver forælder (Google Kalender → kalenderens indstillinger)."))
+        if not any(S.is_write_calendar(cfg, gc) for gc in cfg.get("google", [])):
+            out.append(Result(WARN, "Kalender til nye aftaler", f"{g.calendar_id} er ikke en af de kalendere, appen viser",
+                              "Aftaler, appen opretter, dukker ikke op i appen. Ret [calendar_write] calendar_id, eller tilføj kalenderen under [[google]]."))
+        return out
     except S.CalendarError as e:
         hint = "Del kalenderen med servicekontoens e-mailadresse (ret: «Foretag ændringer i begivenheder»)." if e.status == 403 else "Tjek kalender-id og at Calendar API er slået til for projektet."
         if created:
