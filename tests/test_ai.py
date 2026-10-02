@@ -325,6 +325,12 @@ def test_an_old_claude_assistant_config_still_means_claude():
     assert (s.provider, s.model, s.api_key_env, s.max_output_tokens) == ("claude", "claude-test", "MIN_NØGLE", 900)
 
 
+def test_mode_claude_wins_over_an_ai_section_for_gemini():
+    cfg = {"assistant": {"mode": "claude"}, "ai": {"provider": "gemini", "model": "gemini-3.5-flash-lite", "daily_cap": 30}}
+    s = ai.settings_from(cfg)
+    assert (s.provider, s.model, s.api_key_env, s.daily_cap) == ("claude", "claude-sonnet-5-5", "ANTHROPIC_API_KEY", 30)
+
+
 def test_state_files_are_only_readable_by_the_owner(tmp_path, clock):
     import os
     import stat

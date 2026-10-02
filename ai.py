@@ -105,12 +105,15 @@ def settings_from(cfg: dict) -> Settings:
     """[ai] i config.toml. Ældre opsætning med [assistant] mode = "claude" (og model/api_key_env dér) virker stadig."""
     a = dict(cfg.get("ai") or {})
     asst = cfg.get("assistant") or {}
-    if asst.get("mode") == "claude" and "provider" not in a:
+    if asst.get("mode") == "claude":              # betyder altid Claude – også hvis [ai] siger noget andet
+        if str(a.get("provider", "claude")).lower() != "claude":
+            for k in ("model", "api_key_env"):    # [ai]'s model/nøgle hører til en anden udbyder
+                a.pop(k, None)
         a["provider"] = "claude"
-        for k in ("model", "api_key_env", "max_output_tokens"):
-            if k in asst and k not in a:
+        for k in ("model", "api_key_env"):
+            if k in asst:
                 a[k] = asst[k]
-        if "max_tokens" in asst and "max_output_tokens" not in a:
+        if "max_tokens" in asst:
             a["max_output_tokens"] = asst["max_tokens"]
     provider = str(a.get("provider", "gemini")).lower()
     d = DEFAULTS.get(provider, {})
