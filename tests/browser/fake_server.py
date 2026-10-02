@@ -9,6 +9,7 @@ class FakeServer:
     def __init__(self):
         self.family: dict | None = None                 # None = ingen family.json (appen viser demodata)
         self.briefing: dict | None = None
+        self.briefing_week: dict | None = None
         self.server = False                             # False = ingen /api/status (statisk brug)
         self.mark_read = True
         self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
@@ -54,7 +55,8 @@ class FakeServer:
             self.family_gets += 1
             return self._json(route, self.family) if self.family is not None else route.fulfill(status=404, body="")
         if path in ("/briefing.json", "/briefing_uge.json"):
-            return self._json(route, self.briefing) if self.briefing and path == "/briefing.json" else route.fulfill(status=404, body="")
+            b = self.briefing if path == "/briefing.json" else self.briefing_week
+            return self._json(route, b) if b else route.fulfill(status=404, body="")
         if path == "/api/status":
             if not self.server:
                 return route.fulfill(status=404, body="")
