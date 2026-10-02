@@ -74,6 +74,10 @@ Fejlsøgning: `fetch_family.py --dump-aula` gemmer rå kalenderdata for ±3 dage
 
 Fanen "Beskeder" virker som en mailklient: kompakt liste til venstre, den valgte besked i fuld bredde til højre med hele tråden (nyeste først, ældre foldet sammen). Søg, filtrér på ulæste, "Skal gøres" eller "Med datoer", og brug ↑/↓ til at bladre. På mobil åbner beskeden i fuld skærm. Beskeder, du har åbnet, markeres som set på den enhed (de forbliver ulæste i Aula).
 
+## Feed
+
+Fanen "Feed" viser opslag og billeder fra Aula, nyeste først, og kan filtreres på børn og på **Alt / Opslag / Billeder**. Søgefeltet øverst filtrerer, mens du skriver: det søger i titel, tekst og afsender, alle ord skal findes (i vilkårlig rækkefølge), og træf markeres. Lange opslag vises i fuld længde under søgning. `Esc` rydder søgningen. Der søges kun i det, appen har hentet (`posts_limit` opslag pr. barn og de `gallery_albums` nyeste albums); ældre opslag findes i Aula.
+
 ## Besked-analyse (messages.py)
 
 Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller privat samtale) og det rigtige barn:
@@ -144,36 +148,15 @@ Alt, der skal gemmes, ligger i `data/` (config, Aula-login og hentede data), så
 
 Aulas login fornyes automatisk, så MitID kun skal bruges, når fornyelsen fejler. Sker det, fortsætter serveren med de seneste Aula-data, viser en rød advarsel i appen og sender (hvis `notify_ntfy` er sat) en push-besked uden data i. Åbn `/auth` og log ind igen. Google-kalenderen opdateres uanset.
 
-### Kalenderforslag og "Føj til kalender"
+### "Føj til kalender"
 
-Aktiviteter i ugeplan, opslag og beskeder kan overføres til familiekalenderen på to måder.
+Appen opretter **aldrig selv** aftaler eller forslag til kalenderen. Du vælger det, der skal med.
 
-**1. Forslag (automatisk).** Ved hver opdatering gennemsøges ugeplan, opslag og beskeder, og nye fund dukker op under fanen **Forslag** (og som en meddelelse øverst i "I dag"). Hvert forslag kan oprettes, rettes eller afvises. Reglerne leder efter:
+På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står en knap "Føj til kalender". Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Øverst står, hvilken kalender aftalen oprettes i, og hvem den tildeles ud fra navnene i titlen. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i en kalender; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
 
-| Kommer med | Bliver i Aula |
-|---|---|
-| Lejrskole/koloni, ture (zoo, museum, teater …), turneringer og stævner | Fødselsdage der fejres i klassen eller på stuen |
-| Planlagte test og prøver | Temadage, temauger, emneuger, motionsdag, Halloween |
-| Forældremøder og skole-hjem-samtaler | Skolens interne shows og arrangementer uden forældre |
-| Fødselsdagsinvitationer hvor man skal et andet sted hen | Elevsamtaler |
-| Arrangementer forældre deltager i, lukkedage | |
-| Omlagte skoledage ("omlagt dag kl. 8–13") – en temadag, der ændrer dagen, kommer altså med | |
-
-Datoer regnes ud fra, hvornår beskeden er skrevet, så "testen i morgen (torsdag)", "lejrskole i næste uge" og "på fredag" bliver til rigtige datoer. Fund uden dato, i fortiden eller i private samtaler bliver aldrig til forslag. Usikre forslag er mærket "Måske". Forslag, der ligner en aftale, der allerede findes i kalenderen samme dag, vises ikke.
-
-**2. Manuelt.** På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står en knap "Føj til kalender" – uanset om reglerne ville have foreslået det. Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Øverst står, hvilken kalender aftalen oprettes i, og hvem den tildeles ud fra navnene i titlen. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i en kalender; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
+Titlen er forudfyldt ud fra teksten ("Lejrskole", "Tur til Zoo", "Karlas fødselsdag"). Datoer regnes ud fra, hvornår beskeden er skrevet, så "testen i morgen (torsdag)" og "på fredag" bliver til rigtige datoer. Findes der allerede en aftale samme dag med samme ord, vises knappen ikke.
 
 Aftalen oprettes med børnenes navne i titlen ("Hugo + Carla: Tur til Zoo"), fordi appen tildeler kalenderaftaler til personer ud fra navne i titlen. Beskrivelsen peger tilbage på beskeden. Aftaler, du opretter via appen, vises med det samme. Lige efter oprettelsen kan du trykke "Fortryd" i bekræftelsen. Angiver du kun et starttidspunkt, får Google en sluttid en time senere, men appen viser kun starttidspunktet.
-
-### Lær af dine manuelle aktiviteter
-
-Tilføjer du en aktivitet manuelt, som reglerne ikke selv ville have foreslået (fx en tandlægetid eller et skolefoto), kan appen lære af den. I dialogen står "Foreslå lignende aktiviteter fremover" med de ord, den ville huske, fx *tandlæge*. Skriver du en titel med et af ordene, vælges det automatisk; ellers sætter du selv flueben. Du kan også tilføje dit eget ord eller udtryk. Fra da af bliver aktiviteter, hvor ordet nævnes sammen med en dato, foreslået under **Forslag**, mærket "Lært regel".
-
-- **Ord og vendinger.** Et *ord* ("tandlæge") rammer også "tandlægen" og "tandlægetid". En *vending* ("skal til tandlæge") er snævrere og rammer kun den formulering. Vendinger vælges aktivt. Datoer og tidspunkter genkendes allerede i alle formuleringer, så det er aktivitetens ord, der læres.
-- **Tryghed.** Kun bogstaver og bindestreg accepteres, og reglen bygges af appen, aldrig af det, du skriver. For almindelige ord (*skolen, mødes, husk* …) afvises, og det samme gælder ord, der står i mere end 25 sætninger i de seneste data (`max_rule_matches`), fordi de ville oversvømme listen.
-- **Dit ord vinder over filtrene.** En lært regel springer temafilteret over: lærer du "motionsdag", får du forslag om motionsdage, selv om de normalt bliver i Aula.
-- **Ingen dubletter.** Aktiviteten, du lærte af, foreslås ikke igen, og overlappende regler giver ét forslag.
-- **Styring.** Under **Forslag → Lærte regler** kan reglerne slås fra eller fjernes. De ligger i `learned_rules.json` ved siden af family.json og kan også redigeres i hånden. Læring kræver serveren, som gemmer reglerne.
 
 ### Sæt direkte oprettelse op (én gang)
 
@@ -190,13 +173,13 @@ Appen opretter aftaler direkte i familiekalenderen – du forlader aldrig appen,
 - [ ] I `config.toml`: sæt `write = true` på familiekalenderen under `[[google]]` (nødvendigt, hvis du har flere Google-kalendere – appen gætter aldrig), og `enabled = true` under `[calendar_write]`. Kalender-id'et udledes af iCal-adressen; ellers sæt `calendar_id` på kalenderen.
 - [ ] Påmindelser: hver forælder åbner familiekalenderens indstillinger i Google Kalender → **Standardunderretninger** og vælger fx "1 dag før". Google giver kun påmindelser til den, der opretter en aftale – her servicekontoen – så appen kan ikke sætte dem for jer. Fjern `reminder_minutes`, hvis den står i din config.
 - [ ] Genstart serveren og kør `python server.py --selftest`. Den opretter og sletter en prøveaftale langt ude i fremtiden og tjekker, at kalenderen også kan læses via API'et. Alt skal være ✔.
-- [ ] Prøv i appen: opret et forslag, og se at dialogen skriver "Oprettes i **Familiekalender**", at aftalen dukker op i Google Kalender, og at "Fortryd" i bekræftelsen fjerner den igen.
+- [ ] Prøv i appen: tryk "Føj til kalender" på en besked, og se at dialogen skriver "Oprettes i **Familiekalender**", at aftalen dukker op i Google Kalender, og at "Fortryd" i bekræftelsen fjerner den igen.
 
 Menuernes navne hos Google kan ændre sig lidt. Får du en fejl, forklarer appen den (fx "er kalenderen delt med servicekontoen?"). Hver aftale får et fast id, så den aldrig kan oprettes to gange, og "Fjern fra kalender" sletter den igen.
 
 **Læsning via API.** Når servicekontoen virker, læses familiekalenderen også via Googles API i stedet for iCal-adressen (`read_via_api = true`, standard). Ændringer ses så ved næste hentning i stedet for efter Googles iCal-forsinkelse, og appen kan kende de aftaler, den selv har oprettet. Fejler API'et, bruges iCal-adressen som reserve, hvis den står i config. Andre Google-kalendere læses stadig via iCal.
 
-Indstillinger: `[suggestions]` (`disabled_categories`, `horizon_days`) og `[calendar_write]` (`calendar_id`, `read_via_api`). Med ntfy slået til får du en kort besked, når der er nye forslag (`notify_suggestions = false` slår det fra). Test reglerne på dine egne data uden Aula: `python activities_test.py aula_feed.json`.
+Indstillinger: `[suggestions]` (`enabled` slår genkendelsen af datoer og aflysninger fra, `horizon_days`, `max_age_days`) og `[calendar_write]` (`calendar_id`, `read_via_api`). Test genkendelsen på dine egne data uden Aula: `python activities_test.py aula_feed.json`.
 
 ## Markér som læst
 
@@ -232,7 +215,7 @@ Afprøvet i Chromium med emulerede iPad- og iPhone-størrelser og berøringsgest
 
 ### Indstillinger (`[server]` i config.toml)
 
-`interval_minutes`, `night_interval_minutes`, `aula`, `session_days`, `trust_proxy`, `public_url`, `notify_ntfy`, `notify_suggestions`, `mark_read_in_aula`, `evening_push`, `evening_push_only_if_content`, `push_details`, `stale_alert_hours`, `private_unlock_minutes`. Dertil `[display] evening_hour` og `[private] protect`. Kun én serverproces må køre ad gangen.
+`interval_minutes`, `night_interval_minutes`, `aula`, `session_days`, `trust_proxy`, `public_url`, `notify_ntfy`, `mark_read_in_aula`, `evening_push`, `evening_push_only_if_content`, `push_details`, `stale_alert_hours`, `private_unlock_minutes`. Dertil `[display] evening_hour` og `[private] protect`. Kun én serverproces må køre ad gangen.
 
 ### Filer og netværk
 
@@ -241,7 +224,7 @@ Afprøvet i Chromium med emulerede iPad- og iPhone-størrelser og berøringsgest
 
 ## Aftenvisning og aftenpush
 
-Efter kl. 17 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, skema, aftaler, vigtig info og opgaver. Over skemaet står en lille vælger (**I dag / I morgen**), så du også kan kigge frem om formiddagen eller tilbage om aftenen. Dit valg gælder, til det automatiske skifte sker igen (kl. 17 og ved midnat). Serveren laver overblikket for i morgen præcis kl. 17, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
+Efter kl. 17 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, skema, aftaler, vigtig info og opgaver. Skiftet sker af sig selv kl. 17 og tilbage ved midnat; der er ingen knap til at skifte. Resten af dagen i dag kan ses under **Ugen**. Serveren laver overblikket for i morgen præcis kl. 17, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
 
 Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 17 om i morgen, kun hvis der er noget at huske, gøre eller noget særligt (`evening_push_only_if_content = false` sender altid). Pushet sendes højst én gang pr. dag, også efter en genstart.
 
@@ -269,7 +252,7 @@ Samtaler mellem jer og personalet (fx om et barns trivsel) var tidligere kun skj
 
 ## Aflysninger og flytninger
 
-En besked om, at noget er **aflyst, udsat eller flyttet**, bliver ikke til en ny aftale, men til en ændring af den, der allerede står i kalenderen:
+En besked om, at noget er **aflyst, udsat eller flyttet**, bliver ikke til en ny aftale, men til en ændring af den, der allerede står i kalenderen. Ændringen står **på beskeden selv** (og på opslaget eller ugeplanspunktet) under "Ændring i kalenderen":
 
 | Beskeden siger | Appen foreslår |
 |---|---|
@@ -277,9 +260,11 @@ En besked om, at noget er **aflyst, udsat eller flyttet**, bliver ikke til en ny
 | "Forældremødet flyttes til 4. nov." / "flyttet fra 21/10 til 4/11" | **Flyt aftalen** (åbner dialogen med den nye tid) |
 | "Udsat på ubestemt tid" | Fjern, eller behold til der kommer en ny dato |
 
+"Behold" lader aftalen stå og kan fortrydes.
+
 - Aftaler, som **ikke** er oprettet via appen, kan appen ikke ændre sikkert. De får en besked om at rette dem i Google Kalender.
-- Findes der ingen aftale at aflyse, sker der ingenting. En flytning uden kendt gammel aftale bliver en ny aktivitet på den **nye** dato, aldrig på den gamle.
-- Spørgsmål ("Skal vi på tur?"), betingelser og tvetydige tilfælde (to mulige aftaler) giver ikke noget gæt. En senere aflysning fjerner også tidligere forslag og "Føj til kalender"-muligheder om det samme.
+- Findes der ingen aftale at aflyse, sker der ingenting. Ved en flytning uden kendt gammel aftale kan du bruge "Føj til kalender" på beskeden med den **nye** dato.
+- Spørgsmål ("Skal vi på tur?"), betingelser og tvetydige tilfælde (to mulige aftaler) giver ikke noget gæt. En senere aflysning fjerner også "Føj til kalender"-muligheder om det samme.
 - Klokkeslæt som "kl. 7 om aftenen" læses som 19.00.
 
 ## Drift, tilsyn og selvtest
@@ -321,7 +306,7 @@ Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, de
 | `test_times.py` | sluttider: rigtige, tænkte (`endInferred`) og 45-minutters lektioner |
 | `test_server.py` | adgang, CSRF, spærring, private tråde og billeder, aflys/flyt |
 | `test_selftest.py` | selvtesten mod sunde og ødelagte opsætninger |
-| `browser/` | datovælger, layout, beskeder (læst, stryg, private), kalender-UI (oprettelse, fortryd, modtager), tider i alle visninger, aften og kiosk, tilgængelighed |
+| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til kalender" (oprettelse, fortryd, modtager), aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk, tilgængelighed |
 
 `homework_test.py` og `messages_test.py` i roden er ældre hjælpescripts, der kører genkendelsen mod **dine egne filer** (`python homework_test.py weekplan.json`, `python messages_test.py aula_feed.json`) og indgår ikke i `pytest`.
 

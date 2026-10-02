@@ -5,6 +5,19 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Removed (second round)
+- Automatic calendar suggestions: the Forslag tab, its badge, the "nye forslag" banner and the ntfy push
+  (`notify_suggestions`). New events are only created manually via "Føj til kalender".
+- Learned rules (`/api/learned*`, `learned_rules.json`, "Foreslå lignende aktiviteter fremover"). They only existed to
+  produce suggestions. An existing `learned_rules.json` is ignored and can be deleted.
+- The "I dag / I morgen" toggle. The overview still switches to tomorrow automatically after `evening_hour`.
+
+### Added (second round)
+- Cancellations and moves of calendar events are shown on the message, post or weekly-plan item they come from
+  ("Ændring i kalenderen"), with Fjern fra kalender / Flyt aftalen / Behold.
+- Search in the feed (posts and albums): title, text and author, all words must match, hits highlighted, respects the
+  person filter and type tabs, `Esc` clears.
+
 ### Changed
 - "Add to calendar" now only creates events directly in the family calendar via the service account. The Google
   Calendar link fallback is removed: without direct writing the button is disabled and the reason is shown, and

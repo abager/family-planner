@@ -119,11 +119,10 @@ mark_read_in_aula = true        # åbner du en besked i appen, markeres den ogs�
 
 # Kalenderforslag: aktiviteter i ugeplan, opslag og beskeder, der fortjener en plads i familiekalenderen
 [suggestions]
+# Genkendelse af datoer til "Føj til kalender" og af aflysninger/flytninger. Appen foreslår aldrig selv nye aftaler.
 enabled = true
-horizon_days = 270              # hvor langt frem der foreslås
+horizon_days = 270              # hvor langt frem en dato må ligge
 max_age_days = 120              # hvor gamle beskeder der gennemsøges
-max_rule_matches = 25           # lærte ord, der står i flere sætninger end dette, afvises som for almindelige
-# disabled_categories = ["arrangement"]    # lejrskole, møde, test, turnering, lukket, omlagt, tur, arrangement, fødselsdag
 
 # Oprettelse i Google Kalender direkte fra appen via en servicekonto (se README: "Sæt direkte oprettelse op").
 # Aftalerne oprettes i den [[google]]-kalender, der har write = true (eller den eneste). Uden dette kan der ikke oprettes aftaler fra appen.

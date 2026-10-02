@@ -8,7 +8,7 @@ architecture, conventions or status change. The user-facing documentation is REA
 A self-hosted family planner for one Danish family (two parents, three children). It pulls school data from
 Aula (calendar, timetable, weekly plans from Meebook, homework from Min Uddannelse, messages, posts, gallery)
 and family events from Google Calendar (iCal), turns them into one overview, and serves it as a PWA to phones,
-tablets and a kiosk screen. It can also write suggested events back to Google Calendar via a service account.
+tablets and a kiosk screen. Events can be added to Google Calendar from any message, post or weekly-plan item via a service account (manually only).
 
 ## Language and conventions
 
@@ -61,7 +61,7 @@ familie_regler.md (free text)   ─┘                                     └�
 | `activities.py` | Finds activities worth a calendar entry; cancellations and moves |
 | `schedule.py` | Timetable cleanup: subject names, teacher abbreviations, hidden support lessons |
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister") |
-| `suggestions.py` | Calendar suggestions state and Google Calendar writes (service account); learned rules |
+| `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
 | `private.py` | Storage and gating of private threads |
 | `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
 | `selftest.py` | Checks a real setup end-to-end (Aula login, Google write, ntfy, permissions) |
@@ -70,7 +70,7 @@ familie_regler.md (free text)   ─┘                                     └�
 Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
 `private_messages.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
-`web/suggestions_state.json`, `web/learned_rules.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
+`web/suggestions_state.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
 `weekplan.json`.
 
 ## Commands
@@ -136,6 +136,11 @@ Planned restructuring (do in small steps, tests green after each):
 ## Calendar and time conventions
 
 - The app writes only to the calendar chosen by `suggestions.write_target()`; there is no "open Google" fallback.
+- **No automatic suggestions.** `activities.find_all()` still finds activities (their titles are reused for the manual
+  "Føj til kalender" options), but `family.json` `suggestions` only carries changes (`CHANGE_KINDS`: cancel, hold, move)
+  of events already in the calendar. They are shown on the source message/post/weekly-plan item, not in a tab.
+  Learned rules were removed; don't reintroduce a suggestions tab, badge or push without the user asking.
+- "I dag" switches to tomorrow automatically after `evening_hour` (`dayOffset = autoOffset`); there is no manual toggle.
 - An event's `end` is always set (the UI needs a slot), but `endInferred: true` means nobody gave an end time:
   show only the start. Never invent an end without setting the flag. Lessons default to `lesson_minutes` (45).
 - All time display in `web/index.html` goes through `evRange()` / `lessonRange()`; don't format times inline.
