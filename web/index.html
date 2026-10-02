@@ -374,6 +374,11 @@ body.kiosk .wrap{max-width:none;padding:clamp(10px,2vmin,30px);padding-bottom:cl
 .k-date{color:var(--muted);font-size:1.15em}
 .k-date .k-day{color:var(--ink)}
 .k-weather{color:var(--ink);font-weight:600;margin-top:2px}
+.story{margin-top:10px;max-width:68ch}
+.story p{margin:0 0 .7em;line-height:1.55}
+.story p:last-child{margin-bottom:0}
+.k-story{list-style:none;padding:0 !important;display:block !important}
+.k-story p{margin:0 0 .55em;line-height:1.4;font-size:.92em}
 .k-weather small{display:block;color:var(--muted);font-weight:400}
 .homeinfo{color:var(--muted);margin:8px 0 0}
 .k-status{margin-left:auto;font-size:.8em;color:var(--muted);text-align:right}
@@ -649,7 +654,7 @@ button,a,.chip,.pill{touch-action:manipulation}
     <div class="k-body">
       <div class="k-kids" id="kKids"></div>
       <div class="k-side">
-        <section class="k-card"><h2>Husk og frister</h2><ul class="k-list" id="kRemember"></ul></section>
+        <section class="k-card"><h2 id="kRememberHead">Husk og frister</h2><ul class="k-list" id="kRemember"></ul></section>
         <section class="k-card"><h2 id="kAptTitle">Aftaler</h2><ul class="tl" id="kApts"></ul></section>
       </div>
     </div>
@@ -1208,13 +1213,15 @@ function renderBrief(kind, elId){
       const av=(pt.hvem||[]).map(personByName).filter(Boolean).map(pav).join("");
       const src=(pt.kilder||[]).length?`<span class="src">Kilde: ${esc(pt.kilder.join(", "))}</span>`:"";
       return `<li>${av}<span>${esc(unescMd(pt.tekst))}${src}</span></li>`; }).join("")}</ul></div>`).join("");
+  // AI-fortælling (afsnit af ren tekst) – ellers reglernes liste
+  const story=Array.isArray(b.fortaelling) ? b.fortaelling.map(p=>`<p>${esc(p)}</p>`).join("") : "";
   const g=new Date(b.generated);
   const title = kind==="week" ? `Overblik ${String(b.headline_label||"denne uge").toLowerCase()}` : "Overblik "+dayWord();
   const empty = kind==="week" ? "Intet særligt i denne uge – ingen frister, ting at huske eller afvigelser." : `Intet særligt ${dayWord()} – ingen frister, ting at huske eller afvigelser.`;
   el.innerHTML=`<div class="bhead"><h2>${esc(title)}</h2>
       ${window.speechSynthesis&&b.oplaesning?`<div class="speakbox"><button class="speak" aria-pressed="false">${SPEAK_ICON} Læs op</button>${voicePicker()}</div>`:""}</div>
-    ${secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
-    <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet automatisk"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula og familiekalenderen – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
+    ${story ? `<div class="story">${story}</div>` : secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
+    <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet automatisk"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og DMI":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
   el.querySelector(".speak")?.addEventListener("click",e=>speak(b.oplaesning,e.currentTarget));
   el.querySelector(".voice")?.addEventListener("change",e=>{ try{localStorage.setItem(VOICE_KEY,e.target.value);}catch{} speechSynthesis.cancel(); });
 }
@@ -1816,7 +1823,11 @@ function renderKiosk(){
   kw.innerHTML = w ? `<span aria-hidden="true">${esc(w.ikon||"")}</span> ${esc(w.tekst)}${w.raad?.length?`<small>${esc(w.raad.join(", "))}</small>`:""}` : "";
   if(fresh) items=(b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
   else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));
-  document.getElementById("kRemember").innerHTML = items.slice(0,10).map(i=>`<li>${i.who.map(pav).join("")}<span>${esc(i.text)}${i.sec&&fresh?`<small>${esc(i.sec)}</small>`:""}</span></li>`).join("") || `<li class="k-none">Intet særligt ${dayWord()}</li>`;
+  const storyOn = fresh && Array.isArray(b.fortaelling);
+  document.getElementById("kRememberHead").textContent = storyOn ? "Dagen" : "Husk og frister";
+  if(storyOn){
+    document.getElementById("kRemember").innerHTML = `<li class="k-story">${b.fortaelling.map(p=>`<p>${esc(p)}</p>`).join("")}</li>`;
+  } else document.getElementById("kRemember").innerHTML = items.slice(0,10).map(i=>`<li>${i.who.map(pav).join("")}<span>${esc(i.text)}${i.sec&&fresh?`<small>${esc(i.sec)}</small>`:""}</span></li>`).join("") || `<li class="k-none">Intet særligt ${dayWord()}</li>`;
   document.getElementById("kAptTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";
   document.getElementById("kApts").innerHTML = timelineItems(day);
   fitKiosk();
