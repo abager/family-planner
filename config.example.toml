@@ -49,6 +49,11 @@ rpm = 5                            # højst så mange i minuttet. Sæt til (høj
 # timeout_seconds = 30
 # max_output_tokens = 2000
 
+# Kalenderforslag: med [assistant] mode = "ai" finder sprogmodellen aftaler i nye Aula-beskeder, opslag og ugeplaner
+# og udfylder "Føj til kalender". Hvert punkt vurderes én gang. Uden AI (eller når kvoten er brugt) afgør reglerne.
+[calendar_ai]
+enabled = true
+
 # Vejret i overblikket og på kiosken: DMI (vejrmodellen HARMONIE), ingen nøgle.
 # Hjemmets placering sættes IKKE her: åbn appen på pc'en (http://localhost:8080), tryk "Vejr: hjem"
 # og "Brug min placering som hjem". Den afrundes til ca. 1 km og gemmes i web/home_location.json.

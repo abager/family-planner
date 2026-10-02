@@ -5,6 +5,15 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (AI calendar items, phase 3)
+- The AI reads new Aula messages (never private), feed posts and week plans and prefills "Føj til kalender" with
+  title, date, time, place and child. The button only appears on items where something was found. Cancellations,
+  postponements and moves of events the app created are shown on the item. Nothing is written without a click.
+- Every suggestion is checked against the item's own text (date, time, place; changes must match exactly one
+  app-created event). Each item is checked once; first run covers the last 14 days; at most 3 requests per fetch;
+  30 requests a day are kept for the overview. Without AI, the rules decide, item by item.
+  `[calendar_ai] enabled` in config.toml.
+
 ### Changed (AI narrative)
 - With AI, the day and week overviews are a warm, chronological narrative in a few short paragraphs (~150 words),
   addressed to the parents, shown in the app and on the kiosk ("Dagen"). The normal school timetable is left out;

@@ -116,6 +116,12 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 **Budget:** Svar gemmes i `web/ai_cache.json`, så uændrede data aldrig koster en ny forespørgsel, og forbruget tælles i `web/ai_usage.json`. Dagen tælles i Stillehavstid som hos Google, så budgettet nulstilles ved midnat i Californien (normalt kl. 9 dansk tid). Efter en fejl holder appen pause, før den prøver igen (længere for hver fejl i træk). Begge filer indeholder familiens data og må aldrig i git.
 
+### Kalenderforslag fra AI
+
+Med `mode = "ai"` læser sprogmodellen nye Aula-beskeder (aldrig private), opslag og ugeplaner og finder aftaler, der hører hjemme i kalenderen – fx *"Vi tager i skoven næste torsdag, mødetid 8.15 ved den røde port"*. Der er ingen ny skærm: knappen **Føj til kalender** vises kun på de punkter, hvor der er fundet noget, og formularen er udfyldt med titel, dato, tid, sted og barn. I retter, hvis noget er forkert, og trykker Gem. Intet skrives i kalenderen uden jeres klik. Siger en besked, at en aftale, I har oprettet fra appen, er aflyst eller flyttet, vises det på beskeden.
+
+Alt, hvad AI'en foreslår, kontrolleres mod punktets egen tekst: datoen skal stå der (eller ugedagen, op til to uger efter beskeden er skrevet), klokkeslæt og sted skal stå der, og en aflysning skal passe til præcis én aftale, appen har oprettet. Ellers droppes forslaget. Hvert punkt vurderes kun én gang. Første gang tjekkes de seneste 14 dage; derefter kun nye og ændrede punkter, højst 3 forespørgsler pr. hentning, og 30 af dagens forespørgsler holdes altid tilbage til overblikket. Uden AI – eller når kvoten er brugt – finder appens egne regler forslagene som før. Slå det fra med `[calendar_ai] enabled = false`.
+
 ### Vejr (DMI)
 
 Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"), og kioskskærmen viser en vejrlinje under datoen. Vejret kommer fra DMI's åbne data (vejrmodellen HARMONIE) – ingen nøgle, ingen konto. HARMONIE rækker kun et par døgn frem, så ugeoverblikket har kun vejr for de dage, DMI dækker.

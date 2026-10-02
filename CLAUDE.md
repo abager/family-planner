@@ -28,9 +28,10 @@ tablets and a kiosk screen. Events can be added to Google Calendar from any mess
   (non-private), tasks, week plans, weather, and from the timetable ONLY deviations (substitute, notes) – never the
   normal schedule (user decision: it's in the app). The rule-based fallback still produces `afsnit`.
 - **Phase status of the AI work.** Phase 1 (done): `ai.py` + day/week summaries. Phase 2 (planned): homework per
-  child extracted from messages, weekly plans and feed posts, with source quote and link. Phase 3 (planned): calendar
-  suggestions only on AI-flagged items, date/time validated against the source text, never written without a click;
-  in fallback `activities.find_all()` decides flagged items.
+  child extracted from messages, weekly plans and feed posts, with source quote and link. Phase 3 (done, `calendar_ai.py`): calendar
+  suggestions only on AI-flagged items, date/time/place validated against the source text, changes only to exactly
+  one app-created event, never written without a click; per item, `activities.find_all()` decides when the AI has
+  no answer for it (unavailable, quota, reserve, older than 14 days on first run).
 - **Time is an argument.** Code that depends on "now" takes the time as a parameter so tests don't depend on clocks
   (see `ops.py`). Keep that pattern.
 - **Degrade, don't break.** If Aula or a Google calendar fails, the previous data for that source is kept and the UI
@@ -82,6 +83,7 @@ familie_regler.md (free text)   ─┘                                     └�
 | `activities.py` | Finds activities worth a calendar entry; cancellations and moves |
 | `schedule.py` | Timetable cleanup: subject names, teacher abbreviations, hidden support lessons |
 | `weather.py` | DMI weather (Forecast EDR, `harmonie_dini_sf`, no key): home location (rounded), hourly-cached fetch, coarse day summaries, rule-based advice |
+| `calendar_ai.py` | AI calendar items from messages/posts/week plans → same `(suggestions, options)` shape as `activities.find_all`; per-item cache, batches of 8, ≤3 requests/fetch, 30-request reserve for the briefing |
 | `ai.py` | The only way to call a language model: provider adapters (Gemini, Claude) over plain httpx, JSON output, content-hash cache, daily budget + RPM throttle, backoff, `AIUnavailable` |
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
