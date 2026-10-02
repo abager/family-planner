@@ -124,7 +124,7 @@ button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offse
 .scard .shead{display:flex;align-items:center;gap:8px;margin-bottom:6px;font:700 1rem var(--display)}
 .scard .shead small{margin-left:auto;font:400 .8rem var(--body);color:var(--muted)}
 .lessons{list-style:none;margin:0;padding:0}
-.lessons li{display:grid;grid-template-columns:46px 1fr;gap:8px;padding:4px 6px;border-radius:8px;font-size:.92rem}
+.lessons li{display:grid;grid-template-columns:5.6em 1fr;gap:8px;padding:4px 6px;border-radius:8px;font-size:.92rem}
 .lessons li time{font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted)}
 .lessons li .who{font-size:.76rem;color:var(--muted)}
 .lessons li .also{font-style:italic}
@@ -745,7 +745,10 @@ button,a,.chip,.pill{touch-action:manipulation}
   "generated": "ISO timestamp",
   "people":  [{ "id":"p1", "name":"Anna", "role":"adult|child", "color":"#hex", "note":"3.B, Solskolen" }],
   "events":  [{ "id":"e1", "title":"…", "start":"ISO", "end":"ISO", "allDay":false,
-                "people":["p3"] | ["family"], "source":"aula|google", "location":"…", "notes":"…" }],
+                "people":["p3"] | ["family"], "source":"aula|google", "location":"…", "notes":"…",
+                "endInferred":true (valgfri: sluttiden er tænkt – vis kun start), "appCreated":true (valgfri: oprettet af appen),
+                "lessons":[{ "start":"HH:MM", "end":"HH:MM", "title":"…", "endInferred":true (valgfri) }] (skoledage) }],
+  "settings":{ "eveningHour":17, "lessonMinutes":45, "hidePrivate":true },
   "tasks":   [{ "id":"t1", "title":"…", "due":"YYYY-MM-DD", "person":"p3", "kind":"lektie|husk|besked", "source":"aula" }],
   "weekplan":[{ "id":"w1", "person":"p3", "date":"YYYY-MM-DD"|null, "dayLabel":"…", "title":"…", "label":"…", "text":"…", "source":"meebook" }],
   "posts":   [{ "id":"po1", "title":"…", "author":"…", "timestamp":"ISO", "important":false, "text":"…", "people":["p3"] }],
@@ -758,6 +761,15 @@ const MONTHS = ["januar","februar","marts","april","maj","juni","juli","august",
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const hm = d => `${pad(d.getHours())}.${pad(d.getMinutes())}`;
+// ---------- Tidsrum, ét sted for hele appen: begge tider, når sluttiden er kendt, ellers kun starttidspunktet (endInferred = tænkt sluttid)
+const toMin = t => { if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; };
+const minHM = n => `${pad(Math.floor(n/60)%24)}:${pad(n%60)}`;
+const hhmm = t => t ? t.replace(":",".") : "";
+const lessonMinutes = () => state.data?.settings?.lessonMinutes ?? 45;
+const lessonEnd = l => l.end || minHM(toMin(l.start)+lessonMinutes());           // en lektion uden sluttid varer 45 min (kan indstilles)
+const lessonRange = l => `${hhmm(l.start)}–${hhmm(lessonEnd(l))}`;
+const evRange = ev => ev.allDay ? "Hele dagen" : ev.endInferred ? hm(new Date(ev.start)) : `${hm(new Date(ev.start))}–${hm(new Date(ev.end))}`;
+const NO_END = "sluttid ukendt";
 const startOfWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
 const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -855,6 +867,7 @@ function demoData(){
     E("au3","Bedsteforældredag",at(3,9),at(3,11),["leo"],"aula"),
     E("g7","Loppemarked",at(5,10),at(5,13),["family"],"google"),
     E("g8","Fødselsdag hos Karla",at(5,14),at(5,17),["carla"],"google"),
+    E("g9","Frisør Monica",at(1,12),at(1,13),["monica"],"google",{endInferred:true}),
     {id:"au4",title:"Lukkedag",start:at(4,0),end:at(4,23,59),allDay:true,people:["leo"],source:"aula"}
   );
   const tasks = [
@@ -1041,6 +1054,7 @@ function timelineItems(day){
     const who = ev.people.includes("family") ? "Hele familien" : ev.people.map(id=>person(id)?.name).join(", ");
     const dots = colorsFor(ev).map(c=>`<span class="dot" style="--c:${c}"></span>`).join("");
     const time = ev.allDay ? `<div class="t allday">Hele dagen</div>`
+      : ev.endInferred ? `<div class="t">${hm(new Date(ev.start))}<span class="dur">${NO_END}</span></div>`
       : `<div class="t">${hm(new Date(ev.start))}<span class="tend">–${hm(new Date(ev.end))}</span><span class="dur">${duration(ev)}</span></div>`;
     return `<li>${time}<div><span class="dots">${dots}</span><span class="title">${icon("event")}${esc(ev.title)}</span>
       <div class="meta">${esc(who)}${ev.location?` · ${esc(ev.location)}`:""} · ${srcLabel(ev.source)}</div></div></li>`;
@@ -1088,16 +1102,15 @@ function renderSkema(){
     const evs=state.data.events.filter(e=>onDay(e,day)&&e.people.includes(k.id));
     const ls=evs.flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
     if(!ls.length) return "";
-    const toMin=t=>{ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; };
     const nowMin=now.getHours()*60+now.getMinutes();
-    const first=ls[0].start, last=ls.reduce((mx,l)=>(l.end||l.start)>mx?(l.end||l.start):mx, ls[0].end||ls[0].start);
+    const first=ls[0].start, last=ls.map(lessonEnd).sort().pop();
     return `<div class="scard" style="--c:${k.color}"><div class="shead">${pav(k)}${esc(k.name)}<small>${first.replace(":",".")}–${last.replace(":",".")}</small></div>
       <ul class="lessons">${ls.map((l,i)=>{
-        const s=toMin(l.start), e=toMin(l.end) ?? toMin(ls[i+1]?.start) ?? s+45;
+        const s=toMin(l.start), e=toMin(lessonEnd(l));
         const cls = !isToday ? "" : nowMin>=e ? "past" : (nowMin>=s ? "now" : "");
         const extra=[l.teacher,l.location].filter(Boolean).join(" · ");
         const also=[...(l.alt||[]).map(x=>`samtidig: ${x.title}${x.teacher?` (${x.teacher})`:""}${x.location?`, ${x.location}`:""}`)];
-        return `<li class="${cls}"><time>${l.start.replace(":",".")}</time><span>${esc(l.title)}${l.substitute?`<span class="sub">vikar${l.substitute&&l.substitute!=="vikar"?`: ${esc(l.substitute)}`:""}</span>`:""}
+        return `<li class="${cls}"><time${l.endInferred?` title="${NO_END} – regnet som ${lessonMinutes()} min"`:""}>${lessonRange(l)}</time><span>${esc(l.title)}${l.substitute?`<span class="sub">vikar${l.substitute&&l.substitute!=="vikar"?`: ${esc(l.substitute)}`:""}</span>`:""}
           ${extra?`<div class="who">${esc(extra)}</div>`:""}${also.length?`<div class="who also">${esc(also.join(" · "))}</div>`:""}
           ${l.note?`<div class="lnote">${icon("note")} ${esc(unescMd(l.note))}</div>`:""}</span></li>`;
       }).join("")}</ul></div>`;
@@ -1219,7 +1232,7 @@ function pillsFor(l,d){
   const evs=state.data.events.filter(e=>onDay(e,d)&&(l.id==="family"?e.people.includes("family"):e.people.includes(l.id))).sort(byStart);
   const tks=l.id==="family"?[]:state.data.tasks.filter(t=>!t.openEnded&&tPeople(t).includes(l.id)&&t.due===key);
   const pls=l.id==="family"?[]:arr("weekplan").filter(w=>w.person===l.id&&w.date===key&&w.category!=="anden_klasse");
-  return evs.map(e=>`<button class="pill${e.source==="besked"?" sugg":""}" data-ev="${e.id}">${icon("event")}${e.allDay?"":`<time>${hm(new Date(e.start))}–${hm(new Date(e.end))}</time>`}${esc(e.title)}</button>`).join("")
+  return evs.map(e=>`<button class="pill${e.source==="besked"?" sugg":""}" data-ev="${e.id}">${icon("event")}${e.allDay?"":`<time>${evRange(e)}</time>`}${esc(e.title)}</button>`).join("")
     + tks.map(t=>`<button class="pill task" data-task="${t.id}">${icon("task")}${esc(t.title)}</button>`).join("")
     + pls.map(w=>`<button class="pill plan" data-plan="${esc(w.id)}">${icon(planIcon(w))}${esc(planTitle(w))}</button>`).join("");
 }
@@ -1251,10 +1264,10 @@ function renderWeek(){
 }
 
 function showEvent(id){
-  const e=state.data.events.find(x=>x.id===id), s=new Date(e.start), en=new Date(e.end);
+  const e=state.data.events.find(x=>x.id===id), s=new Date(e.start);
   const who=e.people.includes("family")?"Hele familien":e.people.map(i=>person(i)?.name).join(", ");
   document.getElementById("dTitle").textContent=e.title;
-  document.getElementById("dBody").innerHTML=`<p>${DAYS[s.getDay()]} ${s.getDate()}. ${MONTHS[s.getMonth()]}${e.allDay?", hele dagen":`, ${hm(s)}–${hm(en)}`}</p>
+  document.getElementById("dBody").innerHTML=`<p>${DAYS[s.getDay()]} ${s.getDate()}. ${MONTHS[s.getMonth()]}${e.allDay?", hele dagen":`, ${evRange(e)}${e.endInferred?` (${NO_END})`:""}`}</p>
     <p class="meta">${esc(who)}${e.location?`<br>${esc(e.location)}`:""}<br>Kilde: ${srcLabel(e.source)}</p>${e.notes?`<p style="white-space:pre-line">${esc(e.notes)}</p>`:""}`;
   document.getElementById("detail").showModal();
 }
@@ -1723,16 +1736,15 @@ function kidCard(k,day,now,isToday){
   const evs=state.data.events.filter(e=>onDay(e,day)&&e.people.includes(k.id));
   const ls=evs.flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
   const other=evs.filter(e=>!lessonsOf(e).length && !isSchoolBlock(e));
-  const toMin=t=>{ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; };
   const nowMin=now.getHours()*60+now.getMinutes();
   let head=other.length||tasksFor(k,day).length ? "" : `<div class="k-line k-none">Intet på programmet</div>`, nowLine="";
   if(ls.length){
-    const last=ls.reduce((mx,l)=>(l.end||l.start)>mx?(l.end||l.start):mx, ls[0].end||ls[0].start);
-    head=`<div class="k-hours">${ls[0].start.replace(":",".")}–${last.replace(":",".")}</div>`;
+    const last=ls.map(lessonEnd).sort().pop();
+    head=`<div class="k-hours">${hhmm(ls[0].start)}–${hhmm(last)}</div>`;
     if(isToday){
-      const cur=ls.find((l,i)=>{ const s=toMin(l.start), e=toMin(l.end)??toMin(ls[i+1]?.start)??s+45; return nowMin>=s&&nowMin<e; });
+      const cur=ls.find((l,i)=>{ const s=toMin(l.start), e=toMin(lessonEnd(l)); return nowMin>=s&&nowMin<e; });
       const nxt=ls.find(l=>toMin(l.start)>nowMin);
-      nowLine = cur ? `<div class="k-line k-now">Nu: ${esc(cur.title)}${cur.location?` · ${esc(cur.location)}`:""}</div>` : nxt ? `<div class="k-line">Næste: ${esc(nxt.title)} kl. ${nxt.start.replace(":",".")}</div>` : `<div class="k-line k-none">Skoledagen er slut</div>`;
+      nowLine = cur ? `<div class="k-line k-now">Nu: ${esc(cur.title)}${cur.location?` · ${esc(cur.location)}`:""}</div>` : nxt ? `<div class="k-line">Næste: ${esc(nxt.title)} kl. ${lessonRange(nxt)}</div>` : `<div class="k-line k-none">Skoledagen er slut</div>`;
     }
   }
   const subs=ls.filter(l=>l.substitute).map(l=>`${esc(l.title)} ${l.start.replace(":",".")}`);
@@ -1741,7 +1753,7 @@ function kidCard(k,day,now,isToday){
   const plans=arr("weekplan").filter(w=>w.person===k.id && w.date===key && w.category && !["undervisning","anden_klasse"].includes(w.category)).map(w=>planSummary(w) && `${esc(w.subject||w.title)}: ${esc(planSummary(w))}`);
   return `<article class="k-kid" style="--c:${k.color}"><h3>${pav(k)}${esc(k.name)}</h3>${head}${nowLine}
     ${subs.length?`<div class="k-line">Vikar i ${subs.join(", ")}<span class="k-sub">vikar</span></div>`:""}
-    ${other.map(e=>`<div class="k-line">${icon("event")} ${esc(e.title)}${e.allDay?"":` · ${hm(new Date(e.start))}`}</div>`).join("")}
+    ${other.map(e=>`<div class="k-line">${icon("event")} ${esc(e.title)}${e.allDay?"":` · ${evRange(e)}`}</div>`).join("")}
     ${tasks.map(t=>`<div class="k-line">${icon("task")} ${esc(t)}</div>`).join("")}
     ${plans.map(t=>`<div class="k-line">${icon("note")} ${t}</div>`).join("")}</article>`;
 }
