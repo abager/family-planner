@@ -229,3 +229,69 @@ def test_ai_status_reports_usage_but_no_key(acfg, monkeypatch):
 
 def test_ai_status_is_none_when_the_briefing_uses_no_language_model(cfg):
     assert B.ai_status(cfg) is None
+
+
+# ---------------------------------------------------------------- vejret i overblikket
+def wx(dato="2026-10-01", ugedag="torsdag", regn="regn", raad=("regntøj og gummistøvler",), **kw):
+    d = {"dato": dato, "ugedag": ugedag, "min": 8, "max": 11, "regn": regn, "himmel": "overskyet", "vind": None,
+         "frost": False, "raad": list(raad), **kw}
+    if regn != "ingen":
+        d.setdefault("regn_hvornaar", "om eftermiddagen")
+    return d
+
+
+def with_weather(*days):
+    d = family_data()
+    d["weather"] = {"kilde": "DMI", "hentet": "2026-10-01T06:00:00+02:00", "dage": list(days)}
+    return d
+
+
+def test_the_ai_gets_coarse_weather_for_the_day_with_a_source_id(acfg):
+    fake = Fake(ok({"afsnit": [{"titel": "Vejr", "punkter": [{"tekst": "Regn om eftermiddagen, 8–11° – regntøj", "hvem": [], "refs": ["V1"]}]}]}))
+    b = brief(acfg, fake, data=with_weather(wx(), wx("2026-10-02", "fredag")))
+    sent = json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"]
+    payload = json.loads(sent.split("Data:\n", 1)[1])
+    assert [v["dato"] for v in payload["vejr"]] == ["2026-10-01"]          # kun dagen overblikket handler om
+    assert payload["vejr"][0]["id"] == "V1" and "lat" not in sent and "tekst" not in payload["vejr"][0]
+    assert b["afsnit"][0]["titel"] == "Vejr" and b["afsnit"][0]["punkter"][0]["kilder"] == ["Vejr (DMI)"]
+    assert '"Vejr"' in json.loads(fake.requests[0].content)["systemInstruction"]["parts"][0]["text"]
+
+
+def test_the_week_gets_only_the_days_dmi_covers(acfg):
+    fake = Fake(ok(GOOD))
+    brief(acfg, fake, mode="week", data=with_weather(wx(), wx("2026-10-02", "fredag")))
+    payload = json.loads(json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"].split("Data:\n", 1)[1])
+    assert [v["ugedag"] for v in payload["vejr"]] == ["torsdag", "fredag"]
+
+
+def test_without_ai_the_rules_write_the_weather_with_advice(cfg):
+    b = B.make_briefing(cfg, with_weather(wx()), "day", now=NOW)
+    sec = b["afsnit"][0]
+    assert sec["titel"] == "Vejr"
+    assert sec["punkter"][0]["tekst"] == "8–11°, regn om eftermiddagen – regntøj og gummistøvler"
+    assert sec["punkter"][0]["kilder"] == ["Vejr (DMI)"]
+
+
+def test_the_week_fallback_has_one_weather_line_per_covered_day(cfg):
+    b = B.make_briefing(cfg, with_weather(wx(), wx("2026-10-02", "fredag", regn="ingen", raad=())), "week", now=NOW)
+    vejr = next(s for s in b["afsnit"] if s["titel"] == "Vejr")
+    assert [p["tekst"] for p in vejr["punkter"]] == ["Torsdag: 8–11°, regn om eftermiddagen – regntøj og gummistøvler",
+                                                     "Fredag: 8–11°, overskyet"]
+
+
+def test_no_weather_means_no_weather_section_and_no_weather_in_the_prompt(acfg, cfg):
+    b = B.make_briefing(cfg, family_data(), "day", now=NOW)
+    assert all(s["titel"] != "Vejr" for s in b["afsnit"])
+    fake = Fake(ok(GOOD))
+    brief(acfg, fake)
+    payload = json.loads(json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"].split("Data:\n", 1)[1])
+    assert payload["vejr"] == []
+
+
+def test_unchanged_coarse_weather_costs_no_new_ai_request(acfg):
+    fake = Fake(ok(GOOD))
+    brief(acfg, fake, data=with_weather(wx()))
+    later = with_weather(wx())
+    later["weather"]["hentet"] = "2026-10-01T07:00:00+02:00"           # ny hentning, samme grove vejr
+    brief(acfg, fake, data=later, now=NOW + dt.timedelta(hours=1, minutes=5))
+    assert len(fake.requests) == 1

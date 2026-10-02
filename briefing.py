@@ -152,13 +152,21 @@ def build_digest(data: dict, start: dt.date, end: dt.date, now: dt.datetime) -> 
                           "titel": _scrub(p.get("title"), 120), "hvem": name(p.get("people", [])),
                           "vigtigt": bool(p.get("important")), "tekst": _scrub(p.get("text"), 300)})
 
+    # Vejret (groft, fra weather.py via family.json) for de dage i perioden, DMI dækker
+    vejr = []
+    for d in ((data.get("weather") or {}).get("dage") or []):
+        dd = _date(d.get("dato"))
+        if dd and start <= dd <= end:
+            vejr.append({"id": ref("V", d["dato"], "Vejr (DMI)"), **{k: d[k] for k in
+                         ("dato", "ugedag", "min", "max", "regn", "regn_hvornaar", "himmel", "vind", "frost", "raad") if k in d}})
+
     family = [{"navn": p["name"], "rolle": "voksen" if p.get("role") == "adult" else "barn", "note": p.get("note")}
               for p in people.values()]
     return {
         "nu": now.strftime("%Y-%m-%d %H:%M"), "ugedag_nu": DAYS[now.weekday()],
         "periode": {"fra": start.isoformat(), "til": end.isoformat()},
         "familie": family, "skema": schedule, "aftaler": events, "opgaver": tasks,
-        "ugeplan": plan, "nye_beskeder": messages, "nye_opslag": posts,
+        "ugeplan": plan, "nye_beskeder": messages, "nye_opslag": posts, "vejr": vejr,
         "_refs": refs,
     }
 
@@ -180,6 +188,10 @@ Regler:
   Ingen indledende floskler, ingen gentagelser.
 - Hvert punkt skal have "refs" med kilde-id'erne (fx "A3", "O1") fra data.
 - Følg familiens egne regler, hvis de er givet, fx hvem der plejer at hente.
+- Vejr: findes "vejr" i data, så start med afsnittet "Vejr" – ét punkt pr. dag i data, med kort prognose og
+  praktiske råd til børnene, fx "Regn om eftermiddagen, 8–11° – regntøj og gummistøvler til Hugo og Carla".
+  "raad" i data er forslag; brug dem eller formulér dem bedre. Nævn kun dage, der står i "vejr", gæt aldrig
+  vejret, og udelad afsnittet, hvis der ingen vejrdata er. Refs er dagens "V"-id.
 - Skriv aldrig "i dag", "i morgen" eller "i går" – overblikket læses på forskellige tidspunkter. Brug ugedagen
   ("onsdag", "på fredag") eller udelad dagen, når overblikket kun handler om én dag.
 
@@ -187,7 +199,7 @@ Svar KUN med JSON (ingen markdown, ingen forklaring) i dette format:
 {
   "oplaesning": "samme overblik skrevet til at blive LÆST HØJT (se regler for oplæsning)",
   "afsnit": [
-    {"titel": "Husk" | "Skal gøres" | "Særligt" | "Kommende frister",
+    {"titel": "Vejr" | "Husk" | "Skal gøres" | "Særligt" | "Kommende frister",
      "punkter": [{"tekst": "…", "hvem": ["navn", …], "refs": ["A1"]}]}
   ]
 }
@@ -221,7 +233,7 @@ def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[d
     return [{"role": "user", "content": content}]
 
 
-SECTION_TITLES = {"Husk", "Skal gøres", "Særligt", "Kommende frister"}
+SECTION_TITLES = {"Vejr", "Husk", "Skal gøres", "Særligt", "Kommende frister"}
 
 
 def validate_result(result: dict, refs: dict[str, str]) -> None:

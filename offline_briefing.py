@@ -17,6 +17,7 @@ så private samtaler indgår aldrig, heller ikke her – overblikket vises jo p�
 """
 from __future__ import annotations
 
+import weather
 import datetime as dt
 import re
 
@@ -237,7 +238,24 @@ def day_briefing(digest: dict, today: dt.date, real_today: dt.date | None = None
         maybe = "Muligvis: " if t.get("sikkerhed") == "middel" else ""
         out.add("Kommende frister", f"{_prefix(t['hvem'])}{maybe}{t['titel']} – {when}", t["hvem"], [t["id"]], kilder=_src_task(t))
 
-    return {"afsnit": out.result(["Husk", "Skal gøres", "Særligt", "Kommende frister"])}
+    _weather(out, digest, [today])
+    return {"afsnit": out.result(["Vejr", "Husk", "Skal gøres", "Særligt", "Kommende frister"])}
+
+
+def _weather(out, digest: dict, days: list[dt.date] | None) -> None:
+    """Ét punkt pr. dag med DMI-vejr: kort prognose og råd. days=None: alle dage i perioden (ugen)."""
+    for v in digest.get("vejr", []):
+        d = _date(v.get("dato"))
+        if days is not None and d not in days:
+            continue
+        text = weather.short_text(v)
+        if days is None:
+            text = f"{_cap(v['ugedag'])}: {text}"
+        else:
+            text = _cap(text)
+        if v.get("raad"):
+            text += " – " + ", ".join(v["raad"])
+        out.add("Vejr", text, [], [v["id"]], kilder=["Vejr (DMI)"])
 
 
 # ---------------------------------------------------------------- ugens overblik
@@ -264,7 +282,8 @@ def week_briefing(digest: dict, start: dt.date, end: dt.date, today: dt.date) ->
 
     _special(out, digest, None)
 
-    return {"afsnit": out.result(["Skal gøres", "Husk og frister", "Særligt"])}
+    _weather(out, digest, None)
+    return {"afsnit": out.result(["Vejr", "Skal gøres", "Husk og frister", "Særligt"])}
 
 
 def offline_briefing(digest: dict, mode: str, now: dt.datetime) -> dict:

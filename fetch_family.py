@@ -1202,6 +1202,12 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         except Exception as e:  # noqa: BLE001 – forslag må aldrig vælte hentningen
             log.warning("Kunne ikke finde kalenderforslag: %s", e)
     events.sort(key=lambda x: x["start"])
+    try:
+        import weather
+        weather_data = weather.for_family(cfg, now)        # groft dagsresumé, aldrig placeringen; None uden hjem
+    except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
+        log.warning("Vejret sprunget over: %s", e)
+        weather_data = None
     data = {
         "generated": iso(now),
         "people": people.public(),
@@ -1213,6 +1219,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         "albums": extra["albums"],
         "suggestions": suggestions_list,
         "health": health,
+        "weather": weather_data,
         "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 17)),
                      "lessonMinutes": lesson_minutes(cfg)},
     }
