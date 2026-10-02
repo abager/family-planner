@@ -5,6 +5,15 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (AI narrative)
+- With AI, the day and week overviews are a warm, chronological narrative in a few short paragraphs (~150 words),
+  addressed to the parents, shown in the app and on the kiosk ("Dagen"). The normal school timetable is left out;
+  only deviations (substitute, notes) are mentioned.
+- The AI now receives all calendar events (incl. place and note), school news and non-private messages.
+  Private threads are still never sent; phone numbers, mail addresses and CPR numbers are still removed.
+- A narrative is rejected (fallback used) if its sources don't exist, it mentions a clock time not in the data,
+  its length is off, or it contains formatting. Without AI, the rule-based list is unchanged.
+
 ### Added (weather)
 - Weather from DMI (HARMONIE, no key) in the day and week overviews (section "Vejr": short forecast and practical
   advice, also without AI) and a weather line on the kiosk. The week only has weather for the days DMI covers.

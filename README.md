@@ -89,7 +89,9 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 ## Overblik (briefing.py)
 
-Øverst i "I dag" og "Ugen" står et overblik over det, der er **særligt** for dagen eller ugen: *Husk* (ting der skal med), *Skal gøres* (forældrehandlinger med frist), *Særligt* (vikarer, lukkedage, noter fra skolen, praktisk info) og *Kommende frister* (de næste tre uger). Almindelige aftaler, nyheder fra skolen og stående lektier ("hver dag") er med vilje udeladt i dagsoverblikket – de står i "Dagens aftaler", Beskeder og Feed. Hvert punkt viser barnets ikon og kilde.
+Øverst i "I dag" og "Ugen" står et overblik. **Med AI** er det en varm, kronologisk fortælling til jer forældre – fra morgen til aften (ugen: dag for dag) – i nogle få korte afsnit, ca. 150 ord: hvad der skal med ud ad døren, afvigelser i skoledagen, afhentning, fritid og aftaler, og vejret, hvor det betyder noget. Det normale skoleskema nævnes ikke – det står allerede i appen. Hvem der henter/bringer nævnes kun, hvis det står i en aftale eller i `familie_regler.md`. Kioskskærmen viser fortællingen under "Dagen".
+
+**Uden AI** laver appens egne regler en liste: *Vejr*, *Husk*, *Skal gøres*, *Særligt* og *Kommende frister*, hvert punkt med barnets ikon og kilde.
 
 **`mode = "ai"`: sprogmodellen skriver overblikket.** Appens egne regler finder fakta (datoer, frister, hvem); sprogmodellen formulerer og prioriterer. Standard er Google Gemini på det gratis niveau. Hvis sprogmodellen ikke kan bruges (ingen nøgle, kvoten er brugt, Google er nede, svaret er ugyldigt), sker der dette:
 
@@ -108,7 +110,7 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 5. Prøv for alvor: `python server.py --selftest --no-notify`. Linjen *Familieassistent* skal stå med ✔. Står der ✖, forklarer den, hvad der er galt.
 6. Se præcis hvad der sendes: `python briefing.py --dry-run`.
 
-**Vilkår, I selv har taget stilling til:** På Googles gratis niveau må Google bruge det, der sendes, til at forbedre sine tjenester, og vilkårene er skrevet til voksne brugere, mens overblikket også vises på kioskskærmen for børnene. Derfor sendes kun et renset uddrag: private samtaler sendes aldrig, og telefonnumre, mailadresser og CPR-numre fjernes. `familie_regler.md` sendes som den er – skriv ikke telefonnumre eller CPR-numre i den.
+**Vilkår, I selv har taget stilling til:** På Googles gratis niveau må Google bruge det, der sendes, til at forbedre sine tjenester, og vilkårene er skrevet til voksne brugere, mens overblikket også vises på kioskskærmen for børnene. Til fortællingen sendes: alle aftaler fra Google Kalender og Aula (titel, tid, sted og note), opgaver, ugeplaner, afvigelser i skemaet (vikar, noter), skolens nyheder og ikke-private beskeder fra de seneste dage, og vejret. Private samtaler sendes aldrig, og telefonnumre, mailadresser og CPR-numre fjernes først – men sted og note fra kalenderen kan stadig indeholde fx en adresse eller en lægetid. `familie_regler.md` sendes som den er – skriv ikke telefonnumre eller CPR-numre i den.
 
 **Skift udbyder** i `config.toml` under `[ai]`: `provider = "claude"`, `model = "…"` og `api_key_env = "ANTHROPIC_API_KEY"` (nøgle fra platform.claude.com i `.env`). Ældre opsætning med `mode = "claude"` virker stadig.
 

@@ -21,6 +21,12 @@ tablets and a kiosk screen. Events can be added to Google Calendar from any mess
   back on anything unexpected, only receive scrubbed data (`briefing._scrub`), never receive private threads, and
   tell the user when the fallback is in use. Facts the AI returns must point back to a source (refs); unsourced
   points are dropped.
+- **AI summary = narrative.** With AI, the day/week briefing is `fortaelling` (2–5 plain-text paragraphs, warm,
+  chronological, addressed to the parents, ~150 words day / ≤220 week) plus `kilde_ids`. Validated in
+  `briefing.validate_narrative`: valid source ids, every clock time must appear in the data, word limits, no
+  formatting – otherwise fallback. The payload contains all calendar events (incl. place/note), messages and posts
+  (non-private), tasks, week plans, weather, and from the timetable ONLY deviations (substitute, notes) – never the
+  normal schedule (user decision: it's in the app). The rule-based fallback still produces `afsnit`.
 - **Phase status of the AI work.** Phase 1 (done): `ai.py` + day/week summaries. Phase 2 (planned): homework per
   child extracted from messages, weekly plans and feed posts, with source quote and link. Phase 3 (planned): calendar
   suggestions only on AI-flagged items, date/time validated against the source text, never written without a click;
