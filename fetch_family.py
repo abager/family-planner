@@ -1,0 +1,1195 @@
+#!/usr/bin/env python3
+"""Henter data fra Aula og Google Kalender (iCal) og skriver family.json til familieplanneren.
+
+Brug:
+  python fetch_family.py                 # hent én gang (første gang: MitID-login via QR i terminalen)
+  python fetch_family.py --watch 900     # hent hvert 15. minut
+  python fetch_family.py --no-aula       # kun Google (godt til at teste opsætningen)
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import hashlib
+import inspect
+import datetime as dt
+import json
+import logging
+import re
+import sys
+import tomllib
+from collections import defaultdict
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import httpx
+import icalendar
+import recurring_ical_events
+
+import activities
+import homework
+import private as private_mod
+import messages as msg_analysis
+import schedule
+import suggestions as sugg_store
+
+TZ = ZoneInfo("Europe/Copenhagen")
+log = logging.getLogger("familieplanner")
+
+
+# ---------------------------------------------------------------- helpers
+def to_local(value) -> tuple[dt.datetime, bool]:
+    """Returnér (tz-aware datetime, all_day)."""
+    if isinstance(value, dt.datetime):
+        return (value.replace(tzinfo=TZ) if value.tzinfo is None else value.astimezone(TZ)), False
+    if isinstance(value, dt.date):
+        return dt.datetime.combine(value, dt.time(0, 0), TZ), True
+    raise ValueError(f"Ukendt datotype: {value!r}")
+
+
+def iso(d: dt.datetime) -> str:
+    return d.astimezone(TZ).isoformat(timespec="minutes")
+
+
+class People:
+    def __init__(self, people: list[dict]):
+        self.people = people
+        self.by_id = {p["id"]: p for p in people}
+        self._alias_re = [
+            (p["id"], re.compile(r"(?<!\w)(" + "|".join(map(re.escape, p.get("aliases", [p["name"]]))) + r")(?!\w)", re.I))
+            for p in people
+        ]
+
+    def in_text(self, text: str) -> list[str]:
+        return [pid for pid, rx in self._alias_re if rx.search(text or "")]
+
+    def by_aula_name(self, name: str) -> str | None:
+        parts = (name or "").split()
+        if not parts:
+            return None
+        first = parts[0].lower()
+        for p in self.people:
+            aula_parts = p.get("aula_name", "").split()
+            if aula_parts and aula_parts[0].lower() == first:
+                return p["id"]
+        return None
+
+    def aula_self(self) -> str | None:
+        return next((p["id"] for p in self.people if p.get("aula_self")), None)
+
+    def public(self) -> list[dict]:
+        keys = ("id", "name", "role", "color", "note", "icon")
+        return [{k: p[k] for k in keys if k in p} for p in self.people]
+
+
+# ---------------------------------------------------------------- Google (iCal)
+async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, failed: list[str] | None = None) -> list[dict]:
+    """failed: får navnene på de kalendere, der ikke kunne hentes, så kaldet kan beholde deres seneste aftaler."""
+    events: list[dict] = []
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
+        for cal_cfg in cfg.get("google", []):
+            name = cal_cfg.get("name", "Google")
+            try:
+                resp = await http.get(cal_cfg["ical_url"])
+                resp.raise_for_status()
+                cal = icalendar.Calendar.from_ical(resp.content)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Kunne ikke hente Google-kalender %s: %s", name, e)
+                if failed is not None:
+                    failed.append(name)
+                continue
+            for comp in recurring_ical_events.of(cal).between(start, end):
+                if str(comp.get("STATUS", "")).upper() == "CANCELLED":
+                    continue
+                s, all_day = to_local(comp.decoded("DTSTART"))
+                e_raw = comp.decoded("DTEND") if comp.get("DTEND") else None
+                e = to_local(e_raw)[0] if e_raw else s + (dt.timedelta(days=1) if all_day else dt.timedelta(hours=1))
+                title = str(comp.get("SUMMARY", "(uden titel)"))
+                who = people.in_text(title) or cal_cfg.get("default_people", ["family"])
+                uid = str(comp.get("UID", title))
+                events.append({
+                    "id": f"g:{uid}:{s.isoformat()}",
+                    "title": title,
+                    "start": iso(s),
+                    "end": iso(e - dt.timedelta(minutes=1) if all_day else e),
+                    "allDay": all_day,
+                    "people": who,
+                    "source": "google",
+                    "calendar": name,
+                    "location": str(comp.get("LOCATION", "")) or None,
+                    "notes": str(comp.get("DESCRIPTION", "")).strip()[:500] or None,
+                })
+    log.info("Google: %d aftaler", len(events))
+    return events
+
+
+# ---------------------------------------------------------------- Aula
+# Skema som tekst: "08.00-08.45 Dansk", "1. lektion 8:00 – 8:45 Matematik (JS)", "kl. 10.15 - 11.00: Idræt"
+_SCHEDULE_LINE = re.compile(
+    r"^\s*(?:\d{1,2}\.\s*(?:lektion|modul|time)\s*:?\s*)?(?:kl\.?\s*)?(\d{1,2})[.:](\d{2})\s*[-–]\s*(\d{1,2})[.:](\d{2})\s*:?\s*(.+?)\s*$",
+    re.I)
+
+
+def parse_schedule_text(text: str) -> list[dict]:
+    lessons = []
+    for line in (text or "").splitlines():
+        m = _SCHEDULE_LINE.match(line.replace("\u00a0", " "))
+        if m and m[5].strip(" -–:"):
+            lessons.append({"start": f"{int(m[1]):02d}:{m[2]}", "end": f"{int(m[3]):02d}:{m[4]}",
+                            "title": m[5].strip(" -–:"), "teacher": None, "substitute": None, "location": None})
+    return lessons if len(lessons) >= 2 else []   # én linje med et klokkeslæt er ikke et skema
+
+
+def _plain_keep_lines(html: str) -> str:
+    """Som _plain, men bevarer linjeskift mellem afsnit/linjer, så skemalinjer kan genkendes."""
+    import html as _h
+    t = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</li>|</tr>|</h\d>", "\n", html or "")
+    t = _h.unescape(re.sub(r"<[^>]+>", " ", t))
+    return "\n".join(re.sub(r"[ \t\u00a0]+", " ", ln).strip() for ln in t.splitlines() if ln.strip())
+
+
+async def _enrich_aula_events(client, events: list[dict], acfg: dict) -> None:
+    """Hent beskrivelsen for Aula-aftaler de næste dage og find skema-tekst i den."""
+    today = dt.date.today()
+    horizon = today + dt.timedelta(days=acfg.get("event_details_days", 7))
+    todo = [e for e in events if e.get("_aula_id")
+            and today - dt.timedelta(days=1) <= dt.date.fromisoformat(e["start"][:10]) <= horizon]
+    todo = todo[: acfg.get("event_details_max", 60)]
+    found = 0
+    for e in todo:
+        try:
+            detail = await client.get_calendar_event(e["_aula_id"])
+        except Exception as ex:  # noqa: BLE001
+            log.debug("Ingen detaljer for %s: %s", e["title"], ex)
+            continue
+        if not detail:
+            continue
+        desc = detail.get("description")
+        html = desc.get("html") if isinstance(desc, dict) else desc
+        text = _plain_keep_lines(html) if isinstance(html, str) else ""
+        if text:
+            e["notes"] = text[:3000]
+        lessons = parse_schedule_text(text) or parse_schedule_text(e["title"].replace(";", "\n"))
+        if lessons:
+            e["lessons"], e["schedule"] = lessons, True
+            found += 1
+    if todo:
+        log.info("Aula: detaljer for %d aftaler, skema fundet i tekst for %d", len(todo), found)
+
+
+async def _lesson_notes(client, events: list[dict], acfg: dict) -> list[dict]:
+    """Hent noten på de lektioner, Aula markerer med hasRelevantNote. Returnerer rå detaljer til --dump-aula."""
+    today = dt.date.today()
+    horizon = today + dt.timedelta(days=acfg.get("lesson_notes_days", 3))
+    todo = [(e, l) for e in events if e.get("lessons") and today <= dt.date.fromisoformat(e["start"][:10]) <= horizon
+            for l in e["lessons"] if l.get("hasNote") and l.get("id")]
+    raw_details: list[dict] = []
+    for e, l in todo[: acfg.get("lesson_notes_max", 15)]:
+        try:
+            detail = await client.get_calendar_event(l["id"])
+        except Exception as ex:  # noqa: BLE001
+            log.debug("Ingen note for %s: %s", l.get("title"), ex)
+            continue
+        raw_details.append({"id": l["id"], "title": l["title"], "date": e["start"][:10], "detail": detail})
+        text = _find_note_text(detail)
+        if text:
+            l["note"] = text[:600]
+    if todo:
+        log.info("Aula: %d lektioner med note, %d hentet", len(todo), sum(1 for _, l in todo if l.get("note")))
+    for e in events:
+        for l in e.get("lessons") or []:
+            l.pop("id", None)
+            l.pop("hasNote", None) if not l.get("note") else None
+    return raw_details
+
+
+def _find_note_text(obj, depth: int = 0) -> str:
+    """Notens præcise placering kender vi ikke – find tekstfelter, hvis navn indeholder 'note'."""
+    if depth > 5 or obj is None:
+        return ""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if "note" in k.lower() and "has" not in k.lower():
+                if isinstance(v, str) and v.strip():
+                    return _plain_keep_lines(v)
+                if isinstance(v, dict):
+                    t = v.get("html") or v.get("text") or v.get("content")
+                    if isinstance(t, str) and t.strip():
+                        return _plain_keep_lines(t)
+        for v in obj.values():
+            t = _find_note_text(v, depth + 1)
+            if t:
+                return t
+    elif isinstance(obj, list):
+        for v in obj:
+            t = _find_note_text(v, depth + 1)
+            if t:
+                return t
+    return ""
+
+
+def _dump_aula(path: Path, raw_events: list, events: list[dict], lesson_details: list[dict] | None = None) -> None:
+    """Gem rå Aula-kalenderdata til fejlsøgning (--dump-aula)."""
+    today = dt.date.today()
+    near = [ev for ev in raw_events if abs((ev.start_datetime.astimezone(TZ).date() - today).days) <= 3]
+    data = {"raw_events": [ev._raw for ev in near][:200],
+            "processed_events": [e for e in events if abs((dt.date.fromisoformat(e["start"][:10]) - today).days) <= 3],
+            "lesson_details": lesson_details or []}
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=1, default=str), "utf-8")
+    log.info("Skrev rå Aula-kalenderdata til %s", path)
+
+
+def _qr_printer(qr1, qr2):
+    print("\nScan QR-koden med MitID-appen (koden skifter mellem to billeder):\n")
+    qr1.print_ascii(invert=True)
+    print("\n— eller —\n")
+    qr2.print_ascii(invert=True)
+
+
+class LoginRequired(Exception):
+    """Aula kræver nyt MitID-login, og kørslen er ubemandet (ingen kan scanne en QR-kode)."""
+
+
+class AuthHooks:
+    """Hvordan et MitID-login vises for brugeren. Standard er terminalen; serveren (server.py) erstatter dem med en webside.
+
+    interactive = False: en ubemandet kørsel afbryder rent i stedet for at vente på en QR-kode, der aldrig bliver scannet."""
+
+    interactive = True
+
+    def on_login_required(self) -> None:
+        if not self.interactive:
+            raise LoginRequired("Aula-login er udløbet")
+        print("MitID-login kræves – godkend i MitID-appen.")
+
+    def on_qr_codes(self, qr1, qr2) -> None:
+        _qr_printer(qr1, qr2)
+
+    def on_qr_done(self) -> None:
+        pass
+
+    def on_otp_code(self, code: str) -> None:
+        print(f"Bekræft koden i MitID-appen: {code}")
+
+
+auth_hooks = AuthHooks()
+
+
+async def open_aula_client(cfg: dict):
+    """Forbindelse til Aula med de gemte tokens (bruges som `async with await open_aula_client(cfg) as client`).
+    Kræves et nyt MitID-login, afgør auth_hooks, hvad der sker (terminal, webside eller LoginRequired)."""
+    from aula import FileTokenStorage
+    from aula.auth_flow import authenticate_and_create_client
+
+    acfg = cfg["aula"]
+    token_path = Path(acfg.get("token_file", "secrets/aula_tokens.json"))
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    hooks = {"on_qr_codes": auth_hooks.on_qr_codes, "on_qr_done": auth_hooks.on_qr_done,
+             "on_login_required": auth_hooks.on_login_required, "on_otp_code": auth_hooks.on_otp_code}
+    supported = inspect.signature(authenticate_and_create_client).parameters       # ældre versioner mangler fx on_qr_done
+    return await authenticate_and_create_client(
+        acfg["mitid_username"], FileTokenStorage(str(token_path)), **{k: v for k, v in hooks.items() if k in supported},
+    )
+
+
+async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, dump_path: Path | None = None,
+                     previous_messages: list[dict] | None = None) -> dict:
+    acfg = cfg["aula"]
+    events: list[dict] = []
+    result: dict = {"tasks": [], "weekplan": [], "posts": [], "messages": [], "albums": []}
+
+    async with await open_aula_client(cfg) as client:
+        profile = await client.get_profile()
+
+        # Aula institution-profil-id → vores person-id
+        owner: dict[int, str] = {}
+        for child in profile.children:
+            pid = people.by_aula_name(child.name)
+            if pid:
+                owner[child.id] = pid
+            else:
+                log.warning("Barn i Aula matcher ingen person i config: %s", child.name)
+        me = people.aula_self()
+        if me:
+            for inst_id in profile.institution_profile_ids:
+                owner.setdefault(inst_id, me)
+
+        raw_events = await client.get_calendar_events(profile.institution_profile_ids, start, end)
+        lessons: dict[tuple[str, dt.date], list] = defaultdict(list)
+
+        for ev in raw_events:
+            raw = ev._raw or {}
+            who = owner.get(ev.belongs_to)
+            if not who:
+                continue
+            s, e = ev.start_datetime.astimezone(TZ), ev.end_datetime.astimezone(TZ)
+            if cfg.get("collapse_lessons", True) and raw.get("type") == "lesson":
+                lessons[(who, s.date())].append(ev)
+                continue
+            events.append({
+                "id": f"a:{ev.id}",
+                "title": ev.title or "(Aula)",
+                "start": iso(s),
+                "end": iso(e),
+                "allDay": bool(raw.get("allDay")),
+                "people": [who],
+                "source": "aula",
+                "type": raw.get("type"),
+                "location": ev.location,
+                "notes": None,
+                "_aula_id": ev.id,
+            })
+
+        subj_map = cfg.get("subjects", {})
+        for (who, day), evs in lessons.items():
+            evs.sort(key=lambda x: x.start_datetime)
+            lesson_list = schedule.build_lessons(evs, TZ, subj_map, acfg.get("hidden_subjects"), acfg.get("secondary_subjects"))
+            if not lesson_list:
+                continue
+            subs = any(l["substitute"] for l in lesson_list)
+            day_start = dt.datetime.combine(day, dt.time.fromisoformat(lesson_list[0]["start"]), TZ)
+            day_end = dt.datetime.combine(day, dt.time.fromisoformat(max(l["end"] for l in lesson_list)), TZ)
+            events.append({
+                "lessons": lesson_list,
+                "id": f"a:skema:{who}:{day}",
+                "title": "Skole" + (" · vikar" if subs else ""),
+                "start": iso(day_start),
+                "end": iso(day_end),
+                "allDay": False,
+                "people": [who],
+                "source": "aula",
+                "location": None,
+                "notes": schedule.schedule_summary(lesson_list),
+            })
+
+        # Noter på lektioner (fx besked til vikaren) – kun de næste dage, og kun lektioner Aula markerer med en note
+        lesson_details = await _lesson_notes(client, events, acfg)
+
+        # Detaljer (beskrivelse) for kommende Aula-aftaler – her står skemaet nogle gange som tekst
+        await _enrich_aula_events(client, events, acfg)
+        if dump_path:
+            _dump_aula(dump_path, raw_events, events, lesson_details)
+
+        # Hver del hentes for sig, så én fejl ikke vælter resten
+        extras = [
+            ("tasks", acfg.get("fetch_tasks", True), lambda: _fetch_mu_tasks(client, profile, people)),
+            ("weekplan", acfg.get("fetch_weekplan", True), lambda: _fetch_meebook(client, profile, people)),
+            ("posts", acfg.get("fetch_posts", True), lambda: _fetch_posts(client, profile, owner, acfg, media)),
+            ("messages", acfg.get("fetch_messages", True), lambda: _fetch_messages(client, people, acfg, media, previous_messages)),
+            ("albums", acfg.get("fetch_gallery", True), lambda: _fetch_gallery(client, profile, owner, people, acfg, media)),
+        ]
+        out_dir = Path(cfg.get("output", "web/family.json")).parent
+        media = MediaStore(client, out_dir / "media", acfg.get("images_per_item", 8))
+        for key, enabled, fn in extras:
+            if not enabled:
+                continue
+            try:
+                result[key] = await fn()
+            except Exception as e:  # noqa: BLE001
+                log.warning("Aula %s fejlede: %s", key, e)
+                result[key] = None  # None = genbrug forrige data
+        # Ryd kun op, når både opslag og beskeder blev hentet, ellers slettes billeder vi stadig viser
+        media.report()
+        if all(result.get(k) is not None for k in ("posts", "messages", "albums")):
+            media.cleanup()
+
+    for e in events:
+        e.pop("_aula_id", None)
+    result["events"] = events
+    log.info("Aula: %d aftaler, %s", len(events),
+             ", ".join(f"{len(v or [])} {k}" for k, v in result.items() if k != "events"))
+    return result
+
+
+async def _fetch_mu_tasks(client, profile, people: People) -> list[dict]:
+    """Best effort: lektier/opgaver fra Min Uddannelse-widgetten. Ikke alle skoler har den."""
+    try:
+        from aula.const import MIN_UDDANNELSE_TASK_WIDGETS
+    except ImportError:
+        return []
+    child_filter, inst_filter = _widget_filters(profile)
+    try:
+        ctx = await client.get_profile_context()
+        session_uuid = ctx["data"]["userId"]
+    except Exception as e:  # noqa: BLE001
+        log.info("Ingen widget-kontekst (opgaver springes over): %s", e)
+        return []
+
+    today = dt.date.today()
+    weeks = {f"{d.isocalendar()[0]}-W{d.isocalendar()[1]}" for d in (today, today + dt.timedelta(days=7))}
+    out: list[dict] = []
+    for widget_id in MIN_UDDANNELSE_TASK_WIDGETS:
+        try:
+            for week in weeks:
+                for t in await client.widgets.get_mu_tasks(widget_id, child_filter, inst_filter, week, session_uuid):
+                    pid = people.by_aula_name(t.student_name)
+                    if not pid or t.is_completed or not t.due_date:
+                        continue
+                    subject = t.course.name if t.course else (t.classes[0].subject_name if t.classes else "")
+                    out.append({
+                        "id": f"mu:{t.id}:{pid}",
+                        "title": f"{subject}: {t.title}" if subject else t.title,
+                        "due": t.due_date.astimezone(TZ).date().isoformat(),
+                        "person": pid,
+                        "kind": "lektie",
+                        "source": "aula",
+                        "url": t.deep_link,
+                    })
+            return out
+        except Exception as e:  # noqa: BLE001
+            log.info("Min Uddannelse-widget %s gav ingen opgaver: %s", widget_id, e)
+    return out
+
+
+# ---------------------------------------------------------------- Aula: ugeplan, opslag, beskeder
+# Aulas tekstomdannelse sætter backslash foran tegn, der ligner markdown ("1\.", "\-")
+_MD_ESCAPE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!|<>~])")
+
+
+def _plain(html: str | None, limit: int = 2000) -> str:
+    if not html:
+        return ""
+    try:
+        from aula.utils.html import html_to_plain
+        text = html_to_plain(html)
+    except Exception:  # noqa: BLE001
+        text = re.sub(r"<[^>]+>", " ", html)
+    text = _MD_ESCAPE.sub(r"\1", text.replace("\u00a0", " "))      # "1\." → "1."
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text[:limit]
+
+
+_IMG_EXT = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+
+
+def _sniff(data: bytes) -> str | None:
+    """Find billedtypen ud fra filens indhold – filnavne i Aula mangler ofte endelse."""
+    if data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if data[:4] == b"GIF8":
+        return ".gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    if data[4:8] == b"ftyp" and data[8:12] in (b"heic", b"heix", b"mif1", b"msf1", b"hevc"):
+        return ".heic"
+    return None
+
+
+def _heic_to_jpg(data: bytes) -> bytes | None:
+    """iPhone-billeder (HEIC) kan ikke vises i Chrome/Edge. Konvertér hvis pillow-heif er installeret."""
+    try:
+        import io
+        import pillow_heif
+        from PIL import Image
+        pillow_heif.register_heif_opener()
+        img = Image.open(io.BytesIO(data))
+        img.thumbnail((1600, 1600))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "JPEG", quality=85)
+        return buf.getvalue()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+class MediaStore:
+    """Downloader billeder fra opslag/beskeder til web/media, så appen kan vise dem lokalt.
+
+    Aulas billed-links er tidsbegrænsede, så de kan ikke bruges direkte i browseren.
+    Filer navngives efter Aulas id, så de kun hentes én gang. Indholdet tjekkes, så en
+    fejlside aldrig gemmes som et "billede".
+    """
+
+    _THUMB_KEYS = ("largeThumbnailUrl", "mediumThumbnailUrl", "thumbnailUrl", "smallThumbnailUrl")
+
+    def __init__(self, client, folder: Path, max_per_item: int):
+        self.client, self.folder, self.max = client, folder, max_per_item
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.used: set[str] = set()
+        self.stats: defaultdict[str, int] = defaultdict(int)
+
+    def _existing(self, key: str) -> str | None:
+        """Genbrug en tidligere hentet fil – men kun hvis den faktisk er et billede.
+
+        Tidligere versioner gemte hvad som helst Aula svarede (fx en fejlside) som .jpg.
+        Den slags filer slettes her, så billedet hentes igen.
+        """
+        for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"):
+            path = self.folder / f"{key}{ext}"
+            if not path.exists():
+                continue
+            with path.open("rb") as fh:
+                kind = _sniff(fh.read(16))
+            if kind == ext.replace(".jpeg", ".jpg"):
+                return path.name
+            self.stats["ugyldig fil i cache slettet"] += 1
+            path.unlink(missing_ok=True)
+        return None
+
+    def _candidates(self, att) -> list[str]:
+        """Mulige adresser for et billede, bedste først."""
+        raw = att._raw or {}
+        media_raw = raw.get("media") or {}
+        mtype = (att.media.media_type if att.media else "") or media_raw.get("mediaType", "")
+        if "video" in mtype.lower():
+            # Til videoer tager vi kun et stillbillede
+            return [media_raw[k] for k in self._THUMB_KEYS if media_raw.get(k)]
+        urls = []
+        name = ((att.file.name if att.file else "") or att.name or "").lower()
+        is_doc = name.endswith((".pdf", ".doc", ".docx", ".xlsx", ".pptx", ".txt"))
+        if att.file and att.file.url and not is_doc:
+            urls.append(att.file.url)
+        urls += [media_raw[k] for k in self._THUMB_KEYS if media_raw.get(k)]
+        if att.media and att.media.thumbnail_url:
+            urls.append(att.media.thumbnail_url)
+        return list(dict.fromkeys(urls))          # uden dubletter, rækkefølge bevaret
+
+    async def _fetch(self, key: str, urls: list[str]) -> str | None:
+        if (have := self._existing(key)):
+            self.stats["fra cache"] += 1
+            return have
+        for url in urls:
+            try:
+                data = await self.client.download_file(url)
+            except Exception as e:  # noqa: BLE001
+                self.stats["download fejlede"] += 1
+                log.debug("Billede %s: download fejlede (%s): %s", key, url[:80], e)
+                continue
+            ext = _sniff(data)
+            if ext == ".heic":
+                converted = _heic_to_jpg(data)
+                if converted is None:
+                    self.stats["HEIC uden konvertering"] += 1
+                    continue                      # prøv thumbnail i stedet
+                data, ext = converted, ".jpg"
+            if not ext:
+                self.stats["ikke et billede"] += 1
+                log.debug("Billede %s: indholdet er ikke et billede (%r…)", key, data[:40])
+                continue
+            fname = f"{key}{ext}"
+            (self.folder / fname).write_bytes(data)
+            self.stats["hentet"] += 1
+            return fname
+        return None
+
+    async def urls(self, key: str, urls: list[str]) -> str | None:
+        """Hent ét billede ud fra en liste af mulige adresser (bruges til galleriet)."""
+        fname = await self._fetch(key, [u for u in urls if u])
+        if fname:
+            self.used.add(fname)
+            return f"{self.folder.name}/{fname}"
+        return None
+
+    async def images(self, attachments, html: str | None = None) -> list[str]:
+        out: list[str] = []
+        jobs: list[tuple[str, list[str]]] = []
+        for att in attachments or []:
+            urls = self._candidates(att)
+            if urls:
+                key = str(att.id or (att.file.id if att.file else None)
+                          or hashlib.sha1(urls[0].split("?")[0].encode()).hexdigest()[:16])
+                jobs.append((key, urls))
+            else:
+                self.stats["vedhæftning uden billede"] += 1
+        # Billeder indsat direkte i opslagets tekst
+        for src in re.findall(r"<img[^>]+src=[\"']([^\"']+)", html or "", re.I):
+            if src.startswith("http"):
+                jobs.append((hashlib.sha1(src.split("?")[0].encode()).hexdigest()[:16], [src]))
+        for key, urls in jobs[: self.max]:
+            fname = await self._fetch(key, urls)
+            if fname:
+                self.used.add(fname)
+                out.append(f"{self.folder.name}/{fname}")
+        return out
+
+    def report(self) -> None:
+        if self.stats:
+            log.info("Billeder: %s", ", ".join(f"{v} {k}" for k, v in self.stats.items()))
+
+    def cleanup(self) -> None:
+        """Slet billeder, der ikke længere hører til et opslag eller en besked."""
+        for f in self.folder.iterdir():
+            if f.is_file() and f.name not in self.used:
+                f.unlink(missing_ok=True)
+
+
+def _widget_filters(profile) -> tuple[list[str], list[str]]:
+    child_filter = [str(c._raw["userId"]) for c in profile.children if c._raw and "userId" in c._raw]
+    inst_filter = sorted({
+        str(c._raw.get("institutionProfile", {}).get("institutionCode"))
+        for c in profile.children if c._raw and c._raw.get("institutionProfile", {}).get("institutionCode")
+    })
+    return child_filter, inst_filter
+
+
+_DK_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"], start=1)}
+_DK_DAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
+
+
+def _parse_plan_date(text: str, monday: dt.date) -> str | None:
+    """Meebook-datoer kommer i forskellige formater; prøv de mest almindelige."""
+    t = (text or "").strip().lower()
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", t)
+    if m:
+        return f"{m[1]}-{m[2]}-{m[3]}"
+    m = re.search(r"(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})", t)
+    if m:
+        y = int(m[3]) + (2000 if len(m[3]) == 2 else 0)
+        return dt.date(y, int(m[2]), int(m[1])).isoformat()
+    m = re.search(r"(\d{1,2})\.?\s*([a-zæøå]{3})", t)
+    if m and m[2] in _DK_MONTHS:
+        return dt.date(monday.year, _DK_MONTHS[m[2]], int(m[1])).isoformat()
+    for i, name in enumerate(_DK_DAYS):
+        if t.startswith(name):
+            return (monday + dt.timedelta(days=i)).isoformat()
+    return None
+
+
+async def _fetch_meebook(client, profile, people: People) -> list[dict]:
+    child_filter, inst_filter = _widget_filters(profile)
+    ctx = await client.get_profile_context()
+    session_uuid = ctx["data"]["userId"]
+    today = dt.date.today()
+    out: list[dict] = []
+    this_monday = today - dt.timedelta(days=today.weekday())
+    for monday in (this_monday, this_monday + dt.timedelta(days=7)):
+        y, w, _ = monday.isocalendar()
+        week = f"{y}-W{w:02d}"
+        for student in await client.widgets.get_meebook_weekplan(child_filter, inst_filter, week, session_uuid):
+            pid = people.by_aula_name(student.name)
+            if not pid:
+                continue
+            for day in student.week_plan:
+                date = _parse_plan_date(day.date, monday)
+                for task in day.tasks:
+                    subject = task.pill or task.title or "Ugeplan"
+                    out.append({
+                        "id": f"mb:{pid}:{task.id}:{date}",
+                        "person": pid,
+                        "date": date,
+                        "week": week,
+                        "dayLabel": day.date,
+                        "type": task.type,          # Meebooks egen markering: "task" eller "comment"
+                        "subject": subject,
+                        "title": task.title or subject,
+                        "text": _plain(task.content, 1500),
+                        "source": "meebook",
+                    })
+    return out
+
+
+_GROUP_CACHE: dict[int, tuple[dict, dict]] = {}
+
+
+async def _child_groups(client, profile, owner: dict[int, str]) -> tuple[dict[int, set[str]], dict[str, set[str]]]:
+    """Barnets grupper (klasse, SFO, stue …) → barn, og institutionskode → børn."""
+    if id(client) in _GROUP_CACHE:
+        return _GROUP_CACHE[id(client)]
+    group_owner: dict[int, set[str]] = defaultdict(set)
+    inst_owner: dict[str, set[str]] = defaultdict(set)
+    for child in profile.children:
+        pid = owner.get(child.id)
+        if not pid:
+            continue
+        code = str((child._raw or {}).get("institutionProfile", {}).get("institutionCode") or "")
+        if code:
+            inst_owner[code].add(pid)
+        try:
+            for g in await client.get_groups(child_institution_profile_ids=[child.id]):
+                group_owner[g.id].add(pid)
+        except Exception as e:  # noqa: BLE001
+            log.debug("Kunne ikke hente grupper for %s: %s", child.name, e)
+    _GROUP_CACHE[id(client)] = (group_owner, inst_owner)
+    return group_owner, inst_owner
+
+
+def _parse_ts(value) -> str | None:
+    if not value:
+        return None
+    try:
+        return iso(dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")))
+    except ValueError:
+        return str(value)
+
+
+async def _fetch_gallery(client, profile, owner: dict[int, str], people: People, acfg: dict, media: MediaStore) -> list[dict]:
+    """Galleri-albums. Mange institutioner lægger billeder her i stedet for i opslag."""
+    group_owner, inst_owner = await _child_groups(client, profile, owner)
+    ids = profile.institution_profile_ids
+    albums = await client.get_gallery_albums(ids, limit=acfg.get("gallery_albums", 8))
+    log.info("Aula: %d albums i galleriet", len(albums))
+    per_album = acfg.get("images_per_album", 12)
+    out: list[dict] = []
+    for a in albums[: acfg.get("gallery_albums", 8)]:
+        album_id = a.get("id")
+        if not isinstance(album_id, int):
+            continue
+        try:
+            pics = await client.get_album_pictures(ids, album_id, limit=per_album)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Kunne ikke hente billeder i album %s: %s", a.get("title"), e)
+            continue
+        images, tagged = [], set()
+        for pic in pics[:per_album]:
+            for t in pic.get("tags") or []:        # børn, der er tagget på billedet
+                pid = people.by_aula_name(t.get("name") or "")
+                if pid:
+                    tagged.add(pid)
+            f = pic.get("file") or {}
+            is_video = "video" in str(pic.get("mediaType", "")).lower()
+            urls = ([] if is_video else [f.get("url")]) + [pic.get(k) for k in MediaStore._THUMB_KEYS]
+            if (path := await media.urls(f"g{pic.get('id') or f.get('id')}", urls)):
+                images.append(path)
+        who: set[str] = set(tagged)
+        for g in a.get("sharedWithGroups") or []:
+            if isinstance(g, dict):
+                who |= group_owner.get(g.get("id"), set())
+        if not who:
+            code = str(a.get("institutionCode") or (a.get("creator") or {}).get("institutionCode") or "")
+            who = inst_owner.get(code, set())
+        creator = a.get("creator") or {}
+        out.append({
+            "id": f"album:{album_id}",
+            "title": a.get("title") or "Album",
+            "author": creator.get("name") or creator.get("fullName") or a.get("creatorName"),
+            "timestamp": _parse_ts(a.get("creationDate")),
+            "text": _plain(a.get("description") or "", 600),
+            "images": images,
+            "imageCount": a.get("size") or a.get("totalSize") or len(pics),
+            "tagged": sorted(tagged),
+            "people": sorted(who) or ["family"],
+            "source": "aula",
+        })
+    return out
+
+
+async def _fetch_posts(client, profile, owner: dict[int, str], acfg: dict, media: MediaStore) -> list[dict]:
+    """Opslag hentes med ALLE profil-id'er (som Aulas egen app gør) og fordeles på børn via grupper.
+
+    Aula viser forældres opslag ud fra forælderens egen profil, så et kald med kun barnets id
+    giver typisk ingenting. Hvem et opslag handler om, findes via de grupper det er delt med.
+    """
+    limit = acfg.get("posts_limit", 10) * max(1, len(profile.children))
+    group_owner, inst_owner = await _child_groups(client, profile, owner)
+
+    raw_posts = await client.get_posts(profile.institution_profile_ids, limit=limit)
+    log.info("Aula: %d opslag hentet", len(raw_posts))
+    out: list[dict] = []
+    for p in raw_posts:
+        who: set[str] = set()
+        for g in p.shared_with_groups or []:
+            gid = g.get("id") if isinstance(g, dict) else None
+            who |= group_owner.get(gid, set())
+        if not who:  # fx opslag til hele institutionen
+            code = str(getattr(p.owner, "_raw", {}) and (p.owner._raw or {}).get("institutionCode") or "")
+            who = inst_owner.get(code, set())
+        out.append({
+            "id": f"post:{p.id}",
+            "title": p.title,
+            "author": p.owner.full_name if p.owner else None,
+            "timestamp": iso(p.timestamp) if p.timestamp else None,
+            "important": bool(p.is_important),
+            "text": _plain(p.content_html),
+            "images": (imgs := await media.images(p.attachments, p.content_html)),
+            "attachments": len(p.attachments or []) - len(imgs),
+            "groups": [g.get("name") for g in (p.shared_with_groups or []) if isinstance(g, dict) and g.get("name")],
+            "people": sorted(who) or ["family"],
+            "source": "aula",
+        })
+    return sorted(out, key=lambda x: x["timestamp"] or "", reverse=True)
+
+
+async def _api_json(client, query: str) -> dict:
+    """Kald Aulas API direkte med side-parameter. Biblioteket henter altid kun side 0."""
+    resp = await client._request_with_version_retry("get", f"{client.api_url}?{query}")
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def _all_threads(client, max_threads: int, max_pages: int) -> list[dict]:
+    """Alle beskedtråde (nyeste først), side for side, til der ikke kommer nye."""
+    if not (hasattr(client, "_request_with_version_retry") and hasattr(client, "api_url")):
+        log.warning("Aula-biblioteket kan ikke side-inddele beskeder i denne version – henter kun første side")
+        return [t._raw or {} for t in await client.get_message_threads()][:max_threads]
+    seen: set = set()
+    out: list[dict] = []
+    for page in range(max_pages):
+        data = await _api_json(client, f"method=messaging.getThreads&sortOn=date&orderDirection=desc&page={page}")
+        fresh = [t for t in ((data.get("data") or {}).get("threads") or []) if t.get("id") is not None and t["id"] not in seen]
+        if not fresh:
+            break                               # tom side, eller serveren gentager sig selv
+        for t in fresh:
+            seen.add(t["id"])
+            out.append(t)
+        if len(out) >= max_threads:
+            break
+        await asyncio.sleep(0.15)
+    return out[:max_threads]
+
+
+async def _thread_messages(client, thread_id, per_thread: int, max_pages: int = 4) -> list:
+    """Beskederne i en tråd, nyeste først (op til per_thread)."""
+    if not (hasattr(client, "_request_with_version_retry") and hasattr(client, "api_url")):
+        msgs = await client.get_messages_for_thread(thread_id, limit=per_thread)
+    else:
+        from aula.models import Message
+        seen: set = set()
+        msgs = []
+        for page in range(max_pages):
+            data = await _api_json(client, f"method=messaging.getMessagesForThread&threadId={thread_id}&page={page}&limit={per_thread}")
+            d = data.get("data") or {}
+            fresh = [m for m in (d.get("messages") or [])
+                     if m.get("messageType") in ("Message", "MessageEdited") and m.get("id") not in seen]
+            if not fresh:
+                break
+            for m in fresh:
+                seen.add(m.get("id"))
+                try:
+                    msgs.append(Message.from_dict(m))
+                except (TypeError, ValueError) as e:
+                    log.debug("Besked sprunget over: %s", e)
+            if len(msgs) >= per_thread or d.get("moreMessagesExist") is False:
+                break
+            await asyncio.sleep(0.1)
+    msgs.sort(key=lambda x: x.send_datetime or dt.datetime.min.replace(tzinfo=TZ), reverse=True)
+    return msgs[:per_thread]
+
+
+async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
+                          previous: list[dict] | None = None) -> list[dict]:
+    """Hele beskedhistorikken. Tråde, der ikke er ændret siden sidst, genbruges fra forrige family.json."""
+    max_threads = acfg.get("messages_limit", 500)
+    per_thread = acfg.get("messages_per_thread", 50)
+    image_days = acfg.get("message_images_days", 90)
+    threads = await _all_threads(client, max_threads, acfg.get("messages_max_pages", 40))
+    try:
+        unread = {t.thread_id for t in await client.get_message_threads(filter_on="unread")}
+    except Exception:  # noqa: BLE001
+        unread = set()
+    prev_by_id = {m["id"]: m for m in (previous or []) if m.get("id")}
+    today = dt.date.today()
+    out: list[dict] = []
+    fetched = cached = 0
+    for raw in threads:
+        tid, subject = raw.get("id"), raw.get("subject")
+        key = f"msg:{tid}"
+        sig = hashlib.sha1(f"{per_thread}|{json.dumps(raw, sort_keys=True, default=str)}".encode()).hexdigest()[:16]
+        old = prev_by_id.get(key)
+        if old and old.get("sig") == sig and old.get("thread"):
+            entry = dict(old)                                   # uændret tråd: ingen nye kald
+            entry["unread"] = tid in unread
+            entry["people"] = old.get("people_aula") or ["family"]   # analysen kører igen på alle beskeder
+            for src in [*entry.get("images", []), *[i for m in entry["thread"] for i in m.get("images", [])]]:
+                media.used.add(Path(src).name)                   # billederne må ikke ryddes væk
+            out.append(entry)
+            cached += 1
+            continue
+
+        # Hvem handler tråden om? Prøv Aulas "angående"-felt, ellers navne i emnet
+        who: list[str] = []
+        for c in raw.get("regardingChildren") or []:
+            pid = people.by_aula_name(c.get("displayName") or c.get("name") or "")
+            if pid and pid not in who:
+                who.append(pid)
+        if not who:
+            who = [p for p in people.in_text(subject) if people.by_id[p].get("role") == "child"]
+        thread: list[dict] = []
+        try:
+            for i, mm in enumerate(await _thread_messages(client, tid, per_thread)):
+                age = (today - mm.send_datetime.astimezone(TZ).date()).days if mm.send_datetime else 0
+                thread.append({
+                    "from": mm.sender_name,
+                    "timestamp": iso(mm.send_datetime) if mm.send_datetime else None,
+                    "text": _plain(mm.content_html, 6000 if i == 0 else 3000),
+                    "images": await media.images(mm.attachments, mm.content_html) if age <= image_days else [],
+                    "files": [a.name for a in (mm.attachments or []) if a.name],
+                })
+        except Exception as e:  # noqa: BLE001
+            log.debug("Kunne ikke hente beskeder i tråd %s: %s", tid, e)
+        latest = thread[0] if thread else {}
+        out.append({
+            "id": key,
+            "sig": sig,
+            "subject": subject or "(uden emne)",
+            "from": latest.get("from"),
+            "timestamp": latest.get("timestamp") or raw.get("lastUpdatedDate"),
+            "unread": tid in unread,
+            "text": latest.get("text", ""),        # seneste besked – det er den, analysen kigger på
+            "images": latest.get("images", []),
+            "thread": thread,
+            "participants": [p.get("name") for p in raw.get("participants", []) if p.get("name")][:12],
+            "people": who or ["family"],
+            "people_aula": who or ["family"],
+            "source": "aula",
+        })
+        fetched += 1
+        if fetched % 25 == 0:
+            log.info("Beskeder: %d tråde hentet …", fetched)
+    log.info("Beskeder: %d tråde i alt (%d hentet, %d uændrede genbrugt)", len(out), fetched, cached)
+    return out
+
+
+# ---------------------------------------------------------------- lektie-genkendelse
+_CONF = {"lav": 0, "middel": 1, "høj": 2}
+_PLAN_WORDS = re.compile(r"plan|kalender", re.I)
+
+
+def _clean_subject(s: str) -> str:
+    """"Musik, Årsplan" → "Musik"; "aktivitetsplan, Natur teknik, …" → "Natur teknik"."""
+    parts = [p.strip() for p in (s or "").split(",") if p.strip()]
+    return next((p for p in parts if not _PLAN_WORDS.search(p)), parts[0] if parts else "Ugeplan")
+
+
+def analyse_weekplan(cfg: dict, weekplan: list[dict]) -> list[dict]:
+    """Kør homework-algoritmen på ugeplanen: markér hvert punkt og lav lektier/husk-opgaver."""
+    classes = {p["id"]: p.get("class") for p in cfg["people"]}
+    min_conf = _CONF.get(cfg.get("aula", {}).get("homework_min_confidence", "middel"), 1)
+    tasks: list[dict] = []
+    for w in weekplan:
+        # Bagudkompatibelt med ældre family.json, hvor Meebook-typen lå i "title" og faget i "label"
+        wtype = w.get("type") or (w.get("title") if w.get("title") in ("task", "comment") else "")
+        subject = _clean_subject(w.get("subject") or w.get("label") or w.get("title") or "Ugeplan")
+        w.update(type=wtype, subject=subject, title=subject if w.get("title") in (None, "", "task", "comment") else w["title"])
+        w.pop("label", None)
+        if not w.get("date"):
+            w["category"] = "undervisning"
+            continue
+        r = homework.analyse({"type": wtype, "text": w.get("text", ""), "date": w["date"]}, classes.get(w["person"]))
+        w["category"], w["info"] = r["category"], r["info"]
+        for i, t in enumerate(r["tasks"]):
+            if _CONF[t["confidence"]] < min_conf:
+                continue
+            tasks.append({
+                "id": f"{w['id']}:{i}",
+                "title": f"{subject}: {t['title']}" if t["kind"] == "lektie" else t["title"],
+                "due": t["due"],
+                "recurring": t["recurring"],
+                "from": w["date"],         # hvornår lektien blev givet – lange afleveringer vises fra denne dag
+                "person": w["person"],
+                "kind": t["kind"],
+                "confidence": t["confidence"],
+                "text": w.get("text", ""),
+                "source": "meebook",
+            })
+    return homework.dedupe(tasks)
+
+
+def change_targets(store, events: list[dict]) -> list[dict]:
+    """Aftaler, en aflysning eller flytning kan høre til: dem appen har oprettet (kan ændres her) og øvrige i familiekalenderen (kun til info)."""
+    out = []
+    for k, v in store.data["items"].items():
+        if v.get("status") == "created" and v.get("event_id") and v.get("event"):
+            ev = v["event"]
+            out.append({"key": k, "event_id": v["event_id"], "title": ev["title"], "start": ev["start"][:10], "end": ev["end"][:10], "source": "app"})
+    app_ids = {t["event_id"] for t in out}
+    for e in events:
+        if e.get("source") != "google" or str(e["id"]).startswith("gc:"):
+            continue
+        uid = e["id"].split(":")[1] if e["id"].startswith("g:") else ""
+        if any(uid.startswith(a) for a in app_ids):
+            continue
+        out.append({"key": None, "event_id": None, "title": e["title"], "start": e["start"][:10], "end": e["end"][:10], "source": "google"})
+    return out
+
+
+def created_events(store, events: list[dict], people: People) -> list[dict]:
+    """Aftaler oprettet via appen vises med det samme, selv om Googles iCal-adresse først opdateres om lidt."""
+    have = {e["id"].split(":")[1] for e in events if e.get("source") == "google" and e["id"].startswith("g:")}
+    out = []
+    for st in store.recent_created():
+        ev, eid = st["event"], st.get("event_id")
+        if not eid or any(uid.startswith(eid) for uid in have):
+            continue
+        out.append({"id": f"gc:{eid}", "title": ev["title"], "start": ev["start"], "end": ev["end"], "allDay": ev["allDay"],
+                    "people": people.in_text(ev["title"]) or ["family"], "source": "google", "calendar": "Familiekalender",
+                    "location": ev.get("location"), "notes": ev.get("notes"), "pending": True})
+    return out
+
+
+def analyse_messages(cfg: dict, msgs: list[dict], events: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Kør besked-analysen: ret hvem beskeden angår, markér private tråde, og træk
+    handlinger, arrangementer og medbring-lister ud."""
+    people = cfg["people"]
+    family_names = [p["name"] for p in people if p.get("role") == "adult"]
+    tasks: list[dict] = []
+    new_events: list[dict] = []
+    existing = {(e["start"][:10], w) for e in events for w in re.findall(r"[\wæøå]{5,}", e["title"].lower())}
+    cutoff = (dt.date.today() - dt.timedelta(days=cfg.get("aula", {}).get("messages_analyse_days", 60))).isoformat()
+    for m in msgs:
+        if m.get("redacted"):
+            continue                    # allerede analyseret som privat; uden indhold ville analysen komme til et andet resultat
+        r = msg_analysis.analyse(m, people, family_names)
+        m.update(people=r["people"], private=r["private"], category=r["category"],
+                 actions=r["actions"], suggested_events=r["events"], bring=r["bring"])
+        sent = (m.get("timestamp") or "")[:10] or None
+        if sent and sent < cutoff:
+            continue        # gamle beskeder vises og kan søges, men giver ikke opgaver eller aftaler i kalenderen
+        base = {"person": r["people"][0] if len(r["people"]) == 1 else None, "people": r["people"],
+                "source": "besked", "message": m["id"], "from": sent, "subject": m.get("subject")}
+        for i, a in enumerate(r["actions"]):
+            tasks.append({**base, "id": f"{m['id']}:a{i}", "kind": "handling", "title": a["title"],
+                          "due": a["due"] or sent, "openEnded": a["due"] is None,
+                          "confidence": a["confidence"], "text": m.get("subject")})
+        for i, b in enumerate(r["bring"]):
+            tasks.append({**base, "id": f"{m['id']}:b{i}", "kind": "husk", "title": b["title"],
+                          "due": b["due"] or sent, "openEnded": b["due"] is None,
+                          "confidence": "høj", "text": "\n".join(b["items"])})
+        for i, e in enumerate(r["events"]):
+            # Spring over hvis Aula-kalenderen allerede har en aftale samme dag med samme ord
+            words = re.findall(r"[\wæøå]{5,}", e["title"].lower())
+            if any((e["date"], w) in existing for w in words):
+                continue
+            day = dt.date.fromisoformat(e["date"])
+            if e["start"]:
+                s_ = dt.datetime.combine(day, dt.time.fromisoformat(e["start"]), TZ)
+                e_ = dt.datetime.combine(day, dt.time.fromisoformat(e["end"]), TZ) if e["end"] else s_ + dt.timedelta(hours=1)
+                all_day = False
+            else:
+                s_ = dt.datetime.combine(day, dt.time(0, 0), TZ)
+                e_ = dt.datetime.combine(day + dt.timedelta(days=4 if e["allWeek"] else 0), dt.time(23, 59), TZ)
+                all_day = True
+            new_events.append({"id": f"{m['id']}:e{i}", "title": e["title"], "start": iso(s_), "end": iso(e_),
+                               "allDay": all_day, "people": r["people"], "source": "besked",
+                               "location": e["location"], "notes": f"Fra beskeden \"{m.get('subject')}\":\n{e['source_sentence']}"})
+    return tasks, new_events
+
+
+# ---------------------------------------------------------------- main
+async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
+    """Én hentning. Returnerer status til serveren: {"aula": skipped|ok|login_required|error, "error": str|None, "counts": {...}}."""
+    people = People(cfg["people"])
+    now = dt.datetime.now(TZ)
+    start = (now - dt.timedelta(days=cfg.get("days_back", 7))).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = (now + dt.timedelta(days=cfg.get("days_ahead", 28))).replace(hour=23, minute=59, second=0, microsecond=0)
+
+    out_path = Path(cfg.get("output", "web/family.json"))
+    previous = json.loads(out_path.read_text("utf-8")) if out_path.exists() else {}
+
+    google_failed: list[str] = []
+    events = await fetch_google(cfg, people, start, end, google_failed)
+    for name in google_failed:                      # Google nede: behold kalenderens seneste aftaler i stedet for at vise en tom kalender
+        kept = [e for e in previous.get("events", []) if e.get("source") == "google" and e.get("calendar") == name and not str(e.get("id", "")).startswith("gc:")]
+        events += kept
+        log.warning("Beholder %d aftaler fra Google-kalenderen «%s» fra forrige kørsel", len(kept), name)
+    extra_keys = ("tasks", "weekplan", "posts", "messages", "albums")
+    extra = {k: previous.get(k, []) for k in extra_keys}
+    aula_state, aula_error = "skipped", None
+    if use_aula:
+        try:
+            prev_msgs = previous.get("messages")
+            if private_mod.enabled(cfg):                 # private tråde ligger ikke i family.json – hent dem frem, så de ikke hentes forfra
+                prev_msgs = private_mod.hydrate(prev_msgs, private_mod.store_path(cfg))
+            aula = await fetch_aula(cfg, people, start, end, Path("aula_dump.json") if dump else None, previous_messages=prev_msgs)
+            events += aula["events"]
+            for k in extra_keys:
+                if aula.get(k) is not None:  # None = den del fejlede, behold forrige
+                    extra[k] = aula[k]
+            aula_state = "ok"
+        except LoginRequired:
+            aula_state = "login_required"
+            log.warning("Aula-login er udløbet – genbruger forrige Aula-data. Log ind igen.")
+            events += [x for x in previous.get("events", []) if x.get("source") == "aula"]
+        except Exception as e:  # noqa: BLE001
+            # Behold sidste gode Aula-data frem for at vise et tomt overblik
+            aula_state, aula_error = "error", str(e) or e.__class__.__name__
+            log.error("Aula-hentning fejlede, genbruger forrige data: %s", e)
+            events += [x for x in previous.get("events", []) if x.get("source") == "aula"]
+
+    msg_tasks, msg_events = analyse_messages(cfg, extra["messages"], events)
+    extra["tasks"] = ([t for t in extra["tasks"] if t.get("source") not in ("meebook", "besked")]
+                      + analyse_weekplan(cfg, extra["weekplan"]) + msg_tasks)
+    events += msg_events
+    now_s = iso(now)
+    prev_h = previous.get("health", {})
+    health = {"google": {"ok": not google_failed, "failed": google_failed, "last_ok": now_s if not google_failed else prev_h.get("google", {}).get("last_ok")},
+              "aula": {"state": aula_state, "last_ok": now_s if aula_state in ("ok", "skipped") else prev_h.get("aula", {}).get("last_ok")}}
+
+    # Forslag til familiekalenderen + manuelle "føj til kalender"-muligheder på beskeder, opslag og ugeplanspunkter
+    suggestions_list: list[dict] = []
+    new_ids: list[str] = []
+    if cfg.get("suggestions", {}).get("enabled", True):
+        try:
+            store = sugg_store.Store(out_path.with_name("suggestions_state.json"))
+            people_map = {p["id"]: p["name"] for p in cfg["people"]}
+            view = {"messages": extra["messages"], "posts": extra["posts"], "weekplan": extra["weekplan"], "events": events}
+            learned = sugg_store.Learned(out_path.with_name("learned_rules.json")).active()
+            suggestions_list, options = activities.find_all(view, cfg, now.date(), people_map, learned, change_targets(store, events))
+            for kind in ("messages", "posts", "weekplan"):
+                for item in extra[kind]:
+                    item["cal"] = options.get(item["id"], [])
+            new_ids = store.annotate(suggestions_list, options)
+            events += created_events(store, events, people)
+        except Exception as e:  # noqa: BLE001 – forslag må aldrig vælte hentningen
+            log.warning("Kunne ikke finde kalenderforslag: %s", e)
+    events.sort(key=lambda x: x["start"])
+    data = {
+        "generated": iso(now),
+        "people": people.public(),
+        "events": events,
+        "tasks": sorted(extra["tasks"], key=lambda t: t["due"]),
+        "weekplan": extra["weekplan"],
+        "posts": extra["posts"],
+        "messages": (private_mod.protect(extra["messages"], private_mod.store_path(cfg)) if private_mod.enabled(cfg) else extra["messages"]),
+        "albums": extra["albums"],
+        "suggestions": suggestions_list,
+        "health": health,
+        "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 17))},
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+    tmp.replace(out_path)  # atomisk, så frontenden aldrig læser en halv fil
+    log.info("Skrev %s (%d aftaler, %s)", out_path, len(events),
+             ", ".join(f"{len(extra[k])} {k}" for k in extra_keys))
+
+    # Overblik: standard er "offline" (ingen sprogmodel); "claude" kræver API-nøgle
+    acfg = cfg.get("assistant", {})
+    try:
+        import briefing
+        if briefing.assistant_mode(acfg) != "off":
+            briefing.make_briefing(cfg, data, "day")
+            wk = {**cfg, "assistant": {**acfg, "min_minutes_between": acfg.get("week_min_minutes_between", 360)}}
+            briefing.make_briefing(wk, data, "week")
+    except SystemExit as e:
+        log.warning("Overblik springes over: %s", e)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Kunne ikke lave overblik: %s", e)
+    return {"aula": aula_state, "error": aula_error, "generated": data["generated"], "new_suggestions": len(new_ids), "google_ok": not google_failed,
+            "counts": {"events": len(events), **{k: len(extra[k]) for k in extra_keys},
+                       "suggestions": sum(1 for x in suggestions_list if x.get("status") == "new")}}
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--config", default="config.toml")
+    ap.add_argument("--watch", type=int, metavar="SEK", help="hent igen hvert SEK sekund")
+    ap.add_argument("--no-aula", action="store_true", help="spring Aula over")
+    ap.add_argument("-v", "--verbose", action="store_true")
+    ap.add_argument("--dump-aula", action="store_true", help="gem rå kalenderdata i aula_dump.json til fejlsøgning")
+    args = ap.parse_args()
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    cfg_path = Path(args.config)
+    if not cfg_path.exists():
+        sys.exit(f"Fandt ikke {cfg_path}. Kopiér config.example.toml til config.toml og udfyld den.")
+    cfg = tomllib.loads(cfg_path.read_text("utf-8"))
+
+    async def loop():
+        while True:
+            try:
+                await run_once(cfg, use_aula=not args.no_aula, dump=args.dump_aula)
+            except Exception:  # noqa: BLE001
+                log.exception("Hentning fejlede")
+            if not args.watch:
+                return
+            await asyncio.sleep(args.watch)
+
+    asyncio.run(loop())
+
+
+if __name__ == "__main__":
+    main()

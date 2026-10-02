@@ -1,0 +1,11 @@
+services:
+  familieplan:
+    build: .
+    container_name: familieplan
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data            # config.toml, secrets/ og hentede data
+    ports:
+      # Standard: kun denne maskine. Sæt BIND=0.0.0.0 i .env for adgang fra tablets/telefoner på hjemmenetværket.
+      - "${BIND:-127.0.0.1}:8080:8080"

@@ -1,0 +1,22 @@
+# Til en Linux-server uden Docker (fx Raspberry Pi). Læg projektet i /opt/familieplan og kør:
+#   sudo cp familieplan.service /etc/systemd/system/ && sudo systemctl enable --now familieplan
+[Unit]
+Description=Familieplan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=familieplan
+WorkingDirectory=/opt/familieplan
+EnvironmentFile=/opt/familieplan/.env
+# uv henter selv Python 3.14, som Aula-biblioteket kræver
+ExecStart=/usr/local/bin/uv run --python 3.14 --with-requirements requirements.txt server.py --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/familieplan
+
+[Install]
+WantedBy=multi-user.target

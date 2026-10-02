@@ -1,0 +1,4 @@
+{$FAMILIEPLAN_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy familieplan:8080
+}

@@ -1,0 +1,18 @@
+# Tilføjer Caddy foran med automatisk HTTPS-certifikat:
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+# Kræver et domænenavn, der peger på serveren, og at port 80 og 443 er åbne. Sæt trust_proxy = true i [server].
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      FAMILIEPLAN_DOMAIN: ${FAMILIEPLAN_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [familieplan]
+volumes:
+  caddy_data:
+  caddy_config:

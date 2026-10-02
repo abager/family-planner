@@ -1,0 +1,327 @@
+# Familieplanner
+
+Overblik over aftaler, skema og lektier for Andreas, Monica, Hugo, Carla og Leo – hentet fra Aula og Google Kalender.
+
+```
+familieplanner/
+  fetch_family.py        henter data og skriver web/family.json
+  config.toml            din opsætning (lav den ud fra config.example.toml)
+  secrets/               Aula-tokens (oprettes automatisk)
+  web/index.html         selve appen
+  web/family.json        data (skrives af scriptet)
+```
+
+## Kom i gang
+
+Aula-klienten kræver **Python 3.14**. Nemmest med [uv](https://docs.astral.sh/uv/):
+
+```bash
+cp config.example.toml config.toml     # udfyld MitID-brugernavn og iCal-adresse
+
+# 1) Test Google-delen først
+uv run --python 3.14 --with-requirements requirements.txt fetch_family.py --no-aula
+
+# 2) Første Aula-login: scan QR-koden i terminalen med MitID-appen
+uv run --python 3.14 --with-requirements requirements.txt fetch_family.py
+
+# 3) Kør løbende (hvert 15. min)
+uv run --python 3.14 --with-requirements requirements.txt fetch_family.py --watch 900
+
+# Server appen på hjemmenetværket
+python3 -m http.server 8080 -d web      # åbn http://<maskinens-ip>:8080
+```
+
+## Sådan tildeles aftaler til personer
+
+- **Aula**: automatisk. Børnene matches på fornavn (`aula_name`), og det, der hører til din egen Aula-profil, lander hos Andreas.
+- **Google**: ud fra navne i titlen. "Hugo fodbold" → Hugo. "Carla + Leo svømning med mor" → Carla, Leo og Monica. Uden navn → hele familien (kan ændres med `default_people`). Aliasserne styres i `config.toml`.
+
+Skemaets enkelte timer slås sammen til én "Skole"-blok per barn per dag (timerne står i detaljerne, og vikarer markeres). Slå det fra med `collapse_lessons = false`.
+
+## Hvad hentes fra Aula
+
+- Kalender og skema (skematimer samles til én blok per dag)
+- Lektier fra Min Uddannelse (hvis skolen bruger det)
+- Ugeplan fra Meebook (denne og næste uge)
+- Opslag med billeder, hentet per barn så de kan filtreres (billeder gemmes i `web/media`)
+- **Hele beskedhistorikken** (op til 500 tråde, 50 beskeder i hver), med ulæst-markering og evt. billeder. Første kørsel tager lidt længere tid, fordi alle tråde skal hentes; derefter hentes kun tråde, der er nye eller ændret. Beskeder ældre end 60 dage kan søges og læses, men giver ikke opgaver eller aftaler i kalenderen (`messages_analyse_days`). Billeder hentes kun fra de seneste 90 dage (`message_images_days`).
+- Galleri-albums (de nyeste 8, op til 12 billeder hver). Børn, der er tagget på billederne, vises på kortet
+
+Billeder tjekkes på indholdet, så fejlsider aldrig gemmes som billeder. iPhone-billeder (HEIC) kan ikke vises i Chrome/Edge – installér `pillow-heif` for at få dem konverteret til JPG, ellers bruges Aulas miniaturebillede:
+`uv run --python 3.14 --with-requirements requirements.txt --with pillow-heif fetch_family.py`
+
+Hver del kan slås fra i `config.toml`. Børnenes ikoner (`icon`) sættes også der. Fejler én del, genbruges de forrige data for netop den del.
+
+## Lektie-genkendelse (homework.py)
+
+Meebook-ugeplanen analyseres sætning for sætning og hvert punkt får en kategori: lektie, husk, praktisk info eller undervisning. Lektier og husk-ting lander i "Husk og lektier" med den rigtige dag ("på mandag", "Afleveres uge 43", "hver dag").
+
+- `homework_min_confidence` i `config.toml` styrer hvor forsigtig den er ("høj", "middel", "lav").
+- `class = "6.B"` under et barn sorterer parallelklassens punkter fra.
+- Test ændringer uden Aula: `python homework_test.py weekplan.json`
+
+## Skema
+
+"I dag" viser børnenes skema for dagen øverst. Lektionerne kommer fra Aulas skemabegivenheder, og hvis skolen i stedet skriver skemaet som tekst i en aftale ("08.00-08.45 Dansk"), hentes aftalens beskrivelse og skemaet læses ud af den. Nuværende lektion markeres, overståede tones ned, og vikarer vises.
+
+Skemaet gøres læsevenligt (`schedule.py`): fagene skrives ud (DAN → Dansk), lærere forkortes ("Anni C."), vikarer vises med navn, og timer, der følger klassen og ikke barnet, udelades (INK = støttelærer til en anden elev, PS = klassepædagogen). Hvad der skjules, og hvad forkortelser betyder, styres i `config.toml` (`hidden_subjects`, `secondary_subjects`, `[subjects]`). Har en lektion en note fra skolen (fx til vikaren), hentes den og vises under timen.
+
+Fejlsøgning: `fetch_family.py --dump-aula` gemmer rå kalenderdata for ±3 dage i `aula_dump.json`.
+
+## Beskeder
+
+Fanen "Beskeder" virker som en mailklient: kompakt liste til venstre, den valgte besked i fuld bredde til højre med hele tråden (nyeste først, ældre foldet sammen). Søg, filtrér på ulæste, "Skal gøres" eller "Med datoer", og brug ↑/↓ til at bladre. På mobil åbner beskeden i fuld skærm. Beskeder, du har åbnet, markeres som set på den enhed (de forbliver ulæste i Aula).
+
+## Besked-analyse (messages.py)
+
+Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller privat samtale) og det rigtige barn:
+
+- Klasse/årgang i teksten ("forældre i 6B", "3. årgang") slår Aulas grove tilknytning. Kræver `class` eller `grade` under børnene i `config.toml` – husk at opdatere dem i august.
+- Private samtaler mellem jer og skolen skjules bag "Vis besked" (`hide_private`), og der trækkes ikke opgaver ud af dem.
+- Handlinger ("Skriv jer på senest fredag d.25.9") og medbring-lister lander i "Husk og lektier". Arrangementer med dato lander i ugetavlen med stiplet kant.
+- Test uden Aula: `python messages_test.py aula_feed.json`
+
+## Overblik (briefing.py)
+
+Øverst i "I dag" og "Ugen" står et overblik over det, der er **særligt** for dagen eller ugen: *Husk* (ting der skal med), *Skal gøres* (forældrehandlinger med frist), *Særligt* (vikarer, lukkedage, noter fra skolen, praktisk info) og *Kommende frister* (de næste tre uger). Almindelige aftaler, nyheder fra skolen og stående lektier ("hver dag") er med vilje udeladt i dagsoverblikket – de står i "Dagens aftaler", Beskeder og Feed. Hvert punkt viser barnets ikon og kilde.
+
+**Standard: `mode = "offline"`.** Overblikket samles af jeres egne regler uden sprogmodel. Det er gratis, kræver ingen nøgle og intet forlader maskinen. Det laves hver gang `fetch_family.py` kører. Se resultatet: `python briefing.py --offline --dry-run` (dagens) eller med `--week`.
+
+**Senere: `mode = "claude"`.** Claude kan skrive overblikket mere smidigt og prioritere på tværs af kilder. Det kræver en API-nøgle:
+
+1. Lav en nøgle på platform.claude.com under Settings → API keys, helst med en privat mailadresse. Sæt den: `setx ANTHROPIC_API_KEY "din-nøgle"` (åbn derefter et nyt vindue).
+2. Skriv jeres egne regler i `familie_regler.md` (hvem henter, faste aktiviteter …).
+3. Se præcis hvad der sendes: `python briefing.py --dry-run` (med `mode = "claude"`).
+4. Sæt `mode = "claude"` i `config.toml`. Der laves kun nyt overblik, når data har ændret sig, og højst én gang i timen.
+
+Begge tilstande bruger samme filtrerede uddrag: private samtaler, telefonnumre og mailadresser indgår aldrig. `mode = "off"` slår overblikket fra.
+
+## Udseende
+
+- Titlen er "Familieplan". Ikonet i browserfanen (en proppet kalender i børnenes farver) ligger som `web/favicon.svg` med PNG-udgaver (`favicon-32.png`, `apple-touch-icon.png` til hjemmeskærmen på iPad/iPhone). Læg dine egne filer med samme navne i `web/` for at skifte det.
+- "Dagens aftaler" viser ikke skoledagens blokke fra Aula, fordi skemaet allerede står øverst. Egentlige Aula-aftaler (fx forældremøde) vises stadig.
+- Tekst fra Aula (beskeder, ugeplan) ryddes op: markdown-rester fjernes, hårde linjeskift samles til afsnit, og lister vises som lister.
+
+## Kør som server (server.py)
+
+`server.py` er én tjeneste, der gør tre ting: den **henter selv** fra Aula og Google (hvert kvarter om dagen, hvert andet time om natten), **serverer appen** bag familiens adgangskode, og har en side til **MitID-login**, så du ikke behøver en terminal. Den erstatter `fetch_family.py --watch` og `python -m http.server`.
+
+**Hvor kan den køre?** På en maskine, der er tændt hele tiden og kan køre Python 3.14 eller Docker: en Raspberry Pi, en NAS, en lille VPS eller din egen pc. Almindeligt webhotel (PHP/cPanel) kan ikke, fordi det kræver en proces, der kører hele tiden.
+
+### Hurtig start (fx Windows, PowerShell)
+
+```powershell
+$env:FAMILIEPLAN_PASSWORD = "en-lang-adgangskode"
+uv run --python 3.14 --with-requirements requirements.txt server.py --host 0.0.0.0 --port 8080
+```
+
+Åbn http://localhost:8080 (andre enheder: http://maskinens-ip:8080). Log ind med adgangskoden. Står der "Aula-login er udløbet", så tryk på advarslen, vælg "Log ind med MitID", og scan QR-koden med MitID-appen. Det er den samme QR-kode, som ellers vises i terminalen.
+
+### Docker (Linux, NAS, Raspberry Pi)
+
+```bash
+cp .env.example .env                       # sæt FAMILIEPLAN_PASSWORD
+mkdir data && cp config.example.toml data/config.toml    # udfyld som før
+docker compose up -d --build
+```
+
+Alt, der skal gemmes, ligger i `data/` (config, Aula-login og hentede data), så en opdatering er `docker compose up -d --build`. Uden Docker: se `familieplan.service` (systemd).
+
+### Adgang udefra – vælg én
+
+| Løsning | Åbne porte | Bemærkning |
+|---|---|---|
+| Kun hjemmenetværk (`BIND=0.0.0.0` i `.env`) | nej | Enklest. Adgangskoden sendes uden kryptering på dit eget netværk. |
+| **Tailscale** på serveren og telefonerne | nej | Anbefalet til adgang på farten: kun jeres egne enheder kan nå den. |
+| Cloudflare Tunnel | nej | Giver et offentligt navn med HTTPS uden at åbne porte. Overvej at lægge Cloudflare Access foran. |
+| Caddy + eget domæne (`docker-compose.https.yml`) | 80 og 443 | Automatisk HTTPS. Sæt `trust_proxy = true` i `[server]`. |
+
+**Udsæt aldrig port 8080 direkte på internettet uden HTTPS.** Appen indeholder børnenes skoledata.
+
+### MitID-login og udløb
+
+Aulas login fornyes automatisk, så MitID kun skal bruges, når fornyelsen fejler. Sker det, fortsætter serveren med de seneste Aula-data, viser en rød advarsel i appen og sender (hvis `notify_ntfy` er sat) en push-besked uden data i. Åbn `/auth` og log ind igen. Google-kalenderen opdateres uanset.
+
+### Kalenderforslag og "Føj til kalender"
+
+Aktiviteter i ugeplan, opslag og beskeder kan overføres til familiekalenderen på to måder.
+
+**1. Forslag (automatisk).** Ved hver opdatering gennemsøges ugeplan, opslag og beskeder, og nye fund dukker op under fanen **Forslag** (og som en meddelelse øverst i "I dag"). Hvert forslag kan oprettes, rettes eller afvises. Reglerne leder efter:
+
+| Kommer med | Bliver i Aula |
+|---|---|
+| Lejrskole/koloni, ture (zoo, museum, teater …), turneringer og stævner | Fødselsdage der fejres i klassen eller på stuen |
+| Planlagte test og prøver | Temadage, temauger, emneuger, motionsdag, Halloween |
+| Forældremøder og skole-hjem-samtaler | Skolens interne shows og arrangementer uden forældre |
+| Fødselsdagsinvitationer hvor man skal et andet sted hen | Elevsamtaler |
+| Arrangementer forældre deltager i, lukkedage | |
+| Omlagte skoledage ("omlagt dag kl. 8–13") – en temadag, der ændrer dagen, kommer altså med | |
+
+Datoer regnes ud fra, hvornår beskeden er skrevet, så "testen i morgen (torsdag)", "lejrskole i næste uge" og "på fredag" bliver til rigtige datoer. Fund uden dato, i fortiden eller i private samtaler bliver aldrig til forslag. Usikre forslag er mærket "Måske". Forslag, der ligner en aftale, der allerede findes i kalenderen samme dag, vises ikke.
+
+**2. Manuelt.** På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står en knap "Føj til kalender" – uanset om reglerne ville have foreslået det. Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i en kalender; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
+
+Aftalen oprettes med børnenes navne i titlen ("Hugo + Carla: Tur til Zoo"), fordi appen tildeler kalenderaftaler til personer ud fra navne i titlen. Beskrivelsen peger tilbage på beskeden. Aftaler, du opretter via appen, vises med det samme, selv om Googles iCal-adresse først opdateres senere.
+
+### Lær af dine manuelle aktiviteter
+
+Tilføjer du en aktivitet manuelt, som reglerne ikke selv ville have foreslået (fx en tandlægetid eller et skolefoto), kan appen lære af den. I dialogen står "Foreslå lignende aktiviteter fremover" med de ord, den ville huske, fx *tandlæge*. Skriver du en titel med et af ordene, vælges det automatisk; ellers sætter du selv flueben. Du kan også tilføje dit eget ord eller udtryk. Fra da af bliver aktiviteter, hvor ordet nævnes sammen med en dato, foreslået under **Forslag**, mærket "Lært regel".
+
+- **Ord og vendinger.** Et *ord* ("tandlæge") rammer også "tandlægen" og "tandlægetid". En *vending* ("skal til tandlæge") er snævrere og rammer kun den formulering. Vendinger vælges aktivt. Datoer og tidspunkter genkendes allerede i alle formuleringer, så det er aktivitetens ord, der læres.
+- **Tryghed.** Kun bogstaver og bindestreg accepteres, og reglen bygges af appen, aldrig af det, du skriver. For almindelige ord (*skolen, mødes, husk* …) afvises, og det samme gælder ord, der står i mere end 25 sætninger i de seneste data (`max_rule_matches`), fordi de ville oversvømme listen.
+- **Dit ord vinder over filtrene.** En lært regel springer temafilteret over: lærer du "motionsdag", får du forslag om motionsdage, selv om de normalt bliver i Aula.
+- **Ingen dubletter.** Aktiviteten, du lærte af, foreslås ikke igen, og overlappende regler giver ét forslag.
+- **Styring.** Under **Forslag → Lærte regler** kan reglerne slås fra eller fjernes. De ligger i `learned_rules.json` ved siden af family.json og kan også redigeres i hånden. Læring kræver serveren, som gemmer reglerne.
+
+### Sæt direkte oprettelse op (én gang)
+
+Uden dette åbner knappen Google Kalender med aftalen udfyldt, så du selv vælger kalender og gemmer – det virker straks og kræver ingen opsætning. Vil du have, at ét tryk opretter aftalen, skal serveren have lov til at skrive til kalenderen. Det sker med en *servicekonto* (en robotbruger), som familiekalenderen deles med:
+
+1. Gå til console.cloud.google.com og opret et projekt, fx "Familieplan".
+2. Slå **Google Calendar API** til (APIs & Services → Library).
+3. Opret en servicekonto (IAM & Admin → Service Accounts → Create). Den behøver ingen roller.
+4. Åbn servicekontoen → Keys → Add key → Create new key → **JSON**. Gem filen som `secrets/google_service_account.json` (i Docker: `data/secrets/`). Behandl den som en adgangskode.
+5. Kopiér servicekontoens e-mailadresse (slutter på `.iam.gserviceaccount.com`).
+6. I Google Kalender: familiekalenderens indstillinger → **Del med bestemte personer eller grupper** → tilføj e-mailadressen med tilladelsen **Foretag ændringer i begivenheder**.
+7. Sæt `enabled = true` under `[calendar_write]` i `config.toml`, og genstart serveren. Kalender-id'et udledes af iCal-adressen; ellers sæt `calendar_id`.
+
+Menuernes navne hos Google kan ændre sig lidt. Får du en fejl, forklarer appen den (fx "er kalenderen delt med servicekontoen?"). Hver aftale får et fast id, så den aldrig kan oprettes to gange, og "Fjern fra kalender" sletter den igen.
+
+Indstillinger: `[suggestions]` (`disabled_categories`, `horizon_days`) og `[calendar_write]` (`reminder_minutes`; standard er en påmindelse dagen før). Med ntfy slået til får du en kort besked, når der er nye forslag (`notify_suggestions = false` slår det fra). Test reglerne på dine egne data uden Aula: `python activities_test.py aula_feed.json`.
+
+## Markér som læst
+
+Ulæste beskeder har en blå prik i margenen og fed skrift, og i læseruden et "Ulæst"-mærke. Som i Outlook bliver en besked læst, når den har stået åben i **3 sekunder** – ikke når man bare bladrer forbi den. Åbner man den og går tilbage inden da, er den stadig ulæst. En besked, der automatisk er valgt på en stor skærm, markeres ikke; det kræver et klik. Private samtaler, der er skjult, markeres først, når man har trykket "Vis besked".
+
+- **Knap:** "Markér som læst" i læseruden (på computer også tasten `m`).
+- **Touch (iPad, telefon):** stryg en ulæst besked mod venstre. Et kort stryg viser en blå "Læst"-knap; et langt stryg markerer med det samme.
+- **I Aula:** med serveren kører markeringen også i Aula (`mark_read_in_aula = true` under `[server]`), og alle enheder ser den som læst. Kaldet køres i baggrunden, samles og prøves igen, hvis Aula svarer med en fejl; hvis Aula-loginet er udløbet, venter markeringerne. Slå det fra med `mark_read_in_aula = false`, så gælder markeringen kun på den enhed, hvor du læste beskeden.
+- Bemærk: Aulas "læst" kan være synlig for andre (fx afsender). Det er ikke afprøvet. Der findes ikke noget kald til at markere som *ulæst* igen.
+
+## iPad, telefon og computer
+
+Layoutet tilpasser sig skærmen:
+
+| Skærm | Opbygning |
+|---|---|
+| Computer og iPad liggende | Ugen som tavle med en kolonne pr. dag. Beskeder med liste og læserude ved siden af hinanden. Feedet i én kolonne, bredere på store skærme (560 → 720 → 860 px). |
+| iPad stående | Ugen som dagkort i to spor, med i dag først. Beskeder stadig med to ruder. |
+| Telefon | Menuen ligger i bunden som i en app. Personfiltrene står på én række. Beskeder viser én rude ad gangen, og læsevisningen fylder hele skærmen. |
+
+Alt, der kan trykkes på, er mindst 44 px på berøringsskærme. Layoutet respekterer iPhones og iPads sikre områder (hak og hjemmelinje), og appen henter frisk data, når tabletten vågner af dvale.
+
+**Læg den på hjemmeskærmen (iPad/iPhone):** åbn adressen i Safari → Del → "Føj til hjemmeskærm". Så åbner den uden Safaris adresselinje, med eget ikon. Til en tablet, der står fremme i køkkenet: Indstillinger → Skærm & lysstyrke → Autolås, og evt. Tilgængelighed → Guidet adgang, så den ikke slukker eller forlades ved et uheld.
+
+Afprøvet i Chromium med emulerede iPad- og iPhone-størrelser og berøringsgester, men ikke i selve Safari på en iPad.
+
+## Sikkerhed
+
+- Adgangskode (mindst 8 tegn), cookie der kun kan læses af serveren, 90 dages login pr. enhed, og spærring efter 5 forkerte forsøg. Skift adgangskoden, og alle logges ud.
+- `data/secrets/aula_tokens.json` giver adgang til Aula som forælder. Behandl den som en adgangskode, og tag den ikke med i åbne sikkerhedskopier.
+- Billeder, beskeder og `family.json` serveres kun til indloggede. **Private samtaler ligger ikke i `family.json`**, men bag en ekstra kode (se "Private samtaler").
+- Serveren kører som almindelig bruger i containeren, og `config.toml` og `data/` kopieres aldrig ind i Docker-billedet (`.dockerignore`).
+
+### Indstillinger (`[server]` i config.toml)
+
+`interval_minutes`, `night_interval_minutes`, `aula`, `session_days`, `trust_proxy`, `public_url`, `notify_ntfy`, `notify_suggestions`, `mark_read_in_aula`, `evening_push`, `evening_push_only_if_content`, `push_details`, `stale_alert_hours`, `private_unlock_minutes`. Dertil `[display] evening_hour` og `[private] protect`. Kun én serverproces må køre ad gangen.
+
+### Filer og netværk
+
+- `config.toml` indeholder den hemmelige iCal-adresse, og `secrets/` indeholder Aula-login. Ingen af dem må ligge i `web/`. Serveren nægter desuden at udlevere filer som `private_messages.json`, `*_state.json`, `learned_rules.json` og `config.toml`, uanset hvor datamappen ligger.
+- Kør det kun på jeres eget netværk eller bag HTTPS – `family.json` og `media/` indeholder børnenes skoledata og billeder.
+
+## Aftenvisning og aftenpush
+
+Efter kl. 17 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, skema, aftaler, vigtig info og opgaver. Over skemaet står en lille vælger (**I dag / I morgen**), så du også kan kigge frem om formiddagen eller tilbage om aftenen. Dit valg gælder, til det automatiske skifte sker igen (kl. 17 og ved midnat). Serveren laver overblikket for i morgen præcis kl. 17, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
+
+Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 17 om i morgen, kun hvis der er noget at huske, gøre eller noget særligt (`evening_push_only_if_content = false` sender altid). Pushet sendes højst én gang pr. dag, også efter en genstart.
+
+> **Privatliv:** på den offentlige `ntfy.sh` kan alle, der kender emnets navn, læse beskederne. Derfor indeholder beskeden som standard kun tal ("2 at huske · 1 skal gøres · 1 særligt") og ingen navne. `push_details = "full"` tager punkterne i klar tekst med – brug det kun på din egen ntfy-server.
+
+## Kioskvisning
+
+En stor, rolig vægvisning til en tablet i køkkenet. Start den med knappen **Kioskvisning** i statuslinjen, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
+
+- Ur, dato og dagen (I dag / I morgen, efter samme regel som ovenfor), et kort pr. barn (skoletid, hvad der er nu og næste, vikarer, ting at huske) samt Husk og frister og dagens aftaler.
+- Teksten tilpasser sig skærmen, så alt kan ses uden at rulle. Data hentes på ny hvert andet minut, og skærmen holdes tændt (Wake Lock, hvor enheden understøtter det; ellers sæt Autolås til "Aldrig").
+- **Viser aldrig beskeder** og intet fra private samtaler.
+- Tryk et vilkårligt sted for at få **Afslut** frem i seks sekunder (på tastatur: `Esc`). Øverst står en rød advarsel, hvis data er over en time gamle, Aula-login er udløbet, eller Google Kalender ikke kunne hentes.
+
+## Private samtaler
+
+Samtaler mellem jer og personalet (fx om et barns trivsel) var tidligere kun skjult på skærmen – teksten lå stadig i den fil, alle enheder henter. Nu gælder:
+
+- I `family.json` står kun "Privat samtale", tidspunktet og hvilket barn det handler om. **Indholdet** ligger i `secrets/private_messages.json` (rettigheder 600, sammen med Aula-nøglerne og aldrig i den mappe, der serveres).
+- Serveren udleverer det først, når du har indtastet koden i miljøvariablen `FAMILIEPLAN_PRIVATE_CODE` (mindst 4 tegn, helst en anden end adgangskoden). Fem forkerte forsøg spærrer i fem minutter.
+- Oplåsningen gælder `private_unlock_minutes` (standard 10). Appen låser desuden, når du forlader Beskeder, og når skærmen slukkes eller appen skiftes. Billeder fra private samtaler kræver også oplåsning.
+- Private tråde indgår aldrig i overblik, forslag, opgaver eller søgning, og de hentes ikke forfra fra Aula ved hver kørsel.
+- Er `FAMILIEPLAN_PRIVATE_CODE` ikke sat, kan private samtaler ikke åbnes i appen.
+- Bruger du appen uden serveren (fx `python -m http.server`), kan intet beskyttes: sæt `[private] protect = false`, og de ligger som før i `family.json`.
+
+## Aflysninger og flytninger
+
+En besked om, at noget er **aflyst, udsat eller flyttet**, bliver ikke til en ny aftale, men til en ændring af den, der allerede står i kalenderen:
+
+| Beskeden siger | Appen foreslår |
+|---|---|
+| "Turen er aflyst" / "ingen tur i år" | **Fjern fra kalender** (efter en bekræftelse), hvis appen har oprettet aftalen |
+| "Forældremødet flyttes til 4. nov." / "flyttet fra 21/10 til 4/11" | **Flyt aftalen** (åbner dialogen med den nye tid) |
+| "Udsat på ubestemt tid" | Fjern, eller behold til der kommer en ny dato |
+
+- Aftaler, som **ikke** er oprettet via appen, kan appen ikke ændre sikkert. De får en besked om at rette dem i Google Kalender.
+- Findes der ingen aftale at aflyse, sker der ingenting. En flytning uden kendt gammel aftale bliver en ny aktivitet på den **nye** dato, aldrig på den gamle.
+- Spørgsmål ("Skal vi på tur?"), betingelser og tvetydige tilfælde (to mulige aftaler) giver ikke noget gæt. En senere aflysning fjerner også tidligere forslag og "Føj til kalender"-muligheder om det samme.
+- Klokkeslæt som "kl. 7 om aftenen" læses som 19.00.
+
+## Drift, tilsyn og selvtest
+
+- **Planlæggeren dør ikke lydløst.** En uventet fejl logges, vises i `/api/status` (`internal_errors`), og næste kørsel går som normalt. Selve baggrundsopgaverne genstartes automatisk, hvis de går ned.
+- **Google nede ≠ tom kalender.** Kan en Google-kalender ikke hentes, beholdes dens seneste aftaler, og appen viser en advarsel i overskriften. Aula-data genbruges som før.
+- **Tilsyn.** Er data (eller Aula-data) ældre end `stale_alert_hours` (standard 4), får du en ntfy-besked – én gang pr. døgn pr. problem, aldrig om natten – og en besked, når det virker igen. Et udløbet Aula-login har sin egen besked.
+- **Selvtest:** `python server.py --selftest` (tilføj `--no-notify` for ikke at sende en prøvebesked). Den tjekker Python-version, config, adgangskoder, rettigheder på nøglefiler, iCal-adressen, Aula-login (børn, sideinddeling, markér-som-læst), Google-skrivning (opretter og sletter en prøveaftale langt ude i fremtiden), ntfy, og at ingen privat tekst ligger i `family.json`. Svaret er en liste med ✔ (virker), ⚠ (virker, men ret det) og ✖ (virker ikke) og en forklaring på, hvad du skal gøre. Slutkoden er 1, hvis noget er ✖. **Kør den første gang, du sætter det op.**
+
+## Opdatér afhængigheder
+
+`requirements.txt` er **fastlåst** (også de indirekte pakker) til Python 3.14, så en ny version af en pakke ikke kan ændre noget uden varsel – særligt vigtigt for `aula`, som er uofficiel. Det er `requirements.in`, du redigerer. Efter en ændring:
+
+```
+uv pip compile requirements.in --python-version 3.14 --universal --annotation-style line -o requirements.txt
+uv pip compile requirements-dev.in --python-version 3.14 --universal --annotation-style line -o requirements-dev.txt
+```
+
+Kør derefter testene (næste afsnit), før du bygger billedet igen.
+
+## Test
+
+```
+pip install -r requirements-dev.txt            # eller: uv pip install -r requirements-dev.txt
+python -m playwright install chromium          # kun til browsertestene
+pytest                                         # alt
+pytest --ignore=tests/browser                  # kun serverdelen (hurtig, uden browser)
+```
+
+Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, der kontrollerer servicekontoens signatur, en ntfy-modtager og en iCal-server), så de rører hverken Aula, din rigtige kalender eller dine data.
+
+| Fil | Dækker |
+|---|---|
+| `test_activities.py` | genkendelse af aktiviteter; aflysning, udsættelse, flytning |
+| `test_pipeline.py` | hele hentningen: Google-udfald, private tråde, ændringer mod rigtige aftaler, overblik efter kl. 17 |
+| `test_ops.py` | planlægger, aftenpush, tilsyn, push-beskeder |
+| `test_gcal.py` | oprettelse, flytning, sletning i Google Kalender |
+| `test_server.py` | adgang, CSRF, spærring, private tråde og billeder, aflys/flyt |
+| `test_selftest.py` | selvtesten mod sunde og ødelagte opsætninger |
+| `browser/` | datovælger, layout, beskeder (læst, stryg, private), kalender-UI, aften og kiosk, tilgængelighed |
+
+`homework_test.py` og `messages_test.py` i roden er ældre hjælpescripts, der kører genkendelsen mod **dine egne filer** (`python homework_test.py weekplan.json`, `python messages_test.py aula_feed.json`) og indgår ikke i `pytest`.
+
+Tilgængelighedstesten er valgfri: `npm install axe-core`, og sæt `AXE_JS=…/node_modules/axe-core/axe.min.js`.
+
+## Kendte begrænsninger
+
+- Aula-adgangen er uofficiel (via `nickknissen/aula`) og kan gå i stykker, når Aula ændrer noget. Scriptet genbruger så de seneste Aula-data, og appen viser en advarsel, når data er over en time gamle.
+- Lektier hentes kun, hvis skolen bruger Min Uddannelse. Meebook/EasyIQ kan tilføjes senere.
+- Hvis MitID-tokens udløber, skal du køre scriptet interaktivt igen og scanne QR-koden.
+- **Aula og Google er kun afprøvet mod simuleringer.** Loginet, sideinddelingen, markér-som-læst og skrivningen til Google Kalender er aldrig kørt mod de rigtige tjenester; det er det, `--selftest` er til. Docker-billedet er heller ikke bygget i udviklingsmiljøet.
+- **Tilgængelighed:** axe-core finder stadig lav kontrast i de nedtonede, overståede lektioner i skemaet og i den blå accentfarve i mørk tilstand, og siden mangler `<main>`/`<nav>`-områder. Ellers er der ingen kritiske fund.
+- Private samtaler kan ikke beskyttes uden serveren (se ovenfor). Aulas "læst" kan være synlig for andre.
+- Aflysninger og flytninger kan kun ændre aftaler, appen selv har oprettet.

@@ -1,0 +1,141 @@
+# Kopiér til config.toml og udfyld. config.toml må ALDRIG ligge i web/-mappen,
+# fordi den indeholder den hemmelige iCal-adresse.
+
+output = "web/family.json"
+days_back = 7        # hvor langt tilbage der hentes
+days_ahead = 28      # hvor langt frem der hentes
+collapse_lessons = true   # slå skemaets enkelte timer sammen til én "Skole"-blok per dag
+
+[aula]
+mitid_username = "DIT_MITID_BRUGERNAVN"
+token_file = "secrets/aula_tokens.json"
+fetch_tasks = true      # lektier/opgaver fra Min Uddannelse (hvis skolen bruger det)
+fetch_weekplan = true   # ugeplan fra Meebook
+fetch_posts = true      # opslag
+fetch_messages = true   # beskeder
+posts_limit = 10        # opslag per barn
+messages_limit = 500    # højst så mange beskedtråde (hele historikken, nyeste først)
+messages_per_thread = 50  # højst så mange beskeder i hver tråd
+messages_analyse_days = 60  # beskeder ældre end dette vises og kan søges, men giver ikke opgaver/aftaler
+message_images_days = 90    # billeder hentes kun fra beskeder yngre end dette
+homework_min_confidence = "middel"   # "høj" = kun sikre lektier, "lav" = vis også gæt
+hide_private = true     # skjul teksten i private samtaler med skolen, til man trykker "Vis"
+hidden_subjects = ["INK", "Inklusion", "PS"]   # INK = støttelærer til en anden elev, PS = klassepædagogen – vises ikke i skemaet
+secondary_subjects = []                  # timer der vises som "samtidig", men aldrig er timens hovedfag
+images_per_item = 8     # max billeder der hentes per opslag/besked (gemmes i web/media)
+fetch_gallery = true    # billeder fra Aulas galleri
+gallery_albums = 8      # antal nyeste albums
+images_per_album = 12   # max billeder per album
+
+[assistant]
+mode = "offline"         # "offline" = overblik uden sprogmodel (gratis, intet forlader maskinen) · "claude" = Claude skriver det (kræver API-nøgle) · "off" = intet overblik
+model = "claude-sonnet-5-5"
+api_key_env = "ANTHROPIC_API_KEY"
+rules_file = "familie_regler.md"
+speech = false           # true = Claude skriver også en tekst til oplæsning og appen viser "Læs op"
+min_minutes_between = 60           # dagsoverblik laves højst så ofte – og kun hvis data har ændret sig
+week_min_minutes_between = 360     # ugeoverblik
+# Private samtaler sendes aldrig. Se præcis hvad der sendes med: python briefing.py --dry-run
+
+# Google-kalendere: den PRIVATE iCal-adresse fra Google Kalender →
+# kalenderens "Indstillinger og deling" → "Integrer kalender" → "Hemmelig adresse i iCal-format".
+# Aftaler tildeles personer ud fra navne/aliasser i titlen ("Hugo fodbold", "Carla + Leo svømning").
+# Aftaler uden navn i titlen går til default_people.
+[[google]]
+name = "Familiekalender"
+ical_url = "https://calendar.google.com/calendar/ical/.../basic.ics"
+default_people = ["family"]
+
+# Personerne. aula_name bruges til at matche børnene i Aula (fornavn er nok).
+[[people]]
+id = "andreas"
+name = "Andreas"
+role = "adult"
+color = "#2F6FDE"
+note = "Far"
+aliases = ["far", "andreas"]
+aula_self = true     # den voksne, hvis MitID bruges til Aula-login
+
+[[people]]
+id = "monica"
+name = "Monica"
+role = "adult"
+color = "#1F9E89"
+note = "Mor"
+aliases = ["mor", "monica"]
+
+[[people]]
+id = "hugo"
+name = "Hugo"
+role = "child"
+color = "#E4572E"
+note = "12 år"
+aliases = ["hugo"]
+aula_name = "Hugo"
+icon = "🦊"          # vises på feed-kort og i ugetavlen – skift til hvad I vil
+# class = "6.B"      # Hugos klasse – så ugeplanpunkter for parallelklassen sorteres fra
+
+[[people]]
+id = "carla"
+name = "Carla"
+role = "child"
+color = "#8E5CD6"
+note = "9 år"
+aliases = ["carla"]
+aula_name = "Carla"
+# grade = 3          # årgang, hvis klassebogstavet ikke kendes
+icon = "🦋"
+
+[[people]]
+id = "leo"
+name = "Leo"
+role = "child"
+color = "#D9971E"
+note = "5 år"
+aliases = ["leo"]
+aula_name = "Leo"
+icon = "🐻"
+
+# Fagforkortelser, hvis skolen bruger andre end de almindelige (DAN, MAT, ENG, N/T, HDS …)
+[subjects]
+
+# Serveren (server.py): henter selv, serverer appen bag adgangskode og har en side til MitID-login
+[server]
+interval_minutes = 15           # hentning om dagen
+night_interval_minutes = 120    # og om natten (23.00–05.30)
+aula = true
+session_days = 90               # hvor længe en enhed forbliver logget ind
+# notify_suggestions = true    # ntfy: kort besked, når der er nye kalenderforslag (kræver notify_ntfy)
+mark_read_in_aula = true        # åbner du en besked i appen, markeres den også som læst i Aula (se README)
+# trust_proxy = true            # sæt når en reverse proxy (fx Caddy) står foran
+# public_url = "https://familieplan.eksempel.dk"
+# notify_ntfy = "https://ntfy.sh/dit-hemmelige-emne"   # push-besked, når Aula-loginet udløber (ingen data i beskeden)
+# evening_push = true                  # ntfy: én besked efter kl. 17 om i morgen (kun hvis der er noget særligt)
+# evening_push_only_if_content = true  # false = send også, når der intet er
+# push_details = "summary"             # "summary" = kun tal, ingen navne · "full" = indhold i klar tekst (KUN på din egen ntfy-server)
+# stale_alert_hours = 4                # ntfy-alarm, hvis data er ældre end dette (tavs om natten). 0 = slå fra
+# private_unlock_minutes = 10          # hvor længe private samtaler er åbne, efter koden er indtastet
+
+# Kalenderforslag: aktiviteter i ugeplan, opslag og beskeder, der fortjener en plads i familiekalenderen
+[suggestions]
+enabled = true
+horizon_days = 270              # hvor langt frem der foreslås
+max_age_days = 120              # hvor gamle beskeder der gennemsøges
+max_rule_matches = 25           # lærte ord, der står i flere sætninger end dette, afvises som for almindelige
+# disabled_categories = ["arrangement"]    # lejrskole, møde, test, turnering, lukket, omlagt, tur, arrangement, fødselsdag
+
+# Oprettelse i Google Kalender fra appen. Uden dette åbner "Føj til kalender" Google Kalender med aftalen udfyldt (se README)
+[calendar_write]
+enabled = false
+# calendar_id = "…@group.calendar.google.com"   # udledes ellers af iCal-adressen ovenfor
+service_account_file = "secrets/google_service_account.json"
+reminder_minutes = [1440]       # påmindelse dagen før; [] = kalenderens standard
+
+# Dagsvisningen skifter til næste dag efter dette klokkeslæt (gælder overblik, skema, aftaler, vigtig info, kiosk og aftenpush)
+[display]
+evening_hour = 17
+
+# Private samtaler: indholdet tages ud af family.json og udleveres kun mod koden FAMILIEPLAN_PRIVATE_CODE.
+# Sæt protect = false KUN hvis du bruger appen uden serveren (så kan intet beskyttes alligevel).
+[private]
+protect = true

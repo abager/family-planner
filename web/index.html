@@ -1,0 +1,2215 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Familieplan</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#F2F5F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121824" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Familieplan">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --paper:#F2F5F9; --surface:#FFFFFF; --ink:#1B2638; --muted:#5F6B7D; --line:#D9E0EA; --today:#E6EEFB;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121824; --surface:#1B2331; --ink:#E8EDF5; --muted:#9AA6B8; --line:#2C3748; --today:#1F2C44;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121824; --surface:#1B2331; --ink:#E8EDF5; --muted:#9AA6B8; --line:#2C3748; --today:#1F2C44;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+/* Rolige scrollbars: tynde og i temaets farver */
+:root{--sb:color-mix(in srgb,var(--ink) 22%,transparent)}
+*{scrollbar-width:thin;scrollbar-color:var(--sb) transparent}
+@supports not (scrollbar-color:auto){
+  *::-webkit-scrollbar{width:10px;height:10px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:var(--sb);border-radius:10px;border:3px solid transparent;background-clip:content-box}
+}
+/* Tekst fra Aula (afsnit, lister) */
+.rich{white-space:normal;overflow-wrap:anywhere}
+.rich p{margin:0 0 .75em}
+.rich p:last-child,.rich ul:last-child,.rich ol:last-child{margin-bottom:0}
+.rich ul,.rich ol{margin:.1em 0 .85em;padding-left:1.35em}
+.rich li{margin:.2em 0;padding-left:.15em}
+.rich li::marker{color:var(--muted)}
+.rich .lbl{font-weight:700;margin:.1em 0 .25em}
+.rich a{color:#2F6FDE}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--body)}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}
+h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:6px 0 0}
+.status{font-size:.85rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.srv{display:flex;gap:12px;justify-content:flex-end;align-items:center;margin-top:4px;flex-wrap:wrap}
+.srvwarn{color:#E4572E;font-weight:700}
+.srvbtn{all:unset;cursor:pointer;color:#2F6FDE;font-weight:700;font-size:.85rem}
+.srvbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:4px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg button{white-space:nowrap;border:0;background:none;color:var(--ink);font:700 .95rem var(--body);padding:8px 16px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.people{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:2px solid var(--c);background:var(--surface);color:var(--ink);
+  font:700 .95rem var(--body);padding:4px 14px 4px 4px;border-radius:999px;cursor:pointer}
+.chip .av{width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font:800 .85rem var(--display)}
+.chip[aria-pressed="false"]{opacity:.4;border-style:dashed}
+button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.weeknav{display:flex;gap:6px;align-items:center;margin-left:auto}
+.weeknav button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:7px 12px;font:700 .9rem var(--body);cursor:pointer}
+
+/* Week board: the one bold element — swim lanes per person */
+.boardwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:18px}
+.board{display:grid;grid-template-columns:104px repeat(7,minmax(118px,1fr));min-width:930px}
+.board .dh{padding:12px 10px 10px;border-bottom:1px solid var(--line);font:700 .9rem var(--body);color:var(--muted)}
+.board .dh strong{display:block;font:800 1.5rem/1 var(--display);color:var(--ink)}
+.board .dh.is-today{background:var(--today)}
+.board .dh.is-today strong{color:#2F6FDE}
+.lane{display:contents}
+.lane .who{padding:10px;border-bottom:1px solid var(--line);border-left:6px solid var(--c);font:700 1rem var(--display);display:flex;flex-direction:column;justify-content:center}
+.lane .who small{font:400 .78rem var(--body);color:var(--muted)}
+.cell{border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:6px;min-height:74px;display:flex;flex-direction:column;gap:4px}
+.cell.is-today{background:var(--today)}
+.lane:last-child .who,.lane:last-child .cell{border-bottom:0}
+.pill{all:unset;cursor:pointer;display:block;border-radius:8px;padding:4px 7px;font-size:.8rem;line-height:1.3;
+  background:color-mix(in srgb,var(--c) 16%,var(--surface));border-left:4px solid var(--c)}
+.pill time{font-weight:700;margin-right:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill.task{background:none;border:1.5px dashed var(--c);border-left-width:4px;border-left-style:solid}
+.src{font-size:.7rem;color:var(--muted)}
+
+/* Today view */
+.today{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px}
+@media (max-width:700px){.today{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px}
+.brief{grid-column:1 / -1;border-color:color-mix(in srgb,#2F6FDE 35%,var(--line));background:linear-gradient(180deg,color-mix(in srgb,#2F6FDE 7%,var(--surface)),var(--surface) 60%)}
+.brief .bhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brief .blabel{font:700 .82rem var(--body);color:#2F6FDE;margin:0 0 4px}
+.brief h2{font:800 1.4rem/1.1 var(--display);margin:0;flex:1;min-width:200px}
+.brief .speak{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;background:#2F6FDE;color:#fff;font:700 .95rem var(--body);padding:10px 18px;cursor:pointer}
+.brief .speak[aria-pressed="true"]{background:#E4572E}
+.brief .speak svg{width:18px;height:18px;fill:currentColor}
+.speakbox{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.speakbox .voice{font:inherit;font-size:.78rem;color:var(--muted);background:none;border:1px solid var(--line);border-radius:8px;padding:3px 6px;max-width:220px}
+.bsecs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 22px;margin-top:12px}
+.bsec h3{font:700 .95rem var(--display);margin:0 0 4px}
+.bsec ul{list-style:none;margin:0;padding:0}
+.bsec li{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--line);font-size:.95rem}
+.bsec li:first-child{border-top:0}
+.bsec li .pav{width:22px;height:22px;font-size:.72rem;border-width:1.5px;flex:none}
+.bsec li .src{display:block;font-size:.74rem;color:var(--muted)}
+.bfoot{margin-top:10px;font-size:.78rem;color:var(--muted)}
+.skemapanel{grid-column:1 / -1}
+.skema{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.scard{border:1px solid var(--line);border-top:4px solid var(--c);border-radius:14px;padding:10px 12px}
+.scard .shead{display:flex;align-items:center;gap:8px;margin-bottom:6px;font:700 1rem var(--display)}
+.scard .shead small{margin-left:auto;font:400 .8rem var(--body);color:var(--muted)}
+.lessons{list-style:none;margin:0;padding:0}
+.lessons li{display:grid;grid-template-columns:46px 1fr;gap:8px;padding:4px 6px;border-radius:8px;font-size:.92rem}
+.lessons li time{font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted)}
+.lessons li .who{font-size:.76rem;color:var(--muted)}
+.lessons li .also{font-style:italic}
+.lessons li .lnote{margin-top:3px;font-size:.8rem;padding:4px 8px;border-radius:8px;background:color-mix(in srgb,#2F6FDE 9%,var(--surface));white-space:pre-line}
+.lessons li .lnote .ic{color:#2F6FDE}
+.lessons li.past{opacity:.45}
+.lessons li.now{background:color-mix(in srgb,var(--c) 16%,transparent);box-shadow:inset 3px 0 0 var(--c)}
+.lessons li.now time{color:var(--ink)}
+.lessons .sub{font-size:.72rem;font-weight:700;padding:0 6px;border-radius:999px;background:#FDE2D9;color:#9C2F12;margin-left:6px}
+.panel h2{font:800 1.4rem/1.1 var(--display);margin:0 0 12px}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:108px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.tl li:first-child{border-top:0}
+.tl .t{font:700 1.05rem var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl .t .tend{font-weight:500;color:var(--muted)}
+.tl .t .dur{display:block;font:400 .74rem var(--body);color:var(--muted);margin-top:1px}
+.tl .t.allday{font-size:.8rem;color:var(--muted);padding-top:3px}
+.tl .title{font-weight:700}
+.dots{display:inline-flex;gap:4px;margin-right:6px;vertical-align:middle}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--c)}
+.meta{font-size:.85rem;color:var(--muted)}
+.tasks{list-style:none;margin:0;padding:0}
+.tasks li{padding:9px 0 9px 12px;border-left:4px solid var(--c);margin-bottom:8px;background:color-mix(in srgb,var(--c) 8%,transparent);border-radius:0 8px 8px 0}
+.empty{color:var(--muted);font-style:italic}
+.hidden{display:none!important}
+
+.pill.plan{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 10%,var(--surface)) 0 6px,var(--surface) 6px 12px);border-left:4px solid var(--c)}
+.seg .count{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:999px;background:#E4572E;color:#fff;font-size:.78rem;line-height:20px;text-align:center}
+.feed{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:820px){.feed{grid-template-columns:1fr}}
+.items{list-style:none;margin:0;padding:0}
+.items li{border-top:1px solid var(--line)}
+.items li:first-child{border-top:0}
+.item{all:unset;box-sizing:border-box;display:block;width:100%;cursor:pointer;padding:12px 4px}
+.item:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:8px}
+.item .head{display:flex;gap:8px;align-items:baseline}
+.item .subj{font-weight:700;flex:1}
+.item.unread .subj::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:#E4572E;margin-right:7px;vertical-align:middle}
+.item .when{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.item .snip{color:var(--muted);font-size:.9rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.flag{font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:999px;background:#FDE2D9;color:#9C2F12;margin-left:6px}
+.plans{list-style:none;margin:0;padding:0}
+.plans li{margin-bottom:8px}
+.plans .item{padding:8px 10px;border-radius:10px;border-left:4px solid var(--c);background:color-mix(in srgb,var(--c) 8%,transparent)}
+dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
+.ic{width:1em;height:1em;flex:none;vertical-align:-.14em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pill .ic{margin-right:4px;color:var(--c)}
+.tl .title .ic,.tasks .ic,.plans .ic{color:var(--c,var(--muted));margin-right:6px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:0 0 12px;font-size:.85rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.pav{display:inline-grid;place-items:center;width:1.9em;height:1.9em;border-radius:50%;background:color-mix(in srgb,var(--c) 22%,var(--surface));border:2px solid var(--c);font:800 .85rem/1 var(--display);color:var(--ink)}
+.chip .av{background:color-mix(in srgb,var(--c) 22%,var(--surface));color:var(--ink);border:2px solid var(--c)}
+.lane .who .pav{margin-bottom:4px}
+/* Feed */
+.feedwrap{max-width:560px;margin:0 auto}
+@media (min-width:1100px){.feedwrap{max-width:720px}}
+@media (min-width:1600px){.feedwrap{max-width:860px}}
+.ftabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.ftabs button{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 .9rem var(--body);padding:7px 14px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ftabs button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;margin-bottom:18px;overflow:hidden}
+.card.msg{border-color:color-mix(in srgb,#2F6FDE 45%,var(--line))}
+.card.msg.unread{box-shadow:inset 5px 0 0 #E4572E}
+.chead{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.chead .avs{display:flex}
+.chead .avs .pav{font-size:1rem;width:2.3em;height:2.3em}
+.chead .avs .pav+.pav{margin-left:-10px}
+.chead .who{flex:1;min-width:0}
+.chead .who b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chead .who span{font-size:.8rem;color:var(--muted)}
+.kind{display:inline-flex;align-items:center;gap:5px;font:700 .78rem var(--body);padding:4px 10px;border-radius:999px;white-space:nowrap}
+.kind.post{background:color-mix(in srgb,#D9971E 20%,var(--surface));color:var(--ink)}
+.kind.album{background:color-mix(in srgb,#1F9E89 20%,var(--surface));color:var(--ink)}
+.kind.msg{background:color-mix(in srgb,#2F6FDE 18%,var(--surface));color:var(--ink)}
+.photos{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;background:#000;scrollbar-width:none}
+.photos::-webkit-scrollbar{display:none}
+.photos button{all:unset;cursor:zoom-in;flex:0 0 100%;scroll-snap-align:center;aspect-ratio:1/1;max-height:min(70vh,760px);display:block}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.pcount{font-size:.78rem;color:var(--muted);padding:6px 14px 0}
+/* Karrusel med tydelige swipe-markeringer */
+.car{position:relative}
+.arr{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:0;cursor:pointer;
+  display:grid;place-items:center;background:rgba(15,20,30,.38);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  box-shadow:0 0 0 1px rgba(255,255,255,.25) inset;z-index:2;transition:background .15s,opacity .2s}
+.arr:hover{background:rgba(15,20,30,.6)}
+.arr:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.arr svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.arr.prev{left:10px}.arr.next{right:10px}
+.arr[hidden]{display:grid;opacity:0;pointer-events:none}
+.ctr{position:absolute;top:10px;right:10px;z-index:2;background:rgba(15,20,30,.5);color:#fff;font:700 .78rem var(--body);padding:3px 9px;border-radius:999px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.cdots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:5px;z-index:2;pointer-events:none}
+.cdots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.5);box-shadow:0 0 2px rgba(0,0,0,.4);transition:transform .15s,background .15s}
+.cdots i.on{background:#fff;transform:scale(1.25)}
+.open-album{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:#2F6FDE;font-weight:700;font-size:.9rem;padding:6px 14px 0}
+/* Fuldskærmsvisning */
+#lb{margin:0;padding:0;border:0;border-radius:0;width:100vw;height:100dvh;max-width:none;max-height:none;background:#000;color:#fff;overflow:hidden}
+#lb::backdrop{background:#000}
+#lb .lbtrack{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior:contain}
+#lb .lbtrack::-webkit-scrollbar{display:none}
+#lb .lbslide{flex:0 0 100%;height:100%;scroll-snap-align:center;display:grid;place-items:center;
+  padding:calc(56px + env(safe-area-inset-top,0px)) 0 calc(40px + env(safe-area-inset-bottom,0px))}
+#lb .lbslide img{max-width:100vw;max-height:calc(100dvh - 96px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));width:auto;height:auto;object-fit:contain;border-radius:0;display:block;user-select:none;-webkit-user-drag:none}
+#lb .lbbar{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:linear-gradient(rgba(0,0,0,.6),transparent)}
+#lb .lbtitle{flex:1;min-width:0;font:700 1rem var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#lb .lbctr{font:700 .85rem var(--body);opacity:.85}
+#lb .lbclose{all:unset;cursor:pointer;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);margin:0}
+#lb .lbclose:focus-visible{outline:3px solid #fff}
+#lb .lbclose svg{width:22px;height:22px;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round}
+#lb .arr{width:52px;height:52px}
+#lb .arr.prev{left:16px}#lb .arr.next{right:16px}
+#lb .cdots{bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+@media (hover:none){#lb .arr{width:44px;height:44px;background:rgba(15,20,30,.3)}}
+.cbody{padding:10px 14px 14px}
+.cbody h3{font:800 1.15rem/1.25 var(--display);margin:0 0 4px}
+.cbody .txt{white-space:pre-line;margin:0}
+.cbody .txt.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.more{all:unset;cursor:pointer;color:#2F6FDE;font-weight:700;font-size:.9rem;margin-top:4px;display:inline-block}
+.cfoot{font-size:.8rem;color:var(--muted);padding:0 14px 12px}
+.extract{list-style:none;margin:10px 0 0;padding:10px 0 0;border-top:1px dashed var(--line)}
+.extract li{display:flex;gap:8px;align-items:flex-start;font-size:.9rem;padding:3px 0}
+.extract .ic{margin-top:.2em;color:#2F6FDE}
+.extract .d{margin-left:auto;color:var(--muted);white-space:nowrap;font-size:.8rem;padding-left:8px}
+.private{display:flex;align-items:center;gap:10px;color:var(--muted);font-style:italic}
+.private button{all:unset;cursor:pointer;color:#2F6FDE;font-weight:700;font-style:normal}
+.pill.sugg{border-left-style:dashed}
+/* Beskeder: liste + læserude som i Outlook */
+body.mode-mail .wrap{max-width:1680px;padding-bottom:12px}
+body.mode-mail header{margin-bottom:10px}
+body.mode-mail h1{font-size:1.6rem}
+body.mode-mail .sub{display:none}
+.mail{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);height:var(--mailh,70vh);min-height:420px;
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.mlist{display:flex;flex-direction:column;border-right:1px solid var(--line);min-height:0}
+.mtools{display:flex;flex-direction:column;gap:8px;padding:10px;border-bottom:1px solid var(--line)}
+.mtools input{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:7px 10px;width:100%}
+.mfilters{display:flex;gap:6px;flex-wrap:wrap}
+.mfilters button{border:1px solid var(--line);background:none;color:var(--ink);font:700 .8rem var(--body);padding:4px 10px;border-radius:999px;cursor:pointer}
+.mfilters button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.mitems{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1}
+.mrow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:2px 8px;
+  width:100%;padding:8px 10px 8px 8px;border-bottom:1px solid var(--line);border-left:3px solid transparent}
+.mrow:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.mrow[aria-current="true"]{background:var(--today);border-left-color:#2F6FDE}
+.mrow:focus-visible{outline:2px solid #2F6FDE;outline-offset:-2px}
+.mrow .mav{grid-row:span 2;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:2px}
+.mrow .mav .pav{width:24px;height:24px;font-size:.75rem;border-width:1.5px}
+.mrow .mav .pav+.pav{margin-top:-8px}
+.mrow .mfrom{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow.unread .mfrom,.mrow.unread .msubj{font-weight:700}
+/* Ulæst: blå prik i margenen (som i Outlook) og fed skrift. Prikken falmer væk, når beskeden markeres som læst. */
+.mrow{position:relative;touch-action:pan-y;-webkit-user-select:none;user-select:none;padding-left:24px}
+.mrow .udot{position:absolute;left:9px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:#2F6FDE;transform:scale(0);opacity:0;transition:transform .3s ease,opacity .3s ease}
+.mrow.unread .udot{transform:scale(1);opacity:1}
+.mrow .mfrom,.mrow .msubj{transition:color .3s}
+/* Stryg mod venstre (touch): handlingen ligger bag rækken */
+.mswipe{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.mswipe .mrow{display:grid;transform:translateX(var(--dx,0px));background:var(--surface);border-bottom:0}
+.mswipe .mrow:hover{background:color-mix(in srgb,var(--ink) 4%,var(--surface))}
+.mswipe .mrow[aria-current="true"]{background:var(--today)}
+.mswipe.snapping .mrow{transition:transform .22s ease}
+.mact{position:absolute;top:0;bottom:0;right:0;width:max(96px,calc(var(--dx,0px) * -1));background:#2F6FDE;visibility:hidden}
+.mswipe.open .mact,.mswipe.dragging .mact{visibility:visible}
+.mactbtn{all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:96px;height:100%;color:#fff;font:700 .78rem var(--body);cursor:pointer}
+.mactbtn .ic{width:1.5em;height:1.5em}
+.mactbtn:focus-visible{outline:3px solid #fff;outline-offset:-6px}
+/* Læseruden */
+.rtop{display:flex;gap:12px;align-items:flex-start}
+.rtop h2{flex:1;min-width:0}
+.rtools{display:flex;gap:8px;align-items:center;flex:none;padding-top:4px}
+.upill{font:700 .76rem var(--body);padding:3px 10px;border-radius:999px;background:color-mix(in srgb,#2F6FDE 16%,var(--surface));color:var(--ink);transition:opacity .3s,transform .3s}
+.rbtn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font:700 .85rem var(--body);color:#2F6FDE;padding:6px 10px;border-radius:10px;transition:opacity .3s}
+.rbtn:hover{background:color-mix(in srgb,#2F6FDE 10%,transparent)}
+.rbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.fading{opacity:0;transform:scale(.9);pointer-events:none}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);max-width:min(92vw,460px);background:var(--ink);color:var(--paper);
+  font:700 .9rem var(--body);padding:11px 18px;border-radius:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:60;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.mrow .mdate{font-size:.75rem;color:var(--muted);white-space:nowrap;text-align:right}
+.mrow .msubj{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.mrow .mflags{display:flex;gap:4px;color:var(--muted);justify-content:flex-end}
+.mrow .mflags .hot{color:#2F6FDE}
+.mrow .mhit{grid-column:2 / 4;font-size:.8rem;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+mark{background:#FFE27A;color:#1B2638;border-radius:3px;padding:0 1px}
+.reader{overflow-y:auto;min-height:0;padding:18px clamp(16px,3vw,40px) 30px}
+.reader .back{display:none}
+.rhead{max-width:78ch}
+.rhead h2{font:800 clamp(1.3rem,2.4vw,1.8rem)/1.2 var(--display);margin:0 0 8px}
+.rmeta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:.88rem;color:var(--muted)}
+.rmeta .pav{width:26px;height:26px;font-size:.8rem}
+.rmeta .people{display:inline-flex;gap:4px;align-items:center}
+.todo{max-width:78ch;margin:14px 0 4px;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,#2F6FDE 9%,var(--surface));border:1px solid color-mix(in srgb,#2F6FDE 25%,var(--line))}
+.todo .extract{margin:0;padding:0;border:0}
+.msgs{max-width:78ch;margin-top:14px}
+.msg1{border-top:1px solid var(--line);padding:14px 0}
+.msg1:first-child{border-top:0;padding-top:4px}
+.msg1 .mh{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:10px;align-items:baseline;width:100%}
+.msg1 .mh b{font-size:.95rem}
+.msg1 .mh span{margin-left:auto;font-size:.8rem;color:var(--muted);white-space:nowrap}
+.msg1 .mb{white-space:normal;margin-top:8px;line-height:1.6;font-size:1.02rem}
+.msg1.collapsed .mb,.msg1.collapsed .mimgs,.msg1.collapsed .mfiles{display:none}
+.msg1 .snip2{display:none;color:var(--muted);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.msg1.collapsed .snip2{display:block}
+.mimgs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.mimgs button{all:unset;cursor:zoom-in}
+.mimgs img{height:140px;border-radius:10px;display:block}
+.mfiles{margin-top:8px;font-size:.85rem;color:var(--muted)}
+.rempty{display:grid;place-items:center;height:100%;color:var(--muted)}
+@media (max-width:759px){
+  .mail{grid-template-columns:1fr}
+  .mail.reading .mlist{display:none}
+  .mail:not(.reading) .reader{display:none}
+  .reader .back{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:#2F6FDE;font:700 .95rem var(--body);padding:0 0 10px;cursor:pointer}
+}
+dialog img{max-width:100%;border-radius:12px;display:block}
+dialog{border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--ink);max-width:560px;width:calc(100% - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px}
+dialog::backdrop{background:rgba(10,15,25,.45)}
+dialog h3{font:800 1.4rem/1.15 var(--display);margin:0 0 8px}
+dialog button{margin-top:14px;border:0;background:var(--ink);color:var(--paper);font:700 .95rem var(--body);padding:9px 18px;border-radius:999px;cursor:pointer}
+@media (prefers-reduced-motion:no-preference){.pill{transition:transform .12s}.pill:hover{transform:translateY(-1px)}}
+
+/* Kioskvisning: stor tekst, få elementer, ingen knapper – til en tablet på væggen */
+#kioskView{--kfs:clamp(18px,2.75vmin,40px);font-size:var(--kfs)}
+body.kiosk{overflow-x:hidden}
+body.kiosk header,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #suggView,body.kiosk #aulaView{display:none!important}
+body.kiosk .wrap{max-width:none;padding:clamp(10px,2vmin,30px);padding-bottom:clamp(10px,2vmin,30px)}
+.k-top{display:flex;align-items:center;gap:2.4vmin;margin-bottom:2vmin;flex-wrap:wrap}
+.k-clock{font:800 3.6em/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.k-day{font:800 1.6em/1.1 var(--display)}
+.k-date{color:var(--muted);font-size:1.15em}
+.k-date .k-day{color:var(--ink)}
+.k-status{margin-left:auto;font-size:.8em;color:var(--muted);text-align:right}
+.k-status .bad{color:#C23A15;font-weight:700}
+.k-exit{all:unset;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;border:1px solid var(--line);border-radius:999px;padding:.35em 1em;font:700 .8em var(--body);background:var(--surface)}
+body.k-showexit .k-exit{opacity:1;pointer-events:auto}
+.k-body{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:2vmin;align-items:start}
+@media (orientation:portrait){.k-body{grid-template-columns:1fr}}
+.k-kids{display:grid;gap:1.8vmin;grid-template-columns:repeat(auto-fit,minmax(min(100%,13em),1fr))}
+.k-kid{border-radius:1em;background:var(--surface);border:1px solid var(--line);border-top:.38em solid var(--c);padding:.85em .95em}
+.k-kid h3{display:flex;align-items:center;gap:.5em;font:800 1.3em/1.1 var(--display);margin:0 0 .35em}
+.k-kid .pav{width:1.7em;height:1.7em;font-size:1em}
+.k-hours{font-size:1.2em;font-weight:800}
+.k-line{margin-top:.45em;line-height:1.3}
+.k-sub{display:inline-block;font:700 .75em var(--body);background:#FDE2D9;color:#8B2A10;border-radius:999px;padding:.05em .6em;margin-left:.3em}
+.k-none{color:var(--muted);font-style:italic}
+.k-now{font-weight:800}
+.k-card{background:var(--surface);border:1px solid var(--line);border-radius:1em;padding:.85em 1em;margin-bottom:1.8vmin}
+.k-card h2{font:800 1.2em/1.1 var(--display);margin:0 0 .5em}
+.k-list{list-style:none;margin:0;padding:0}
+.k-list li{display:flex;gap:.55em;align-items:flex-start;padding:.42em 0;border-top:1px solid var(--line);line-height:1.3}
+.k-list li:first-child{border-top:0}
+.k-list .pav{flex:none;width:1.5em;height:1.5em;font-size:.9em;margin-top:.1em}
+.k-list small{display:block;color:var(--muted);font-size:.72em}
+body.kiosk .tl li{grid-template-columns:5.2em 1fr;font-size:1em}
+body.kiosk .tl .t{font-size:1em}
+
+.sronly{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* I dag / I morgen */
+.daytoggle{grid-column:1 / -1;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.daytoggle button{all:unset;box-sizing:border-box;cursor:pointer;padding:7px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font:700 .88rem var(--body);min-height:36px;display:inline-flex;align-items:center}
+.daytoggle button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.daytoggle button:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.daytoggle #dtNote{font-size:.8rem;color:var(--muted);margin-left:6px}
+@media (pointer:coarse){.daytoggle button{min-height:44px;padding:9px 20px}}
+
+/* ===== Kalenderforslag ===== */
+.suggwrap{max-width:860px;margin:0 auto}
+.sintro h2{font:800 1.4rem/1.1 var(--display);margin:0 0 6px}
+.sintro p{margin:0 0 10px;color:var(--muted)}
+.snote{background:color-mix(in srgb,#D9971E 14%,var(--surface));border:1px solid color-mix(in srgb,#D9971E 40%,var(--line));border-radius:12px;padding:10px 14px;font-size:.9rem;margin:0 0 14px}
+.sg{background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--cc,#2F6FDE);border-radius:16px;padding:14px 16px;margin-bottom:12px}
+.sg.isdone{opacity:.75}
+.sgtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.catchip{display:inline-flex;align-items:center;gap:6px;font:700 .78rem var(--body);padding:3px 10px;border-radius:999px;background:color-mix(in srgb,var(--cc,#2F6FDE) 16%,var(--surface));color:var(--ink)}
+.maybe,.newtag{font:700 .72rem var(--body);padding:2px 8px;border-radius:999px}
+.maybe{background:#FDE9C8;color:#7A4C00}
+.newtag{background:#DDE8FB;color:#1F4FA8}
+.sg h3{font:800 1.2rem/1.2 var(--display);margin:0 0 4px}
+.sgmeta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--ink);font-size:.95rem}
+.sgmeta span{display:inline-flex;align-items:center;gap:6px}
+.sgwho{display:flex;gap:4px;margin:8px 0 2px}
+.sgsrc{margin:8px 0 0;font-size:.82rem;color:var(--muted)}
+.linklike{all:unset;cursor:pointer;color:#2F6FDE;font-weight:700}
+.linklike:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:4px}
+.sgact{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 .92rem var(--body)}
+.btn.primary{background:#2F6FDE;border-color:#2F6FDE;color:#fff}
+.btn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.btn[disabled]{opacity:.55;pointer-events:none}
+.sdone{margin-top:18px}
+.sdone summary{cursor:pointer;font:700 1rem var(--display);padding:10px 0;min-height:44px}
+.sdone .sg{border-left-color:var(--muted)}
+.suggbanner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;grid-column:1 / -1;border-color:color-mix(in srgb,#2F6FDE 40%,var(--line));background:color-mix(in srgb,#2F6FDE 7%,var(--surface))}
+.suggbanner .ic{color:#2F6FDE}
+.calopts{max-width:78ch;margin:14px 0 4px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:color-mix(in srgb,var(--ink) 3%,var(--surface))}
+.calopts h3{margin:0 0 6px;font:800 .95rem var(--display);display:flex;align-items:center;gap:6px}
+.calopt{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
+.calopt:first-of-type{border-top:0}
+.calopt .meta{display:block}
+.calopt .done{color:#0E6B5B;font-weight:700;font-size:.88rem;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+#evDlg{max-width:520px}
+#privDlg{max-width:400px}
+#privDlg label{display:block;font:700 .85rem var(--body);margin:10px 0 4px}
+#privDlg input{display:block;width:100%;font:400 16px var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px}
+#evDlg label{display:block;font:700 .85rem var(--body);margin:0 0 12px}
+#evDlg input:not([type=checkbox]),#evDlg textarea{display:block;width:100%;margin-top:4px;font:400 16px var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px}
+#evDlg textarea{resize:vertical}
+#evDlg .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#evDlg .chk{display:flex;align-items:center;gap:10px;min-height:44px}
+#evDlg .chk input{width:22px;height:22px;margin:0}
+#evDlg small{font-weight:400;color:var(--muted)}
+/* Datovælger: skriv selv (mange formater) eller vælg i kalenderen */
+#evDlg .dpfield label{margin:0 0 4px}
+.dpbox{position:relative}
+#evDlg .dpbox .dpin{margin-top:0;padding-right:52px}
+.dpbtn{all:unset;box-sizing:border-box;position:absolute;right:4px;top:4px;bottom:4px;width:42px;display:grid;place-items:center;border-radius:8px;cursor:pointer;color:#2F6FDE}
+.dpbtn .ic{width:1.35em;height:1.35em}
+.dpbtn[aria-expanded="true"]{background:color-mix(in srgb,#2F6FDE 14%,transparent)}
+.dpbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px}
+.dphint{min-height:1.35em;margin-top:4px;font-size:.8rem;color:var(--muted);text-transform:none;font-weight:400}
+.dphint.bad{color:#C23A15;font-weight:700}
+#evDlg .dpin[aria-invalid="true"]{border-color:#C23A15}
+.dpcal{margin:0 0 12px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.dphead{display:flex;align-items:center;gap:2px;margin-bottom:6px}
+.dphead .dptitle{flex:1;text-align:center;font:800 1rem var(--display);text-transform:capitalize}
+.dphead button,.dpfoot button{all:unset;box-sizing:border-box;cursor:pointer;min-width:40px;min-height:40px;display:grid;place-items:center;border-radius:10px;font-weight:700;padding:0 8px}
+.dphead button:hover,.dpfoot button:hover{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.dphead button:focus-visible,.dpfoot button:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px}
+.dpgrid{width:100%;border-collapse:collapse;table-layout:fixed}
+.dpgrid th{font:700 .72rem var(--body);color:var(--muted);padding:4px 0;text-transform:uppercase}
+.dpgrid td{padding:2px}
+.dpday{all:unset;box-sizing:border-box;width:100%;height:40px;display:grid;place-items:center;border-radius:10px;cursor:pointer;font:600 .95rem var(--body)}
+.dpday:hover{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.dpday.out{color:var(--muted);opacity:.6}
+.dpday.today{box-shadow:inset 0 0 0 2px #2F6FDE}
+.dpday.range{background:color-mix(in srgb,#2F6FDE 16%,transparent)}
+.dpday.sel,.dpday.sel:hover{background:#2F6FDE;color:#fff;opacity:1}
+.dpday[disabled]{opacity:.3;cursor:not-allowed;background:none}
+.dpday:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px}
+.dpfoot{display:flex;justify-content:space-between;gap:8px;margin-top:6px}
+@media (max-width:560px){#evDlg{padding:16px}.dpcal{padding:6px}.dpgrid td{padding:1px}}
+@media (pointer:coarse){.dpday{height:44px}.dphead button,.dpfoot button{min-height:44px;min-width:44px}}
+#evDlg .learn{border:1px solid var(--line);border-radius:12px;padding:6px 14px 10px;margin:0 0 12px;min-inline-size:0}
+#evDlg .learn .chk{margin:0}
+.lchips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px}
+#evDlg .lchip{display:inline-flex;align-items:center;gap:8px;margin:0;min-height:44px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;font:700 .9rem var(--body);cursor:pointer;background:var(--paper)}
+#evDlg .lchip input{width:20px;height:20px;margin:0}
+#evDlg .lchip.on{border-color:#2F6FDE;background:color-mix(in srgb,#2F6FDE 10%,var(--paper))}
+.rule{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:14px;margin:0 0 10px;background:var(--surface)}
+.rule.off{opacity:.55}
+.rule .meta{display:block;font-size:.82rem}
+.rule .ract{display:flex;gap:8px;flex-wrap:wrap}
+.evnote{margin:0 0 8px;font-size:.82rem;color:var(--muted)}
+.everr{margin:0 0 8px;color:#C23A15;font-weight:700;min-height:1.2em}
+.evbtns{display:flex;gap:10px;flex-wrap:wrap;position:sticky;bottom:-22px;background:var(--surface);padding:12px 0 2px;margin-top:8px;border-top:1px solid var(--line)}
+#evDlg .evbtns button{margin:0}
+@media (max-width:560px){#evDlg .row2{grid-template-columns:1fr}}
+
+/* ===== Responsivt: iPad (stående og liggende), telefon og laptop ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+*{-webkit-tap-highlight-color:transparent}
+button,a,.chip,.pill{touch-action:manipulation}
+.wrap{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+.seg .navic{display:none}
+.agenda{display:none}
+.acard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;scroll-margin-top:12px}
+.acard.is-today{border-color:#2F6FDE;box-shadow:0 0 0 2px color-mix(in srgb,#2F6FDE 22%,transparent)}
+.acard h3{font:800 1.12rem/1.1 var(--display);margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.acard h3 small{font:400 .8rem var(--body);color:var(--muted)}
+.alane{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+.alane .pav{width:26px;height:26px;font-size:.8rem}
+.alane .pills{display:flex;flex-direction:column;gap:4px;min-width:0}
+.alane .pill{font-size:.9rem}
+.acard.past{opacity:.6}
+.anone{margin:2px 0 0;color:var(--muted);font-style:italic;font-size:.9rem}
+
+/* Berøringsskærme (iPad, telefon): trykflader på mindst 44 px */
+@media (pointer:coarse){
+  .seg button{min-height:44px;padding:10px 18px}
+  .chip{min-height:44px;padding-right:16px}
+  .weeknav button{min-height:44px;min-width:44px}
+  .ftabs button{min-height:44px;padding:8px 18px}
+  .mfilters button{min-height:44px;padding:9px 14px}
+  .srvbtn{padding:12px 8px}
+  .pill{padding:13px 10px;font-size:.88rem}
+  .msg1 .mh,.more{min-height:44px}
+  .rbtn{min-height:40px;padding:8px 12px}
+  dialog button{min-height:44px;padding:10px 22px}
+  .mrow{min-height:60px}
+  .private button{min-height:44px;padding:0 12px}
+  .linklike{position:relative}
+  .linklike::after{content:"";position:absolute;inset:-14px -10px}          /* større trykflade uden at ændre layoutet */
+}
+
+/* Smalle skærme og iPad stående: ugen som dag-for-dag-kort i stedet for en tavle, der skal ruldes sidelæns */
+@media (max-width:899px){
+  .boardwrap{display:none}
+  .agenda{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+}
+/* Beskeder: to ruder allerede fra iPad stående */
+@media (min-width:760px) and (max-width:1000px){
+  .mail{grid-template-columns:minmax(260px,320px) minmax(0,1fr)}
+  .reader{padding:16px 22px 28px}
+}
+@media (min-width:700px) and (max-width:1099px){ header{margin-bottom:14px} }
+
+/* Telefon: kompakt top, bundmenu som i en app */
+@media (max-width:699px){
+  .wrap{padding-top:14px;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+  header{margin-bottom:12px;gap:2px}
+  h1{font-size:1.9rem}
+  .sub{margin-top:2px;font-size:.92rem}
+  .status{width:100%;font-size:.8rem}
+  .srv{justify-content:flex-start;margin-top:2px}
+  .controls{margin-bottom:12px;gap:8px}
+  .seg{position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:none;overflow:visible;border:0;border-top:1px solid var(--line);border-radius:0;
+    background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+    display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+  .seg button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;min-height:52px;padding:6px 2px;font-size:.72rem;color:var(--muted);border-radius:12px}
+  .seg button .navic{display:block;width:1.55rem;height:1.55rem}
+  .seg button[aria-pressed="true"]{background:none;color:#2F6FDE}
+  .seg .count{position:absolute;top:1px;left:calc(50% + 4px);margin:0;min-width:18px;font-size:.75rem;line-height:18px;padding:0 5px}
+  .people{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px;padding:2px 16px 4px;width:calc(100% + 32px);scrollbar-width:none}
+  .people::-webkit-scrollbar{display:none}
+  .people{-webkit-mask-image:linear-gradient(to right,#000 88%,transparent);mask-image:linear-gradient(to right,#000 88%,transparent)}   /* antyder, at der er flere at rulle til */
+  .chip{flex:none}
+  .weeknav{margin-left:0;width:100%;justify-content:space-between}
+  #toast{bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+  .panel{padding:14px}
+  .skema{grid-template-columns:1fr}
+  .tl li{grid-template-columns:96px 1fr}
+  .brief .bhead h2{font-size:1.25rem}
+  /* Beskeder på telefon: pladsen skal bruges på beskederne, ikke på titel og filtre */
+  .mail{min-height:0}
+  body.mode-mail header{display:none}
+  body.mode-mail .wrap{padding-top:max(10px,env(safe-area-inset-top))}
+  body.mail-reading .people{display:none}
+  .mtools{padding:8px}
+  .rtop{flex-direction:column;gap:4px}
+  .rtools{padding-top:0}
+  .mfilters{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -8px;padding:0 8px}
+  .mfilters::-webkit-scrollbar{display:none}
+  .mfilters button{flex:none}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-event" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></symbol>
+  <symbol id="i-post" viewBox="0 0 24 24"><path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1Z"/><path d="M17 8a5 5 0 0 1 0 8"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+  <symbol id="i-today" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><circle cx="12" cy="15.5" r="1.8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-week" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M8 10v11M12 10v11M16 10v11"/></symbol>
+  <symbol id="i-calplus" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M12 13v5M9.5 15.5h5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6-5.2-6-10a6 6 0 0 1 12 0c0 4.8-6 10-6 10Z"/><circle cx="12" cy="11" r="2.2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></symbol>
+</svg>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="greeting">Familieplan</h1>
+      <p class="sub" id="dateline"></p>
+    </div>
+    <div class="status" id="status"></div>
+  </header>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Visning">
+      <button id="v-today" aria-pressed="true"><svg class="ic navic" aria-hidden="true"><use href="#i-today"/></svg><span>I dag</span></button>
+      <button id="v-week" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-week"/></svg><span>Ugen</span></button>
+      <button id="v-mail" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-msg"/></svg><span>Beskeder</span><span class="count hidden" id="unreadCount"></span></button>
+      <button id="v-sugg" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-calplus"/></svg><span>Forslag</span><span class="count hidden" id="suggCount"></span></button>
+      <button id="v-aula" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-photo"/></svg><span>Feed</span></button>
+    </div>
+    <div class="people" id="people" aria-label="Vis personer"></div>
+    <div class="weeknav hidden" id="weeknav">
+      <button id="prev" aria-label="Forrige uge">‹</button>
+      <button id="now">Denne uge</button>
+      <button id="next" aria-label="Næste uge">›</button>
+    </div>
+  </div>
+
+  <section id="todayView" class="today">
+    <div class="daytoggle" id="dayToggle" role="group" aria-label="Vælg dag"><button id="dtToday" aria-pressed="true">I dag</button><button id="dtTomorrow" aria-pressed="false">I morgen</button><span id="dtNote"></span></div>
+    <div class="panel suggbanner hidden" id="suggBanner"></div>
+    <div class="panel brief hidden" id="briefDay"></div>
+    <div class="panel skemapanel hidden" id="skemaPanel"><h2 id="skemaTitle">Skema i dag</h2><div class="skema" id="skema"></div></div>
+    <div class="panel"><h2 id="dayTitle">Dagens aftaler</h2><ul class="tl" id="timeline"></ul></div>
+    <div class="panel"><h2 id="infoTitle">Vigtig info i dag</h2><ul class="plans" id="planToday"></ul>
+      <h2 style="margin-top:22px">Husk og lektier</h2><ul class="tasks" id="taskList"></ul></div>
+  </section>
+
+  <section id="weekView" class="hidden">
+    <div class="panel brief hidden" id="briefWeek" style="margin-bottom:14px"></div>
+    <div class="legend">
+      <span><svg class="ic"><use href="#i-event"/></svg>Aftale</span>
+      <span><svg class="ic"><use href="#i-task"/></svg>Opgave eller lektie</span>
+      <span><svg class="ic"><use href="#i-note"/></svg>Kommentar fra ugeplanen</span>
+      <span><svg class="ic"><use href="#i-info"/></svg>Praktisk info (omlagt dag, vikar, skolefoto …)</span>
+    </div>
+    <div class="boardwrap"><div class="board" id="board"></div></div>
+    <div class="agenda" id="agenda"></div>
+  </section>
+
+  <section id="mailView" class="hidden">
+    <div class="mail" id="mail">
+      <div class="mlist">
+        <div class="mtools">
+          <input type="search" id="msearch" placeholder="Søg i beskeder" aria-label="Søg i beskeder">
+          <div class="mfilters" role="group" aria-label="Filtrér beskeder">
+            <button data-mf="all" aria-pressed="true">Alle</button>
+            <button data-mf="unread" aria-pressed="false">Ulæste</button>
+            <button data-mf="todo" aria-pressed="false">Skal gøres</button>
+            <button data-mf="events" aria-pressed="false">Med datoer</button>
+            <button id="mpriv" aria-pressed="false" title="Vis private samtaler, indtil du forlader Beskeder"><svg class="ic"><use href="#i-lock"/></svg> Vis private</button>
+          </div>
+        </div>
+        <ul class="mitems" id="mitems" aria-label="Beskeder"></ul>
+      </div>
+      <div class="reader" id="reader" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="suggView" class="hidden"><div class="suggwrap" id="suggRoot"></div></section>
+
+  <section id="kioskView" class="hidden" aria-label="Kioskvisning">
+    <div class="k-top">
+      <div class="k-clock" id="kClock"></div>
+      <div class="k-date"><div class="k-day" id="kDay"></div><div id="kDate"></div></div>
+      <div class="k-status" id="kStatus"></div>
+      <button type="button" class="k-exit" id="kExit">Afslut kioskvisning</button>
+    </div>
+    <div class="k-body">
+      <div class="k-kids" id="kKids"></div>
+      <div class="k-side">
+        <section class="k-card"><h2>Husk og frister</h2><ul class="k-list" id="kRemember"></ul></section>
+        <section class="k-card"><h2 id="kAptTitle">Aftaler</h2><ul class="tl" id="kApts"></ul></section>
+      </div>
+    </div>
+  </section>
+
+  <section id="aulaView" class="hidden">
+    <div class="feedwrap">
+      <h2 class="sronly">Feed</h2>
+      <div class="ftabs" role="group" aria-label="Vis i feed">
+        <button data-ft="all" aria-pressed="true">Alt</button>
+        <button data-ft="post" aria-pressed="false"><svg class="ic"><use href="#i-post"/></svg>Opslag</button>
+        <button data-ft="album" aria-pressed="false"><svg class="ic"><use href="#i-photo"/></svg>Billeder</button>
+      </div>
+      <div id="feed"></div>
+    </div>
+  </section>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="privDlg" aria-labelledby="privHead">
+  <form id="privForm" novalidate>
+    <h3 id="privHead">Private samtaler</h3>
+    <p class="meta" id="privText">Indtast koden for at læse private samtaler. De låses igen efter få minutter, når du forlader Beskeder, eller når skærmen slukker.</p>
+    <label for="privCode">Kode</label>
+    <input id="privCode" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64">
+    <p class="everr" id="privErr" role="alert"></p>
+    <div class="evbtns"><button type="submit" class="btn primary" id="privOk">Lås op</button><button type="button" class="btn" id="privCancel">Annullér</button></div>
+  </form>
+</dialog>
+<dialog id="evDlg" aria-labelledby="evHead">
+  <form id="evForm" novalidate>
+    <h3 id="evHead">Føj til kalender</h3>
+    <p class="meta" id="evSrc"></p>
+    <label>Titel<input id="evTitle" maxlength="200" autocomplete="off"></label>
+    <div class="row2">
+      <div class="dpfield"><label for="evDate">Dato</label>
+        <div class="dpbox"><input id="evDate" class="dpin" type="text" placeholder="dd/mm/åååå" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="evDateHint">
+          <button type="button" class="dpbtn" id="evDateBtn" aria-label="Vælg dato i kalender" aria-haspopup="dialog" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-calplus"/></svg></button></div>
+        <div class="dphint" id="evDateHint" aria-live="polite"></div></div>
+      <div class="dpfield"><label for="evEnd">Slutdato <small>(valgfri)</small></label>
+        <div class="dpbox"><input id="evEnd" class="dpin" type="text" placeholder="dd/mm/åååå" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="evEndHint">
+          <button type="button" class="dpbtn" id="evEndBtn" aria-label="Vælg slutdato i kalender" aria-haspopup="dialog" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-calplus"/></svg></button></div>
+        <div class="dphint" id="evEndHint" aria-live="polite"></div></div>
+    </div>
+    <div class="dpcal" id="dpCal" role="dialog" aria-label="Vælg dato" hidden></div>
+    <label class="chk"><input id="evAll" type="checkbox"> Hele dagen</label>
+    <div class="row2" id="evTimes"><label>Start<input id="evSt" type="time"></label><label>Slut <small>(valgfri)</small><input id="evEn" type="time"></label></div>
+    <label>Sted<input id="evLoc" maxlength="300" autocomplete="off"></label>
+    <label>Beskrivelse<textarea id="evDesc" rows="3" maxlength="4000"></textarea></label>
+    <fieldset class="learn hidden" id="evLearn">
+      <label class="chk"><input id="evLearnOn" type="checkbox"> Foreslå lignende aktiviteter fremover</label>
+      <div id="evLearnBody">
+        <p class="evnote">Vælg de ord eller vendinger, appen skal huske. Fremover foreslår den aktiviteter, hvor de nævnes sammen med en dato. Reglerne kan fjernes igen under Forslag.</p>
+        <div class="lchips" id="evLearnChips"></div>
+        <label>Andet ord eller udtryk <small>(valgfrit)</small><input id="evLearnCustom" maxlength="60" autocomplete="off" placeholder="fx tandlæge"></label>
+      </div>
+    </fieldset>
+    <p class="evnote" id="evMode"></p>
+    <p class="everr" id="evErr" role="alert"></p>
+    <div class="evbtns"><button type="submit" class="btn primary" id="evOk">Opret i kalender</button><button type="button" class="btn" id="evCancel">Annullér</button></div>
+  </form>
+</dialog>
+<dialog id="lb" aria-label="Billedvisning">
+  <div class="lbbar"><span class="lbtitle" id="lbTitle"></span><span class="lbctr" id="lbCtr"></span>
+    <button class="lbclose" id="lbClose" aria-label="Luk"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="lbtrack" id="lbTrack"></div>
+  <button class="arr prev" id="lbPrev" aria-label="Forrige billede"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+  <button class="arr next" id="lbNext" aria-label="Næste billede"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+  <div class="cdots" id="lbDots"></div>
+</dialog>
+<dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
+
+<script>
+/* ---------- Data contract (what the backend should serve as family.json) ----------
+{
+  "generated": "ISO timestamp",
+  "people":  [{ "id":"p1", "name":"Anna", "role":"adult|child", "color":"#hex", "note":"3.B, Solskolen" }],
+  "events":  [{ "id":"e1", "title":"…", "start":"ISO", "end":"ISO", "allDay":false,
+                "people":["p3"] | ["family"], "source":"aula|google", "location":"…", "notes":"…" }],
+  "tasks":   [{ "id":"t1", "title":"…", "due":"YYYY-MM-DD", "person":"p3", "kind":"lektie|husk|besked", "source":"aula" }],
+  "weekplan":[{ "id":"w1", "person":"p3", "date":"YYYY-MM-DD"|null, "dayLabel":"…", "title":"…", "label":"…", "text":"…", "source":"meebook" }],
+  "posts":   [{ "id":"po1", "title":"…", "author":"…", "timestamp":"ISO", "important":false, "text":"…", "people":["p3"] }],
+  "messages":[{ "id":"m1", "subject":"…", "from":"…", "timestamp":"ISO", "unread":true, "text":"…", "people":["p3"]|["family"] }]
+}
+------------------------------------------------------------------------------------ */
+
+const DAYS = ["søndag","mandag","tirsdag","onsdag","torsdag","fredag","lørdag"];
+const MONTHS = ["januar","februar","marts","april","maj","juni","juli","august","september","oktober","november","december"];
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const hm = d => `${pad(d.getHours())}.${pad(d.getMinutes())}`;
+const startOfWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
+const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+// ---------- Tekst fra Aula: markdown-rester, hårde linjeskift og lister
+// Aula giver tekst med "1\." (escape), linjer brudt ved ca. 80 tegn og "* punkt" som lister.
+const unescMd = s => String(s ?? "").replace(/\\([\\`*_{}\[\]()#+\-.!|<>~])/g,"$1").replace(/\u00a0/g," ");
+const flatText = s => unescMd(s).replace(/\n\s*[*•]\s+/g," · ").replace(/\s*\n\s*/g," ").replace(/\s{2,}/g," ").trim();
+function parseNumbered(s){
+  // Finder "1. a 2. b 3. c" i løbende tekst. Kræver en ubrudt talfølge fra 1 med mindst to punkter.
+  const re=/(?:^|\s)(\d{1,2})[.)]\s+(?=\S)/g, marks=[]; let m;
+  while((m=re.exec(s))) marks.push({n:+m[1], start:m.index, end:m.index+m[0].length});
+  const i=marks.findIndex(x=>x.n===1); if(i<0) return null;
+  const run=[marks[i]];
+  for(let j=i+1;j<marks.length;j++) if(marks[j].n===run.length+1) run.push(marks[j]);
+  if(run.length<2) return null;
+  return {lead:s.slice(0,run[0].start).trim(),
+          items:run.map((x,k)=>s.slice(x.end, k+1<run.length?run[k+1].start:s.length).trim())};
+}
+function splitLead(lead){
+  // "NB! Husk passer Program:" → {lead:"NB! Husk passer", label:"Program"}
+  lead=lead.trim(); const mm=/^(.*?)(?:\s+([A-ZÆØÅ][\wæøå-]+))?\s*:\s*$/.exec(lead);
+  if(!mm) return {lead,label:""};
+  let l=(mm[1]||"").trim(), label=mm[2]||"";
+  if(!label && /^[A-ZÆØÅ][\wæøå-]+$/.test(l)){ label=l; l=""; }
+  return {lead:l,label};
+}
+const linkify = h => h.replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g,u=>`<a href="${u}" target="_blank" rel="noopener">${u.length>48?u.slice(0,47)+"…":u}</a>`);
+function richHTML(text){
+  const src=unescMd(text).replace(/\r/g,""); if(!src.trim()) return "";
+  const html=[]; let buf=[], bullets=[];
+  const flushPara=()=>{
+    if(!buf.length) return;
+    // linjer lægges sammen til sætninger; kun to mellemrum i enden af en linje er et rigtigt linjeskift
+    const segs=[]; let cur="";
+    buf.forEach((ln,i)=>{ cur+=(cur?" ":"")+ln.trim(); if(/ {2,}$/.test(ln) && i<buf.length-1){ segs.push(cur); cur=""; } });
+    if(cur) segs.push(cur); buf=[];
+    const L=parseNumbered(segs.join(" "));
+    if(L){
+      const {lead,label}=splitLead(L.lead);
+      if(lead) html.push(`<p>${linkify(esc(lead))}</p>`);
+      if(label) html.push(`<p class="lbl">${esc(label)}</p>`);
+      html.push(`<ol>${L.items.map(i=>`<li>${linkify(esc(i))}</li>`).join("")}</ol>`);
+    } else html.push(`<p>${segs.map(x=>linkify(esc(x))).join("<br>")}</p>`);
+  };
+  const flushBullets=()=>{ if(bullets.length){ html.push(`<ul>${bullets.map(b=>`<li>${linkify(esc(b))}</li>`).join("")}</ul>`); bullets=[]; } };
+  for(const line of src.split("\n")){
+    if(!line.trim()){ flushPara(); flushBullets(); continue; }
+    const bm=/^(\s*)([*•]|[-–])\s+(.*)$/.exec(line);
+    if(bm && (bm[2]==="*"||bm[2]==="•"||bm[1].length>0||bullets.length)){ flushPara(); bullets.push(bm[3].trim()); continue; }
+    if(bullets.length && /^\s{2,}\S/.test(line)){ bullets[bullets.length-1]+=" "+line.trim(); continue; }
+    flushBullets(); buf.push(line);
+  }
+  flushPara(); flushBullets();
+  return html.join("");
+}
+function planSummary(w){
+  // Kort tekst til kortet. Lister vises som antal punkter, hele teksten ligger i detaljevisningen.
+  if(w.category==="info" && w.info) return unescMd(w.info);
+  const flat=flatText(w.text), L=parseNumbered(flat);
+  if(L){
+    const {lead,label}=splitLead(L.lead), n=`${L.items.length} punkter`;
+    return [lead, label?`${label}: ${n}`:n].filter(Boolean).join(" · ");
+  }
+  return flat.length<=140 ? flat : flat.slice(0,139).replace(/\s+\S*$/,"")+"…";
+}
+
+function demoData(){
+  const wk = startOfWeek(new Date());
+  const at = (day,h,m=0) => { const d=addDays(wk,day); d.setHours(h,m,0,0); return d.toISOString(); };
+  const people = [
+    {id:"andreas",name:"Andreas",role:"adult",color:"#2F6FDE",note:"Far"},
+    {id:"monica",name:"Monica",role:"adult",color:"#1F9E89",note:"Mor"},
+    {id:"hugo",name:"Hugo",role:"child",color:"#E4572E",note:"12 år",icon:"🦊"},
+    {id:"carla",name:"Carla",role:"child",color:"#8E5CD6",note:"9 år",icon:"🦋"},
+    {id:"leo",name:"Leo",role:"child",color:"#D9971E",note:"5 år",icon:"🐻"}
+  ];
+  const E = (id,title,s,e,ppl,source,extra={}) => ({id,title,start:s,end:e,allDay:false,people:ppl,source,...extra});
+  const events = [];
+  for(let d=0; d<5; d++){
+    const L=(a)=>a.map(([st,en,t,extra])=>({start:st,end:en,title:t,...(extra||{})}));
+    events.push(E("h"+d,"Skole",at(d,8),at(d,d===4?13:14,30),["hugo"],"aula",{lessons:L([["08:00","08:45","Dansk",{teacher:"GD"}],["08:45","09:30","Dansk",{teacher:"GD"}],["10:00","10:45","Matematik",{teacher:"JS",substitute:d===2?"vikar":null}],["10:45","11:30","Engelsk"],["12:15","13:00","Historie"],["13:00","14:30","Idræt",{location:"Hallen"}]])}));
+    events.push(E("c"+d,"Skole + SFO",at(d,8),at(d,15),["carla"],"aula",{lessons:L([["08:00","08:45","Dansk"],["08:45","09:30","Matematik"],["10:00","10:45","Natur/teknologi"],["10:45","11:30","Musik"],["12:15","13:00","Billedkunst"]])}));
+    events.push(E("l"+d,"Institution",at(d,7,45),at(d,15,30),["leo"],"aula",{schoolDay:true}));
+  }
+  events.push(
+    E("g1","Hugo fodbold",at(0,16,30),at(0,17,45),["hugo"],"google",{location:"Klubhuset"}),
+    E("g2","Tandlæge Carla",at(1,15),at(1,15,30),["carla","monica"],"google"),
+    E("g3","Svømning Carla + Leo",at(2,17),at(2,17,45),["carla","leo"],"google",{location:"Svømmehallen"}),
+    E("g4","Aftensmad hos bedsteforældre",at(4,17,30),at(4,20,30),["family"],"google"),
+    E("g5","Andreas løb",at(3,19),at(3,20),["andreas"],"google"),
+    E("g6","Monica sent møde",at(3,16),at(3,18),["monica"],"google"),
+    E("au1","Skole-hjem-samtale",at(1,16,30),at(1,16,50),["hugo","andreas"],"aula",{location:"Lokale 12"}),
+    E("au2","Emneuge: Vikinger",at(2,8),at(2,13),["carla"],"aula",{notes:"Medbring madpakke og tøj til at være ude"}),
+    E("au3","Bedsteforældredag",at(3,9),at(3,11),["leo"],"aula"),
+    E("g7","Loppemarked",at(5,10),at(5,13),["family"],"google"),
+    E("g8","Fødselsdag hos Karla",at(5,14),at(5,17),["carla"],"google"),
+    {id:"au4",title:"Lukkedag",start:at(4,0),end:at(4,23,59),allDay:true,people:["leo"],source:"aula"}
+  );
+  const tasks = [
+    {id:"t1",title:"Dansk: læs kapitel 4",due:ymd(addDays(wk,1)),person:"hugo",kind:"lektie",source:"aula"},
+    {id:"t2",title:"Matematik s. 32–33",due:ymd(addDays(wk,3)),person:"hugo",kind:"lektie",source:"aula"},
+    {id:"t3",title:"Gymnastiktøj med",due:ymd(addDays(wk,2)),person:"carla",kind:"husk",source:"aula"},
+    {id:"t4",title:"Læsebog: 20 minutter",due:ymd(addDays(wk,2)),person:"carla",kind:"lektie",source:"aula"},
+    {id:"t5",title:"Skiftetøj i garderoben",due:ymd(addDays(wk,2)),person:"leo",kind:"husk",source:"aula"}
+  ];
+  const weekplan = [
+    {id:"w6",person:"hugo",date:ymd(new Date()),subject:"Matematik",title:"Matematik",category:"husk",text:"NB! Husk passer Program: 1\\. Lektionens program 2\\. Morgenlæsning (10 min) 3\\.\nKlassesamtale - Cirkler 4\\. KonteXt side 30-31",source:"meebook"},
+    {id:"w1",person:"hugo",date:ymd(addDays(wk,0)),title:"Dansk",label:"Lektie",text:"Vi starter på novelleforløbet. Læs 'Ulven' til onsdag og noter tre ting, du undrer dig over.",source:"meebook"},
+    {id:"w2",person:"hugo",date:ymd(addDays(wk,2)),title:"Natur/teknologi",label:"Husk",text:"Vi skal ud i skoven og tage vandprøver. Husk gummistøvler.",source:"meebook"},
+    {id:"w3",person:"carla",date:ymd(addDays(wk,1)),title:"Matematik",label:null,text:"Vi arbejder med gangestykker. Øv 7-tabellen hjemme.",source:"meebook"},
+    {id:"w4",person:"carla",date:ymd(addDays(wk,2)),title:"Emneuge",label:"Husk",text:"Vikingeuge hele ugen. Tøj til at være ude hver dag.",source:"meebook"},
+    {id:"w5",person:"hugo",date:null,dayLabel:"Hele ugen",title:"Ugens fokus",label:null,text:"Klassen arbejder med godt samvær i frikvartererne.",source:"meebook"}
+  ];
+  const pic = (sky,ground,sun) => "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"><rect width="400" height="400" fill="${sky}"/><circle cx="300" cy="110" r="46" fill="${sun}"/><path d="M0 280 Q100 220 200 270 T400 250 V400 H0Z" fill="${ground}"/><path d="M0 330 Q120 300 240 330 T400 320 V400 H0Z" fill="#00000022"/></svg>`);
+  const posts = [
+    {id:"po1",title:"Motionsdag fredag",author:"Skolens ledelse",timestamp:at(0,9,12),important:true,images:[pic("#BFE3C9","#4E9A62","#FFD166")],text:"Fredag er det motionsdag for hele skolen. Eleverne skal have løbetøj, drikkedunk og en god madpakke med. Skoledagen slutter kl. 12.",people:["hugo","carla"]},
+    {id:"po2",title:"Billeder fra turen til stranden",author:"Stuen Mælkebøtten",timestamp:at(1,14,40),important:false,text:"Sikke en dejlig dag vi havde! Børnene byggede sandslotte og fandt krabber.",people:["leo"],images:[pic("#9FD3F0","#F2D38C","#FFE27A"),pic("#7FB8E6","#E9C57A","#FFFFFF"),pic("#F6B38E","#6FA38B","#FFE9A8")]},
+    {id:"po3",title:"Forældremøde i 6. klasse",author:"Klasselæreren",timestamp:at(1,8,5),important:false,text:"Vi holder forældremøde torsdag d. 15. kl. 19. Dagsorden følger.",people:["hugo"]}
+  ];
+  const messages = [
+    {id:"m1",subject:"Tur til Naturcentret",from:"Klasselærer 3.B",timestamp:at(2,7,58),unread:true,text:"Kære forældre. Vi tager på tur torsdag. Husk madpakke og praktisk tøj. Vi er tilbage kl. 13.",people:["carla"],
+     category:"handling",bring:[{title:"Medbring: madpakke, praktisk tøj",due:ymd(addDays(wk,3))}],suggested_events:[{title:"Tur til Naturcentret",date:ymd(addDays(wk,3)),start:"08:30",end:"13:00",location:"Naturcentret"}],
+     thread:[{from:"Klasselærer 3.B",timestamp:at(2,7,58),text:"Ja, gerne regntøj og gummistøvler. Vi er ude det meste af dagen.",images:[],files:[]},
+             {from:"Monica",timestamp:at(1,20,10),text:"Hej, skal de have regntøj med?",images:[],files:[]},
+             {from:"Klasselærer 3.B",timestamp:at(1,7,40),text:"Kære forældre.\n\nVi tager på tur til Naturcentret torsdag. Vi går fra skolen kl. 8.30 og er tilbage kl. 13.\n\nHusk madpakke og praktisk tøj efter vejret.\n\nDe bedste hilsner",images:[],files:["Program.pdf"]}]},
+    {id:"m2",subject:"Glemt jakke",from:"Pædagog i børnehaven",timestamp:at(1,15,22),unread:true,text:"Leo har glemt sin blå jakke her. Den hænger på hans plads.",people:["leo"]},
+    {id:"m3",subject:"SFO lukker tidligt fredag",from:"SFO-lederen",timestamp:at(0,11,0),unread:false,text:"SFO lukker kl. 15 fredag pga. personalemøde.",people:["family"]}
+  ];
+  const albums = [
+    {id:"al1",title:"Høstfest i børnehaven",author:"Mælkebøtten",timestamp:at(2,12,5),text:"Vi lavede æblemost og snobrød over bål.",images:[pic("#F3C98B","#8FB573","#FFF1B8"),pic("#E8A87C","#7FA86B","#FFE9A8")],imageCount:14,tagged:["leo"],people:["leo"]}
+  ];
+  const fut=n=>ymd(addDays(wk,n));
+  const suggestions=[
+    {id:"sg_demo00000001",type:"suggestion",category:"lejrskole",label:"Lejrskole / koloni",title:"Lejrskole",calendar_title:"Hugo: Lejrskole",start:fut(14),end:fut(18),all_day:true,start_time:null,end_time:null,location:"Jylland",people:["hugo"],
+      description:"Fra Aula-besked «Program for lejrskole»\n\nVi tager på lejrskole i uge 43.",confidence:"høj",reason:"nævner «lejrskole» og en dato",sources:[{type:"message",id:"m1",title:"Program for lejrskole",label:"Aula-besked",date:ymd(wk)}],status:"new"},
+    {id:"sg_demo00000002",type:"suggestion",category:"tur",label:"Tur / udflugt",title:"Tur til Zoo",calendar_title:"Carla + Leo: Tur til Zoo",start:fut(10),end:fut(10),all_day:false,start_time:"08:30",end_time:"14:00",location:"Zoo",people:["carla","leo"],
+      description:"Fra Aula-opslag «Zoo-tur»\n\nVi mødes kl. 8.30 og er tilbage kl. 14.00.",confidence:"høj",reason:"nævner «tur til Zoo» og en dato",sources:[{type:"post",id:"po1",title:"Zoo-tur",label:"Aula-opslag",date:ymd(wk)}],status:"new"},
+    {id:"sg_demo00000003",type:"suggestion",category:"fødselsdag",label:"Fødselsdagsinvitation",title:"Karlas fødselsdag",calendar_title:"Carla: Karlas fødselsdag",start:fut(12),end:fut(12),all_day:false,start_time:"14:00",end_time:"17:00",location:"Strandvejen 12, 2900 Hellerup",people:["carla"],
+      description:"Fra Aula-besked «Invitation»\n\nKarla har fødselsdag og inviterer til fest hos hende.",confidence:"middel",reason:"nævner «fødselsdag» og en dato",sources:[{type:"message",id:"m2",title:"Invitation",label:"Aula-besked",date:ymd(wk)}],status:"new"}
+  ];
+  messages[0].cal=[{id:"ev_demo0000001",suggested:false,learn:[{kind:"keyword",text:"naturcentret",anchor:"naturcentret",default:false},{kind:"phrase",text:"tur til naturcentret",anchor:"naturcentret",default:false}],title:"Tur til Naturcentret",calendar_title:"Carla: Tur til Naturcentret",start:ymd(addDays(wk,3)),end:ymd(addDays(wk,3)),start_time:"08:30",end_time:"13:00",all_day:false,location:"Naturcentret",people:["carla"],description:"Fra Aula-besked «Tur til Naturcentret»",exists:false,source:{type:"message",id:"m1",title:"Tur til Naturcentret",label:"Aula-besked"}}];
+  return {generated:new Date().toISOString(),people,events,tasks,weekplan,posts,messages,albums,suggestions,demo:true};
+}
+
+const state = { data:null, view:"today", weekStart:startOfWeek(new Date()), hidden:new Set() };
+
+// Når appen kører på serveren (server.py), kræver den login. Ved udløbet session sendes man til loginsiden – aldrig til demodata.
+const toLogin = () => { location.href = "/login?next=" + encodeURIComponent(location.pathname); };
+async function loadServer(){
+  try{
+    const r = await fetch("api/status",{cache:"no-store"});
+    if(r.status===401){ toLogin(); return; }
+    state.server = r.ok && (r.headers.get("content-type")||"").includes("json") ? await r.json() : null;
+  }catch{ state.server = null; }
+}
+async function load(){
+  try{
+    const r = await fetch("family.json",{cache:"no-cache"});
+    if(r.status===401){ toLogin(); return; }
+    if(!r.ok) throw new Error(r.status);
+    state.data = await r.json();
+  }catch{ state.data = demoData(); }
+  await loadServer();
+  await loadCal();
+  applyPrivateOverlay();
+  // Familieassistentens overblik (valgfrit – findes kun hvis assistenten er slået til)
+  state.briefing = {};
+  for(const [k,f] of [["day","briefing.json"],["week","briefing_uge.json"]]){
+    try{ const r=await fetch(f,{cache:"no-cache"}); if(r.ok) state.briefing[k]=await r.json(); }catch{}
+  }
+  if(state.data.demo && !state.briefing.day) state.briefing.day = demoBriefing();
+  // Uændrede data forstyrrer ikke feed og beskeder (rulleposition, karruseller). Kun hjørnet med status opdateres.
+  const sig=[state.data.generated,state.briefing.day?.generated,state.briefing.week?.generated,state.server?.runs,state.server?.aula,state.server?.pending_reads,arr("messages").filter(m=>m.unread).length,Object.keys(state.cal.created).length,state.cal.dismissed.length,(state.data.suggestions||[]).length,(state.cal.learned||[]).map(r=>r.id+r.enabled).join(",")].join("|");
+  lastLoad=Date.now();
+  if(sig===lastSig && (state.view==="aula"||state.view==="mail"||state.view==="sugg")){ renderChrome(); return; }
+  lastSig=sig;
+  render();
+}
+let lastSig="", lastLoad=Date.now();
+// En tablet i dvale sætter timere på pause: hent frisk data, når den vågner
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && Date.now()-lastLoad>60000) load(); });
+function demoBriefing(){
+  const d=new Date(); return {demo:true, method:"offline", generated:d.toISOString(), mode:"day", period:[ymd(d),ymd(d)], headline_label:`i dag, ${DAYS[d.getDay()]}`,
+    afsnit:[{titel:"Husk",punkter:[{tekst:"Hugo: Natur/teknologi: gummistøvler med",hvem:["Hugo"],kilder:["Ugeplan (Meebook)"]},{tekst:"Carla: Emneuge: tøj til at være ude hele dagen",hvem:["Carla"],kilder:["Ugeplan (Meebook)"]}]},
+            {titel:"Særligt",punkter:[{tekst:"Hugo har vikar i Matematik (10.00)",hvem:["Hugo"],kilder:["Skema"]}]},
+            {titel:"Kommende frister",punkter:[{tekst:"Hugo: Matematik s. 32–33 – frist torsdag",hvem:["Hugo"],kilder:["Ugeplan (Meebook)"]}]}]};
+}
+
+const person = id => state.data.people.find(p=>p.id===id);
+const colorsFor = ev => ev.people.includes("family") ? state.data.people.map(p=>p.color) : ev.people.map(id=>person(id)?.color).filter(Boolean);
+const visible = ev => ev.people.includes("family") || ev.people.some(id=>!state.hidden.has(id));
+const onDay = (ev,day) => { const s=new Date(ev.start), e=new Date(ev.end); const d0=new Date(day); d0.setHours(0,0,0,0); const d1=addDays(d0,1); return s<d1 && e>d0; };
+const byStart = (a,b) => (b.allDay-a.allDay) || (new Date(a.start)-new Date(b.start));
+const srcLabel = s => ({aula:"Aula",google:"Google Kalender",meebook:"Meebook",besked:"Aula-besked"}[s]||s);
+const arr = k => state.data[k] || [];
+const personVisible = ids => (ids||[]).includes("family") || (ids||[]).some(id=>!state.hidden.has(id));
+const whoText = ids => (ids||[]).includes("family") ? "Hele familien" : (ids||[]).map(id=>person(id)?.name).filter(Boolean).join(", ");
+const dotsFor = ids => ((ids||[]).includes("family") ? state.data.people.map(p=>p.color) : (ids||[]).map(id=>person(id)?.color).filter(Boolean))
+  .map(c=>`<span class="dot" style="--c:${c}"></span>`).join("");
+function when(isoStr){
+  if(!isoStr) return "";
+  const d=new Date(isoStr), today=new Date(); const diff=Math.round((startOfDayMs(today)-startOfDayMs(d))/864e5);
+  if(diff===0) return `i dag ${hm(d)}`;
+  if(diff===1) return `i går ${hm(d)}`;
+  if(diff>1 && diff<7) return `${DAYS[d.getDay()]} ${hm(d)}`;
+  return `${d.getDate()}. ${MONTHS[d.getMonth()].slice(0,3)}${d.getFullYear()!==today.getFullYear()?" "+d.getFullYear():""}`;
+}
+function startOfDayMs(d){ const x=new Date(d); x.setHours(0,0,0,0); return x.getTime(); }
+const tPeople = t => t.people && t.people.length ? t.people : [t.person];
+const tColor = t => person(tPeople(t)[0])?.color || "var(--muted)";
+const icon = id => `<svg class="ic" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const pav = p => `<span class="pav" style="--c:${p.color}" title="${esc(p.name)}">${esc(p.icon || p.name[0])}</span>`;
+const pavsFor = ids => ((ids||[]).includes("family") ? state.data.people.filter(p=>p.role==="child") : (ids||[]).map(person).filter(Boolean)).map(pav).join("");
+function openDetail(title, html){
+  document.getElementById("dTitle").textContent=title;
+  document.getElementById("dBody").innerHTML=html;
+  document.getElementById("detail").showModal();
+}
+
+async function refreshNow(){
+  // Beder serveren hente nu, og vent på at den er færdig, før data genindlæses
+  state.refreshing=true; renderChrome();
+  await loadServer();
+  const need=(state.server?.runs??0)+(state.server?.running?2:1);       // kører den allerede, tæller først den næste kørsel
+  await fetch("api/refresh",{method:"POST",headers:{"X-Requested-With":"familieplan"}});
+  for(let i=0;i<150;i++){                       // højst ca. 5 minutter
+    await new Promise(r=>setTimeout(r,1500));
+    await loadServer();
+    if(!state.server || (!state.server.running && state.server.runs>=need)) break;
+  }
+  state.refreshing=false; await load();
+}
+function renderChrome(){
+  const now=new Date();
+  document.getElementById("dateline").textContent = `${DAYS[now.getDay()]} d. ${now.getDate()}. ${MONTHS[now.getMonth()]} · uge ${isoWeek(now)}`;
+  const g = new Date(state.data.generated);
+  const sv=state.server, needLogin = sv && ["login_required","waiting_for_login"].includes(sv.aula);
+  const stale = now-g > 36e5;
+  let line = state.data.demo ? "<b>Demodata</b> – ingen family.json fundet"
+    : (stale ? `<b style="color:#E4572E">Data er over en time gamle</b> (${hm(g)}) – ${sv?"serveren henter ikke nyt":"tjek at hentescriptet kører"}`
+             : `Opdateret <b>${hm(g)}</b> fra Aula og Google Kalender`);
+  if(sv){
+    const bits=[];
+    if(needLogin) bits.push(`<a class="srvwarn" href="auth">Aula-login er udløbet – log ind</a>`);
+    else if(sv.aula==="error") bits.push(`<a class="srvwarn" href="auth" title="${esc(sv.last_error||"")}">Aula-hentning fejlede</a>`);
+    if(sv.mark_error) bits.push(`<span class="srvwarn" title="${esc(sv.mark_error)}">Læst-markering ikke gemt i Aula</span>`);
+    bits.push(state.refreshing||sv.running ? `<span>Henter …</span>` : `<button class="srvbtn" id="refreshNow">Opdatér nu</button>`);
+    bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
+    line += `<div class="srv">${bits.join("")}</div>`;
+  }
+  const gh=state.data.health?.google;
+  if(gh && gh.ok===false) line += `<div class="srv"><span class="srvwarn" title="${esc((gh.failed||[]).join(", "))}">Google Kalender kunne ikke hentes – viser seneste kendte aftaler${gh.last_ok?` (fra kl. ${hm(new Date(gh.last_ok))})`:""}</span></div>`;
+  const kb=`<button class="srvbtn" id="kioskBtn">Kioskvisning</button>`;
+  line = sv ? line.replace(/(<div class="srv">)(?!.*<div class="srv">)/s, `$1${kb}`) : line+`<div class="srv">${kb}</div>`;
+  if(sv && !line.includes('id="kioskBtn"')) line += `<div class="srv">${kb}</div>`;
+  document.getElementById("status").innerHTML = line;
+  document.getElementById("kioskBtn")?.addEventListener("click", enterKiosk);
+  document.getElementById("refreshNow")?.addEventListener("click", refreshNow);
+  document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{ await fetch("logout",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); toLogin(); });
+  const box=document.getElementById("people"); box.innerHTML="";
+  state.data.people.forEach(p=>{
+    const b=document.createElement("button"); b.className="chip"; b.style.setProperty("--c",p.color);
+    b.setAttribute("aria-pressed",String(!state.hidden.has(p.id)));
+    b.innerHTML=`<span class="av">${esc(p.icon || p.name[0])}</span>${esc(p.name)}`;
+    b.onclick=()=>{ state.hidden.has(p.id)?state.hidden.delete(p.id):state.hidden.add(p.id); render(); };
+    box.appendChild(b);
+  });
+}
+function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const n=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-n); const y=new Date(Date.UTC(t.getUTCFullYear(),0,1)); return Math.ceil(((t-y)/864e5+1)/7); }
+
+function duration(ev){
+  const m=Math.round((new Date(ev.end)-new Date(ev.start))/6e4); if(!(m>0)) return "";
+  const h=Math.floor(m/60), r=m%60;
+  return h ? `${h} t${r?` ${r} min`:""}` : `${r} min`;
+}
+// Skoledagens blokke fra Aula ("Skole", "Skole + SFO" …) står allerede i skemaet og hører ikke hjemme blandt dagens aftaler
+const isSchoolBlock = ev => (ev.lessons && ev.lessons.length) || ev.type==="lesson" || !!ev.schoolDay;
+function timelineItems(day){
+  return state.data.events.filter(e=>onDay(e,day)&&visible(e)&&!isSchoolBlock(e)).sort(byStart).map(ev=>{
+    const who = ev.people.includes("family") ? "Hele familien" : ev.people.map(id=>person(id)?.name).join(", ");
+    const dots = colorsFor(ev).map(c=>`<span class="dot" style="--c:${c}"></span>`).join("");
+    const time = ev.allDay ? `<div class="t allday">Hele dagen</div>`
+      : `<div class="t">${hm(new Date(ev.start))}<span class="tend">–${hm(new Date(ev.end))}</span><span class="dur">${duration(ev)}</span></div>`;
+    return `<li>${time}<div><span class="dots">${dots}</span><span class="title">${icon("event")}${esc(ev.title)}</span>
+      <div class="meta">${esc(who)}${ev.location?` · ${esc(ev.location)}`:""} · ${srcLabel(ev.source)}</div></div></li>`;
+  }).join("") || `<li style="display:block"><div class="empty">Ingen aftaler ${dayWord()}</div></li>`;
+}
+
+// ---------- Skema
+// Lektioner kommer enten struktureret fra backenden (lessons) eller – i ældre data – som tekstlinjer "08.00 Dansk" i notes
+function lessonsOf(ev){
+  if(Array.isArray(ev.lessons) && ev.lessons.length) return ev.lessons;
+  const out=[];
+  for(const line of (ev.notes||"").split("\n")){
+    const m=line.match(/^\s*(\d{1,2})[.:](\d{2})(?:\s*[-–]\s*(\d{1,2})[.:](\d{2}))?\s+(.+)$/);
+    if(m) out.push({start:`${m[1].padStart(2,"0")}:${m[2]}`, end:m[3]?`${m[3].padStart(2,"0")}:${m[4]}`:null,
+                    title:m[5].replace(/\s*\(vikar:?\s*([^)]*)\)/i,""), substitute:(m[5].match(/\(vikar:?\s*([^)]*)\)/i)||[])[1]||null});
+  }
+  return out.length>=2 ? out : [];
+}
+// Fanen "I dag" handler om i dag – men efter kl. 17 (indstilles i config) om i morgen. Man kan selv skifte; valget gælder, til det automatiske skifter igen.
+const eveningHour=()=>state.data?.settings?.eveningHour ?? 17;
+const autoOffset=()=>new Date().getHours()>=eveningHour()?1:0;
+function dayOffset(){ const o=state.dayOverride; return (o && o.auto===autoOffset()) ? o.offset : autoOffset(); }
+function focusDay(){ const d=new Date(); d.setDate(d.getDate()+dayOffset()); d.setHours(12,0,0,0); return d; }
+const dayWord=()=>dayOffset()===1?"i morgen":"i dag";
+function setDayOffset(n){ state.dayOverride={offset:n,auto:autoOffset()}; render(); }
+let lastAutoOffset=null;
+setInterval(()=>{ const a=autoOffset(); if(lastAutoOffset!==null && a!==lastAutoOffset && state.data){ state.dayOverride=null; if(state.view==="today"||state.kiosk) render(); } lastAutoOffset=a; },20000);
+function relDay(day){
+  const t=new Date(); t.setHours(12,0,0,0); const diff=Math.round((startOfDayMs(day)-startOfDayMs(t))/864e5);
+  const date=`${day.getDate()}/${day.getMonth()+1}`;
+  if(diff===0) return `i dag, ${DAYS[day.getDay()]} ${date}`;
+  if(diff===1) return `i morgen, ${DAYS[day.getDay()]} ${date}`;
+  return `${DAYS[day.getDay()]} ${date}`;
+}
+function scheduleDay(){
+  // Kun dagens skema. Er der ingen skole i dag, skjules sektionen.
+  const day=focusDay();
+  return state.data.events.some(e=>onDay(e,day)&&lessonsOf(e).length) ? day : null;
+}
+function renderSkema(){
+  const panel=document.getElementById("skemaPanel"), day=scheduleDay();
+  const kids=state.data.people.filter(p=>p.role==="child" && !state.hidden.has(p.id));
+  const now=new Date(), isToday = day && ymd(day)===ymd(now);
+  const cards = !day ? [] : kids.map(k=>{
+    const evs=state.data.events.filter(e=>onDay(e,day)&&e.people.includes(k.id));
+    const ls=evs.flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
+    if(!ls.length) return "";
+    const toMin=t=>{ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; };
+    const nowMin=now.getHours()*60+now.getMinutes();
+    const first=ls[0].start, last=ls.reduce((mx,l)=>(l.end||l.start)>mx?(l.end||l.start):mx, ls[0].end||ls[0].start);
+    return `<div class="scard" style="--c:${k.color}"><div class="shead">${pav(k)}${esc(k.name)}<small>${first.replace(":",".")}–${last.replace(":",".")}</small></div>
+      <ul class="lessons">${ls.map((l,i)=>{
+        const s=toMin(l.start), e=toMin(l.end) ?? toMin(ls[i+1]?.start) ?? s+45;
+        const cls = !isToday ? "" : nowMin>=e ? "past" : (nowMin>=s ? "now" : "");
+        const extra=[l.teacher,l.location].filter(Boolean).join(" · ");
+        const also=[...(l.alt||[]).map(x=>`samtidig: ${x.title}${x.teacher?` (${x.teacher})`:""}${x.location?`, ${x.location}`:""}`)];
+        return `<li class="${cls}"><time>${l.start.replace(":",".")}</time><span>${esc(l.title)}${l.substitute?`<span class="sub">vikar${l.substitute&&l.substitute!=="vikar"?`: ${esc(l.substitute)}`:""}</span>`:""}
+          ${extra?`<div class="who">${esc(extra)}</div>`:""}${also.length?`<div class="who also">${esc(also.join(" · "))}</div>`:""}
+          ${l.note?`<div class="lnote">${icon("note")} ${esc(unescMd(l.note))}</div>`:""}</span></li>`;
+      }).join("")}</ul></div>`;
+  }).filter(Boolean);
+  panel.classList.toggle("hidden", !cards.length);
+  if(!cards.length) return;
+  document.getElementById("skemaTitle").textContent = "Skema "+dayWord();
+  document.getElementById("skema").innerHTML = cards.join("");
+}
+// ---------- Familieassistentens overblik
+const SPEAK_ICON = `<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4Zm-2.5-8.8v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6Z"/></svg>`;
+// Oplæsning: vælg den bedste danske stemme, gør teksten talevenlig og læs sætning for sætning
+const VOICE_KEY="fp-voice";
+const voiceScore = v => (/natural|neural|online|premium|enhanced|forbedret/i.test(v.name)?10:0) + (/google/i.test(v.name)?4:0) + (v.localService?0:1);
+function danishVoices(){ return (window.speechSynthesis?.getVoices()||[]).filter(v=>(v.lang||"").toLowerCase().startsWith("da")).sort((a,b)=>voiceScore(b)-voiceScore(a)); }
+function chosenVoice(){ const vs=danishVoices(); let saved=null; try{saved=localStorage.getItem(VOICE_KEY);}catch{} return vs.find(v=>v.name===saved) || vs[0] || null; }
+const MONTH_NAMES=["januar","februar","marts","april","maj","juni","juli","august","september","oktober","november","december"];
+function speechText(t){
+  return (t||"")
+    .replace(/\bkl\.\s*/gi,"klokken ")
+    .replace(/\b(\d{1,2})[.:]00\b/g,"$1")
+    .replace(/\b(\d{1,2})[.:](\d{2})\b/g,"$1 $2")
+    .replace(/\b(\d{1,2})\/(\d{1,2})\b/g,(m,d,mo)=>`den ${d}. ${MONTH_NAMES[+mo-1]||mo}`)
+    .replace(/(\d)\s*[–-]\s*(\d)/g,"$1 til $2")
+    .replace(/\s[–—-]\s/g,", ")
+    .replace(/\bf\.eks\./gi,"for eksempel").replace(/\bca\./gi,"cirka").replace(/\bevt\./gi,"eventuelt").replace(/\bm\.m\./gi,"med mere")
+    .replace(/[()]/g,", ").replace(/\s*\/\s*/g," og ").replace(/;/g,",")
+    .replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu,"")
+    .replace(/\s+,/g,",").replace(/,\s*,/g,",").replace(/\s{2,}/g," ").trim();
+}
+function speak(text, btn){
+  const synth=window.speechSynthesis; if(!synth) return;
+  const reset=()=>{ btn.setAttribute("aria-pressed","false"); btn.lastChild.textContent=" Læs op"; };
+  if(synth.speaking || synth.pending){ synth.cancel(); reset(); return; }
+  const voice=chosenVoice();
+  // Sætning for sætning: undgår at Chrome klipper lange tekster af, og giver naturlige pauser
+  const parts=speechText(text).split(/(?<=[.!?])\s+(?=[A-ZÆØÅ])/).filter(Boolean);   // ikke ved "3. årgang"
+  parts.forEach((p,i)=>{
+    const u=new SpeechSynthesisUtterance(p.trim()); u.lang="da-DK"; if(voice) u.voice=voice;
+    u.rate = voice && voiceScore(voice)>=10 ? 1.0 : 0.92;   // gamle stemmer lyder bedre lidt langsommere
+    if(i===parts.length-1){ u.onend=reset; } u.onerror=reset;
+    synth.speak(u);
+  });
+  btn.setAttribute("aria-pressed","true"); btn.lastChild.textContent=" Stop";
+}
+function voicePicker(){
+  const vs=danishVoices(); if(vs.length<2) return "";
+  const cur=chosenVoice()?.name;
+  return `<select class="voice" aria-label="Stemme">${vs.map(v=>`<option ${v.name===cur?"selected":""}>${esc(v.name)}</option>`).join("")}</select>`;
+}
+if(window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if(state.data && state.view==="today") renderBrief("day","briefDay"); };
+function personByName(n){ return state.data.people.find(p=>p.name.toLowerCase()===String(n).toLowerCase()); }
+function renderBrief(kind, elId){
+  const el=document.getElementById(elId), b=state.briefing?.[kind];
+  const todayKey=ymd(new Date()), fk=ymd(focusDay());
+  // Dagsoverblikket vises kun, hvis det handler om samme dag som skemaet – ellers er det forældet
+  const stale = !b || !b.period || (kind==="day" ? !(b.period[0]<=fk && fk<=b.period[1]) : b.period[1] < todayKey);
+  if(stale){ el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  const secs=(b.afsnit||[]).map(sec=>`<div class="bsec"><h3>${esc(sec.titel)}</h3><ul>${(sec.punkter||[]).map(pt=>{
+      const av=(pt.hvem||[]).map(personByName).filter(Boolean).map(pav).join("");
+      const src=(pt.kilder||[]).length?`<span class="src">Kilde: ${esc(pt.kilder.join(", "))}</span>`:"";
+      return `<li>${av}<span>${esc(unescMd(pt.tekst))}${src}</span></li>`; }).join("")}</ul></div>`).join("");
+  const g=new Date(b.generated);
+  const title = kind==="week" ? `Overblik ${String(b.headline_label||"denne uge").toLowerCase()}` : "Overblik "+dayWord();
+  const empty = kind==="week" ? "Intet særligt i denne uge – ingen frister, ting at huske eller afvigelser." : `Intet særligt ${dayWord()} – ingen frister, ting at huske eller afvigelser.`;
+  el.innerHTML=`<div class="bhead"><h2>${esc(title)}</h2>
+      ${window.speechSynthesis&&b.oplaesning?`<div class="speakbox"><button class="speak" aria-pressed="false">${SPEAK_ICON} Læs op</button>${voicePicker()}</div>`:""}</div>
+    ${secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
+    <div class="bfoot">${b.method==="claude"?"Skrevet af familieassistenten":"Samlet automatisk"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula og familiekalenderen – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
+  el.querySelector(".speak")?.addEventListener("click",e=>speak(b.oplaesning,e.currentTarget));
+  el.querySelector(".voice")?.addEventListener("change",e=>{ try{localStorage.setItem(VOICE_KEY,e.target.value);}catch{} speechSynthesis.cancel(); });
+}
+function renderToday(){
+  const nb=pendingSugg().length, bn=document.getElementById("suggBanner");
+  bn.classList.toggle("hidden",!nb);
+  if(nb){ bn.innerHTML=`${icon("calplus")} <b>${nb} ${nb===1?"nyt forslag":"nye forslag"} til kalenderen</b><button class="btn primary" id="goSugg">Se forslag</button>`;
+          document.getElementById("goSugg").onclick=()=>{state.view="sugg";render();}; }
+  renderBrief("day","briefDay");
+  renderSkema();
+  const fday=focusDay(), off=dayOffset();
+  document.getElementById("dtToday").setAttribute("aria-pressed",off===0); document.getElementById("dtTomorrow").setAttribute("aria-pressed",off===1);
+  document.getElementById("dtToday").onclick=()=>setDayOffset(0); document.getElementById("dtTomorrow").onclick=()=>setDayOffset(1);
+  document.getElementById("dtNote").textContent = off===1 ? `${DAYS[fday.getDay()]} ${fday.getDate()}. ${MONTHS[fday.getMonth()]}${autoOffset()===1?" · skifter automatisk efter kl. "+eveningHour():""}` : "";
+  document.getElementById("dayTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";
+  document.getElementById("timeline").innerHTML = timelineItems(fday);
+  // Vigtig info: lektier, husk og praktisk info fra ugeplanen for fokusdagen. Almindelig undervisning står i skemaet.
+  document.getElementById("infoTitle").textContent = "Vigtig info "+dayWord();
+  const dayPlans = arr("weekplan").filter(w=>w.date===ymd(fday) && w.category!=="anden_klasse" && !state.hidden.has(w.person));
+  const plans = dayPlans.filter(w=>!w.category || w.category!=="undervisning")
+    .sort((a,b)=>(isTaskPlan(b)-isTaskPlan(a)) || ((b.category==="info")-(a.category==="info")));
+  const planBox=document.getElementById("planToday");
+  planBox.innerHTML = plans.map(w=>{ const p=person(w.person);
+    return `<li style="--c:${p.color}"><button class="item" data-plan="${esc(w.id)}"><div class="head"><span class="subj">${icon(planIcon(w))}${esc(w.subject||w.title)}</span>${w.category&&w.category!=="undervisning"?`<span class="flag">${CAT[w.category]||""}</span>`:w.label?`<span class="flag">${esc(w.label)}</span>`:""}</div>
+      <div class="snip">${esc(p.name)} · ${esc(planSummary(w))}</div></button></li>`; }).join("") || `<li class="empty">Ingen vigtig info</li>`;
+  planBox.querySelectorAll("[data-plan]").forEach(b=>b.onclick=()=>showPlan(b.dataset.plan));
+  const from=ymd(fday), to=ymd(addDays(fday,6)), realToday=ymd(new Date()), realTomorrow=ymd(addDays(new Date(),1));
+  const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"};
+  const todayKey=ymd(fday);
+  const active = t => t.recurring==="daily"
+      ? (t.from||t.due)<=todayKey && todayKey<=ymd(addDays(new Date((t.from||t.due)+"T12:00"),6))
+      : t.openEnded
+        ? t.from && t.from<=todayKey && todayKey<=ymd(addDays(new Date(t.from+"T12:00"),7))   // uden frist: vis en uge fra beskeden
+        : (t.due>=from && t.due<=to) || (t.from && t.from<=todayKey && t.due>=todayKey);
+  const list = state.data.tasks.filter(t=>active(t)&&personVisible(tPeople(t)))
+    .sort((a,b)=>((b.recurring==="daily")-(a.recurring==="daily")) || a.due.localeCompare(b.due));
+  document.getElementById("taskList").innerHTML = list.map(t=>{
+    const d=new Date(t.due+"T12:00");
+    const whenTxt = t.recurring==="daily" ? "hver dag" : t.openEnded ? "snarest" : (t.due===realToday ? "i dag" : t.due===realTomorrow ? "i morgen" : `${DAYS[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`);
+    return `<li style="--c:${tColor(t)}"><button class="item" data-task="${esc(t.id)}" style="padding:0"><strong>${icon("task")}${esc(t.title)}</strong>${t.confidence==="middel"?`<span class="flag">Muligvis</span>`:""}
+      <div class="meta">${esc(whoText(tPeople(t)))} · ${kinds[t.kind]||t.kind} · ${whenTxt}</div></button></li>`;
+  }).join("") || `<li class="empty" style="border:0;background:none">Intet de næste 7 dage</li>`;
+  document.querySelectorAll("#taskList [data-task]").forEach(b=>b.onclick=()=>showTask(b.dataset.task));
+}
+
+function weekLanes(){ return [{id:"family",name:"Familien",color:"var(--ink)",note:"Fælles"},...state.data.people.filter(p=>!state.hidden.has(p.id))]; }
+function pillsFor(l,d){
+  const key=ymd(d);
+  const evs=state.data.events.filter(e=>onDay(e,d)&&(l.id==="family"?e.people.includes("family"):e.people.includes(l.id))).sort(byStart);
+  const tks=l.id==="family"?[]:state.data.tasks.filter(t=>!t.openEnded&&tPeople(t).includes(l.id)&&t.due===key);
+  const pls=l.id==="family"?[]:arr("weekplan").filter(w=>w.person===l.id&&w.date===key&&w.category!=="anden_klasse");
+  return evs.map(e=>`<button class="pill${e.source==="besked"?" sugg":""}" data-ev="${e.id}">${icon("event")}${e.allDay?"":`<time>${hm(new Date(e.start))}–${hm(new Date(e.end))}</time>`}${esc(e.title)}</button>`).join("")
+    + tks.map(t=>`<button class="pill task" data-task="${t.id}">${icon("task")}${esc(t.title)}</button>`).join("")
+    + pls.map(w=>`<button class="pill plan" data-plan="${esc(w.id)}">${icon(planIcon(w))}${esc(planTitle(w))}</button>`).join("");
+}
+function renderWeek(){
+  renderBrief("week","briefWeek");
+  const board=document.getElementById("board"), agenda=document.getElementById("agenda"), todayKey=ymd(new Date());
+  const days=[...Array(7)].map((_,i)=>addDays(state.weekStart,i)), lanes=weekLanes();
+  // Tavle (bred skærm): én bane pr. person, én kolonne pr. dag
+  let html=`<div class="dh">Uge ${isoWeek(state.weekStart)}</div>`;
+  html+=days.map(d=>`<div class="dh ${ymd(d)===todayKey?"is-today":""}">${DAYS[d.getDay()].slice(0,3)}<strong>${d.getDate()}</strong></div>`).join("");
+  lanes.forEach(l=>{
+    html+=`<div class="lane" style="--c:${l.color}"><div class="who">${l.id==="family"?"":pav(l)}${esc(l.name)}<small>${esc(l.note||"")}</small></div>`;
+    days.forEach(d=>{ html+=`<div class="cell ${ymd(d)===todayKey?"is-today":""}">${pillsFor(l,d)}</div>`; });
+    html+=`</div>`;
+  });
+  board.innerHTML=html;
+  // Agenda (iPad stående og telefon): ét kort pr. dag, kun de personer der har noget den dag
+  // I den aktuelle uge starter agendaen med i dag, så de kommende dage står først; overståede dage ligger sidst og er afdæmpede
+  const todayIdx=days.findIndex(d=>ymd(d)===todayKey);
+  const order = todayIdx>0 ? [...days.slice(todayIdx), ...days.slice(0,todayIdx)] : days;
+  agenda.innerHTML=order.map(d=>{
+    const key=ymd(d), past = key<todayKey, rows=lanes.map(l=>{ const items=pillsFor(l,d); return items ? `<div class="alane" style="--c:${l.color}"><div>${l.id==="family"?`<span class="pav" style="--c:var(--muted)" title="Hele familien">👪</span>`:pav(l)}</div><div class="pills">${items}</div></div>` : ""; }).join("");
+    return `<section class="acard${key===todayKey?" is-today":""}${past?" past":""}" id="ad-${key}"><h3>${DAYS[d.getDay()]}<small>${d.getDate()}. ${MONTHS[d.getMonth()]}${key===todayKey?" · i dag":""}</small></h3>${rows||`<p class="anone">Intet planlagt</p>`}</section>`;
+  }).join("");
+  const root=document.getElementById("weekView");
+  root.querySelectorAll("[data-ev]").forEach(b=>b.onclick=()=>showEvent(b.dataset.ev));
+  root.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>showTask(b.dataset.task));
+  root.querySelectorAll("[data-plan]").forEach(b=>b.onclick=()=>showPlan(b.dataset.plan));
+}
+
+function showEvent(id){
+  const e=state.data.events.find(x=>x.id===id), s=new Date(e.start), en=new Date(e.end);
+  const who=e.people.includes("family")?"Hele familien":e.people.map(i=>person(i)?.name).join(", ");
+  document.getElementById("dTitle").textContent=e.title;
+  document.getElementById("dBody").innerHTML=`<p>${DAYS[s.getDay()]} ${s.getDate()}. ${MONTHS[s.getMonth()]}${e.allDay?", hele dagen":`, ${hm(s)}–${hm(en)}`}</p>
+    <p class="meta">${esc(who)}${e.location?`<br>${esc(e.location)}`:""}<br>Kilde: ${srcLabel(e.source)}</p>${e.notes?`<p style="white-space:pre-line">${esc(e.notes)}</p>`:""}`;
+  document.getElementById("detail").showModal();
+}
+function showTask(id){
+  const t=state.data.tasks.find(x=>x.id===id);
+  document.getElementById("dTitle").textContent=t.title;
+  const dd=new Date(t.due+"T12:00");
+  document.getElementById("dBody").innerHTML=`<p class="meta">${esc(whoText(tPeople(t)))} · ${t.recurring==="daily"?"hver dag":t.openEnded?"ingen frist":`senest ${DAYS[dd.getDay()]} ${dd.getDate()}. ${MONTHS[dd.getMonth()]}`}${t.confidence==="middel"?(t.source==="besked"?" · kun hvis det er relevant for jer":" · muligvis lektie"):""} · Kilde: ${srcLabel(t.source||"aula")}</p>${t.text?`<div class="long rich">${richHTML(t.text)}</div>`:""}${t.url?`<p><a href="${esc(t.url)}" target="_blank" rel="noopener">Åbn i Min Uddannelse</a></p>`:""}`;
+  document.getElementById("detail").showModal();
+}
+
+state.feedType="all"; state.expanded=new Set(); state.revealed=new Set();
+const MCAT = {handling:"Skal gøres",arrangement:"Arrangement",samtale:"Privat samtale",hilsen:"Hilsen"};
+const shortDate = iso => { const d=new Date(iso+"T12:00"); return `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`; };
+function extracted(x){
+  const rows=[];
+  (x.actions||[]).forEach(a=>rows.push(`<li>${icon("task")}<span>${esc(a.title)}</span>${a.due?`<span class="d">${shortDate(a.due)}</span>`:""}</li>`));
+  (x.suggested_events||[]).forEach(e=>rows.push(`<li>${icon("event")}<span>${esc(e.title)}${e.location?` · ${esc(e.location)}`:""}</span><span class="d">${e.allWeek?`uge fra ${shortDate(e.date)}`:shortDate(e.date)}${e.start?` ${e.start.replace(":",".")}${e.end?"–"+e.end.replace(":","."):""}`:""}</span></li>`));
+  (x.bring||[]).forEach(b=>rows.push(`<li>${icon("bag")}<span>${esc(b.title)}</span>${b.due?`<span class="d">${shortDate(b.due)}</span>`:""}</li>`));
+  return rows.length?`<ul class="extract">${rows.join("")}</ul>`:"";
+}
+function renderAula(){
+  const items=[
+    ...arr("posts").map(p=>({...p,kind:"post"})),
+    ...arr("albums").map(a=>({...a,kind:"album"}))
+  ].filter(x=>personVisible(x.people) && (state.feedType==="all"||state.feedType===x.kind))
+   .sort((a,b)=>(b.timestamp||"").localeCompare(a.timestamp||""));
+  document.querySelectorAll("[data-ft]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.ft===state.feedType));
+  const box=document.getElementById("feed");
+  box.innerHTML = items.map(x=>{
+    const imgs=x.images||[], open=state.expanded.has(x.id), long=(x.text||"").length>220;
+    const kindBadge = x.kind==="album" ? `<span class="kind album">${icon("photo")}Album</span>`
+      : x.kind==="post" ? `<span class="kind post">${icon("post")}Opslag</span>`
+      : `<span class="kind msg">${icon(x.private?"lock":"msg")}${x.private?"Privat":"Besked"}${x.unread?" · ulæst":""}</span>`;
+    const hide = x.private && (state.data.settings?.hidePrivate ?? true) && !state.revealed.has(x.id);
+    const cat = x.kind==="msg" && MCAT[x.category] && !x.private ? `<span class="flag" style="margin:0 0 6px;display:inline-block;background:color-mix(in srgb,#2F6FDE 15%,var(--surface));color:var(--ink)">${MCAT[x.category]}</span> ` : "";
+    return `<article class="card ${x.kind}${x.unread?" unread":""}">
+      <div class="chead"><div class="avs">${pavsFor(x.people)}</div>
+        <div class="who"><b>${esc(x.author||"Aula")}</b><span>${esc(whoText(x.people))} · ${when(x.timestamp)}</span></div>${kindBadge}</div>
+      ${imgs.length&&!hide?`${carousel(x.id, imgs)}
+        ${x.kind==="album"?`<button class="open-album" data-open="${esc(x.id)}">${icon("photo")} Se ${imgs.length>1?`alle ${imgs.length} billeder`:"billedet"} i stor visning</button>`:""}
+        ${x.imageCount>imgs.length?`<div class="pcount">${imgs.length} af ${x.imageCount} billeder hentet – resten ligger i Aulas galleri</div>`:""}`:""}
+      <div class="cbody">${x.important?`<span class="flag" style="margin:0 0 6px;display:inline-block">Vigtigt</span> `:""}${cat}<h3>${esc(x.title)}</h3>
+        ${hide ? `<div class="private">${icon("lock")} Privat samtale med skolen <button data-reveal="${esc(x.id)}">Vis besked</button></div>`
+          : x.text ? `${long&&!open ? `<p class="txt clamp">${esc(flatText(x.text))}</p>` : `<div class="txt rich">${richHTML(x.text)}</div>`}
+        ${long?`<button class="more" data-more="${esc(x.id)}">${open?"Vis mindre":"Læs mere"}</button>`:""}` : `<p class="meta">Ingen tekst – åbn tråden i Aula</p>`}
+        ${hide?"":extracted(x)}${x.kind==="post"?calOptsHTML(x.cal):""}</div>
+      ${x.attachments?`<div class="cfoot">${x.attachments} vedhæftning(er) – se dem i Aula</div>`:""}
+    </article>`;
+  }).join("") || `<p class="empty">Intet at vise. Prøv at vælge flere personer eller "Alt".</p>`;
+  box.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>{const id=b.dataset.more; state.expanded.has(id)?state.expanded.delete(id):state.expanded.add(id); renderAula();});
+  box.querySelectorAll("[data-reveal]").forEach(b=>b.onclick=async()=>{
+    const x=arr("messages").find(m=>m.id===b.dataset.reveal); if(x?.redacted && !(await unlockPrivate())) return;
+    state.revealed.add(b.dataset.reveal); renderAula();
+  });
+  const byId = Object.fromEntries(items.map(x=>[x.id,x]));
+  box.querySelectorAll("[data-car]").forEach(el=>{
+    const x=byId[el.dataset.car]; initCarousel(el, i=>openLightbox(x.images, i, x.title));
+  });
+  box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{const x=byId[b.dataset.open]; openLightbox(x.images,0,x.title);});
+}
+document.querySelectorAll("[data-ft]").forEach(b=>b.onclick=()=>{state.feedType=b.dataset.ft; renderAula();});
+// Et ugeplanpunkt tæller som opgave, hvis det er mærket som lektie/opgave/husk – ellers er det en kommentar
+const isTaskPlan = w => w.category ? ["lektie","husk"].includes(w.category) : /lektie|opgave|aflever|husk|hjemme/i.test(`${w.label||""} ${w.title||""}`);
+const planIcon = w => isTaskPlan(w) ? "task" : (w.category==="info" ? "info" : "note");
+const planTitle = w => w.category==="info" && w.info ? `${w.subject||w.title}: ${w.info}` : (w.subject||w.title);
+const CAT = {lektie:"Lektie",husk:"Husk",info:"Praktisk info",undervisning:"Undervisning"};
+function showPlan(id){
+  const w=arr("weekplan").find(x=>x.id===id), p=person(w.person);
+  const day = w.date ? (d=>`${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`)(new Date(w.date+"T12:00")) : (w.dayLabel||"");
+  openDetail(w.subject||w.title, `<p class="meta">${esc(p.name)} · ${esc(day)}${w.category?` · ${CAT[w.category]||""}`:(w.label?` · ${esc(w.label)}`:"")} · Kilde: ${srcLabel(w.source)}</p><div class="long rich">${richHTML(w.text)}</div>${calOptsHTML(w.cal)}`);
+}
+// ---------- Billedkarrusel og fuldskærmsvisning
+const CHEV = d => `<svg viewBox="0 0 24 24"><path d="${d==="prev"?"m15 5-7 7 7 7":"m9 5 7 7-7 7"}"/></svg>`;
+function carousel(id, imgs){
+  const many = imgs.length>1;
+  return `<div class="car" data-car="${esc(id)}">
+    <div class="photos">${imgs.map((src,i)=>`<button data-idx="${i}" aria-label="Åbn billede ${i+1} af ${imgs.length} i stor visning"><img src="${esc(src)}" alt="" loading="lazy" draggable="false"></button>`).join("")}</div>
+    ${many?`<button class="arr prev" aria-label="Forrige billede" hidden>${CHEV("prev")}</button>
+    <button class="arr next" aria-label="Næste billede">${CHEV("next")}</button>
+    <span class="ctr">1/${imgs.length}</span>
+    <div class="cdots">${imgs.slice(0,12).map((_,i)=>`<i class="${i?"":"on"}"></i>`).join("")}</div>`:""}
+  </div>`;
+}
+// Fælles logik for en scroll-snap-bane med pile, tæller og prikker
+function wireTrack(track, {prev, next, ctr, dots, onIndex}){
+  const n = track.children.length;
+  const idx = () => Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  const go = i => track.scrollTo({left: Math.max(0, Math.min(n-1, i)) * track.clientWidth, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+  const update = () => {
+    const i = idx();
+    if(prev) prev.hidden = i<=0;
+    if(next) next.hidden = i>=n-1;
+    if(ctr) ctr.textContent = `${i+1}/${n}`;
+    if(dots) [...dots.children].forEach((d,k)=>d.classList.toggle("on", k===Math.min(i, dots.children.length-1)));
+    onIndex && onIndex(i);
+  };
+  let raf; track.addEventListener("scroll", ()=>{cancelAnimationFrame(raf); raf=requestAnimationFrame(update);}, {passive:true});
+  if(prev) prev.onclick = e => { e.stopPropagation(); go(idx()-1); };
+  if(next) next.onclick = e => { e.stopPropagation(); go(idx()+1); };
+  update();
+  return {go, idx, update};
+}
+function initCarousel(el, open){
+  const track = el.querySelector(".photos");
+  wireTrack(track, {prev: el.querySelector(".arr.prev"), next: el.querySelector(".arr.next"), ctr: el.querySelector(".ctr"), dots: el.querySelector(".cdots")});
+  track.querySelectorAll("[data-idx]").forEach(b=>b.onclick=()=>open(+b.dataset.idx));
+}
+const lb = { el: document.getElementById("lb"), ctl: null, returnFocus: null };
+function openLightbox(images, start=0, title=""){
+  if(!images || !images.length) return;
+  const track = document.getElementById("lbTrack");
+  track.innerHTML = images.map((src,i)=>`<div class="lbslide"><img src="${esc(src)}" alt="Billede ${i+1} af ${images.length}" ${Math.abs(i-start)<=1?"":'loading="lazy"'} draggable="false"></div>`).join("");
+  document.getElementById("lbTitle").textContent = title || "";
+  const many = images.length>1;
+  ["lbPrev","lbNext","lbDots"].forEach(id=>document.getElementById(id).style.display = many ? "" : "none");
+  document.getElementById("lbDots").innerHTML = many ? images.slice(0,20).map(()=>"<i></i>").join("") : "";
+  lb.returnFocus = document.activeElement;
+  lb.el.showModal();
+  lb.ctl = wireTrack(track, {prev: document.getElementById("lbPrev"), next: document.getElementById("lbNext"),
+    ctr: document.getElementById("lbCtr"), dots: document.getElementById("lbDots")});
+  requestAnimationFrame(()=>{ track.scrollLeft = start * track.clientWidth; lb.ctl.update(); });
+  document.getElementById("lbClose").focus();
+}
+document.getElementById("lbClose").onclick = () => lb.el.close();
+lb.el.addEventListener("close", () => { document.getElementById("lbTrack").innerHTML=""; lb.returnFocus?.focus?.(); });
+lb.el.addEventListener("keydown", e => {
+  if(!lb.ctl) return;
+  if(e.key==="ArrowRight"){ e.preventDefault(); lb.ctl.go(lb.ctl.idx()+1); }
+  if(e.key==="ArrowLeft"){ e.preventDefault(); lb.ctl.go(lb.ctl.idx()-1); }
+});
+// Hold det viste billede på plads, når skærmen drejes eller vinduet ændrer størrelse
+window.addEventListener("resize", () => { if(lb.el.open && lb.ctl){ const t=document.getElementById("lbTrack"); const i=lb.ctl.idx(); requestAnimationFrame(()=>{t.scrollLeft=i*t.clientWidth;}); } });
+
+// ---------- Beskeder (liste + læserude)
+state.mail = {sel:null, filter:"all", q:"", readerKey:null, showPrivate:false};
+// Private samtaler er skjult på den fælles skærm, men kan låses op – for én besked eller alle på én gang
+// ---------- Private tråde: indholdet ligger på serveren og udleveres kun mod en ekstra kode (se private.py)
+state.priv={unlocked:false,full:{},redacted:{},timer:null};
+let privResolve=null;
+const hasRedacted=()=>arr("messages").some(m=>m.redacted);
+function applyPrivateOverlay(){                       // flet oplåst indhold ind i de udtømte tråde (også efter en ny hentning af data)
+  if(!state.priv.unlocked) return;
+  state.data.messages=state.data.messages.map(m=>{ const f=m.redacted && state.priv.full[m.id]; if(f){ state.priv.redacted[m.id]=m; return f; } return m; });
+}
+function lockPrivate(announce){
+  const was=state.priv.unlocked; clearTimeout(state.priv.timer);
+  if(was && state.server) fetch("api/private/lock",{method:"POST",headers:{"X-Requested-With":"familieplan"}}).catch(()=>{});
+  state.priv.unlocked=false; state.priv.full={};
+  if(Object.keys(state.priv.redacted).length){ state.data.messages=state.data.messages.map(m=>state.priv.redacted[m.id]||m); state.priv.redacted={}; }
+  state.revealed.clear(); state.mail.showPrivate=false; state.mail.readerKey=null;
+  if(was && announce) toast("Private samtaler er låst igen.");
+  if(was) renderMail();                                  // også når visningen er skjult: teksten må ikke blive stående i siden
+}
+function unlockPrivate(){
+  if(state.priv.unlocked) return Promise.resolve(true);
+  if(!state.server){ toast("Private samtaler kan kun åbnes via serveren."); return Promise.resolve(false); }
+  return new Promise(res=>{ privResolve=res; document.getElementById("privErr").textContent=""; document.getElementById("privCode").value="";
+    document.getElementById("privDlg").showModal(); setTimeout(()=>document.getElementById("privCode").focus(),60); });
+}
+const privEl=id=>document.getElementById(id);
+privEl("privCancel").onclick=()=>{ privEl("privDlg").close(); privResolve?.(false); privResolve=null; };
+privEl("privDlg").addEventListener("cancel",()=>{ privResolve?.(false); privResolve=null; });
+privEl("privForm").addEventListener("submit",async e=>{
+  e.preventDefault(); const ok=privEl("privOk"); ok.disabled=true;
+  try{
+    const u=await calPost("api/private/unlock",{code:privEl("privCode").value});
+    const r=await fetch("api/private",{cache:"no-store"}); if(!r.ok) throw new Error("Private samtaler kunne ikke hentes.");
+    const j=await r.json(); state.priv.full=Object.fromEntries(j.messages.map(m=>[m.id,m])); state.priv.unlocked=true;
+    clearTimeout(state.priv.timer); state.priv.timer=setTimeout(()=>lockPrivate(true),(u.expires_in||600)*1000);
+    applyPrivateOverlay(); privEl("privDlg").close(); privResolve?.(true); privResolve=null;
+  }catch(x){ privEl("privErr").textContent=x.message; privEl("privCode").select(); }
+  finally{ ok.disabled=false; }
+});
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") lockPrivate(false); });     // skærmen slukker / appen skiftes: lås
+
+const privHidden = m => m.private && (state.data.settings?.hidePrivate ?? true) && !state.revealed.has(m.id) && !state.mail.showPrivate;
+const SEEN_KEY="fp-seen";
+let seen = new Set(); try{ seen=new Set(JSON.parse(localStorage.getItem(SEEN_KEY)||"[]")); }catch{}
+const saveSeen = () => { try{ localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-500))); }catch{} };
+const isUnread = m => m.unread && !seen.has(m.id+"|"+(m.timestamp||""));
+function mailDate(iso){
+  if(!iso) return "";
+  const d=new Date(iso), t=new Date(), diff=Math.round((startOfDayMs(t)-startOfDayMs(d))/864e5);
+  if(diff===0) return hm(d);
+  if(diff===1) return "i går";
+  if(diff<7) return DAYS[d.getDay()].slice(0,3)+" "+hm(d);
+  return `${d.getDate()}/${d.getMonth()+1}${d.getFullYear()!==t.getFullYear()?"/"+String(d.getFullYear()).slice(2):""}`;
+}
+// ---------- Søgning i beskeder
+// Aula-tekst indeholder hårde linjeskift midt i sætninger, hårde mellemrum og markdown-escapes
+// ("Greve\nStadion", "Kære\u00a0forældre"). Både tekst og søgning normaliseres, så de matcher.
+const tidyTxt = s => (s||"").normalize("NFKC").replace(/\\(.)/g,"$1").replace(/\*\*|__/g,"")
+  .replace(/[\s\u00a0\u200b\u00ad]+/g," ").trim();
+const normTxt = s => tidyTxt(s).toLowerCase();
+const hayCache = new WeakMap();
+function haystack(m){
+  if(hayCache.has(m)) return hayCache.get(m);
+  const parts=[m.subject, m.from, ...(m.participants||[]),
+    ...(m.thread&&m.thread.length ? m.thread.flatMap(x=>[x.from, x.text, ...(x.files||[])]) : [m.text]),
+    ...(m.actions||[]).map(a=>a.title), ...(m.suggested_events||[]).map(e=>e.title+" "+(e.location||"")), ...(m.bring||[]).map(b=>b.title)];
+  const h=normTxt(parts.filter(Boolean).join(" \u2003 ")); hayCache.set(m,h); return h;
+}
+const searchTerms = () => normTxt(state.mail.q).split(" ").filter(t=>t.length>0);
+const escRe = t => t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+function hitSnippet(m, terms){
+  // Vis et udsnit af selve beskedteksten omkring første træf
+  const bodies = m.thread&&m.thread.length ? m.thread.map(x=>x.text) : [m.text];
+  for(const b of bodies){
+    const disp=tidyTxt(b), t=disp.toLowerCase();   // søg i småt, vis med original stavning
+    const i=Math.min(...terms.map(x=>{const k=t.indexOf(x); return k<0?Infinity:k;}));
+    if(i===Infinity) continue;
+    const start=Math.max(0,i-40), cut=disp.slice(start,start+130);
+    let html=esc((start?"…":"")+cut+(start+130<disp.length?"…":""));
+    for(const x of terms) html=html.replace(new RegExp(escRe(esc(x)),"gi"),mm=>`<mark>${mm}</mark>`);
+    return html;
+  }
+  return "";
+}
+function highlightIn(root, terms){
+  if(!terms.length) return;
+  const rx=new RegExp(terms.map(escRe).join("|"),"gi");
+  const walker=document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+  for(const n of nodes){
+    const txt=n.nodeValue; rx.lastIndex=0; if(!rx.test(txt)) continue;
+    rx.lastIndex=0; const frag=document.createDocumentFragment(); let last=0, mm;
+    while((mm=rx.exec(txt))){ frag.append(txt.slice(last,mm.index)); const mk=document.createElement("mark"); mk.textContent=mm[0]; frag.append(mk); last=mm.index+mm[0].length; }
+    frag.append(txt.slice(last)); n.parentNode.replaceChild(frag,n);
+  }
+}
+function mailList(){
+  const terms=searchTerms(), f=state.mail.filter;
+  return arr("messages").filter(m=>personVisible(m.people))
+    .filter(m=> f==="all" || (f==="unread"&&isUnread(m)) || (f==="todo"&&((m.actions||[]).length||(m.bring||[]).length)) || (f==="events"&&(m.suggested_events||[]).length))
+    .filter(m=> !terms.length || terms.every(t=>haystack(m).includes(t)))   // alle ord skal findes, i vilkårlig rækkefølge
+    .sort((a,b)=>(b.timestamp||"").localeCompare(a.timestamp||""));
+}
+function renderMail(){
+  const list=mailList(), box=document.getElementById("mitems"), terms=searchTerms();
+  if(!state.mail.sel || !list.some(m=>m.id===state.mail.sel)) state.mail.sel = window.matchMedia("(min-width:760px)").matches ? list[0]?.id || null : state.mail.sel && list.some(m=>m.id===state.mail.sel) ? state.mail.sel : null;
+  document.querySelectorAll("[data-mf]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mf===state.mail.filter));
+  const pb=document.getElementById("mpriv");
+  pb.classList.toggle("hidden", !(state.data.settings?.hidePrivate ?? true) || !arr("messages").some(m=>m.private));
+  pb.setAttribute("aria-pressed", state.mail.showPrivate);
+  pb.lastChild.textContent = state.mail.showPrivate ? " Skjul private" : " Vis private";
+  box.innerHTML = list.map(m=>{
+    const flags=[];
+    if(m.private) flags.push(icon("lock"));
+    if((m.actions||[]).length||(m.bring||[]).length) flags.push(`<span class="hot">${icon("task")}</span>`);
+    if((m.suggested_events||[]).length) flags.push(`<span class="hot">${icon("event")}</span>`);
+    if((m.thread||[]).some(x=>(x.images||[]).length)||(m.images||[]).length) flags.push(icon("photo"));
+    if((m.thread||[]).length>1) flags.push(`<span style="font-size:.72rem">${m.thread.length}</span>`);
+    const un=isUnread(m);
+    return `<li class="mswipe" data-unread="${un?1:0}"><div class="mact"><button class="mactbtn" tabindex="-1" aria-label="Markér som læst">${icon("check")}Læst</button></div>
+      <button class="mrow${un?" unread":""}" data-mid="${esc(m.id)}"${m.id===state.mail.sel?' aria-current="true"':""}><span class="udot" aria-hidden="true"></span>
+      <span class="mav">${(m.people||[]).includes("family")?`<span class="pav" style="--c:var(--muted)" title="Hele familien">👪</span>`:pavsFor(m.people.slice(0,2))}</span>
+      <span class="mfrom">${esc(m.redacted?"Privat samtale":(m.from||"Aula"))}</span><span class="mdate">${mailDate(m.timestamp)}</span>
+      <span class="msubj">${esc(m.redacted?"Låst – kode kræves":m.subject)}</span><span class="mflags">${flags.join("")}</span>
+      ${terms.length ? `<span class="mhit">${privHidden(m) ? `${icon("lock")} Træf i privat samtale – lås op for at se hvor` : (hitSnippet(m,terms) || "Træf i emne, afsender, deltagere eller vedhæftning")}</span>` : ""}</button></li>`;
+  }).join("") || `<li class="empty" style="padding:14px">Ingen beskeder matcher</li>`;
+  box.querySelectorAll("[data-mid]").forEach(b=>b.onclick=()=>{
+    const li=b.closest(".mswipe");
+    if(li&&li._swiped){ li._swiped=false; return; }                    // et stryg er ikke et tryk
+    if(li&&li.classList.contains("open")){ closeSwipe(li); return; }    // tryk på en åben række lukker den
+    selectMail(b.dataset.mid,true);
+  });
+  box.querySelectorAll('.mswipe[data-unread="1"]').forEach(li=>wireSwipe(li, li.querySelector("[data-mid]").dataset.mid));
+  renderReader();
+  sizeMail();
+}
+// ---------- Markér som læst
+// Som i Outlook: en besked bliver læst, når den har stået åben i 3 sekunder – ikke når den bare vælges i farten.
+const READ_DELAY_MS = 3000;
+function cancelReadTimer(){ clearTimeout(state.mail.readTimer); state.mail.readTimer=null; }
+function scheduleRead(id){
+  cancelReadTimer();
+  const m=arr("messages").find(x=>x.id===id);
+  if(!m || !isUnread(m) || privHidden(m)) return;                      // en skjult privat besked er ikke læst endnu
+  state.mail.readTimer=setTimeout(()=>{
+    state.mail.readTimer=null;
+    const reading = window.matchMedia("(min-width:760px)").matches || document.getElementById("mail").classList.contains("reading");
+    if(state.view==="mail" && state.mail.sel===id && reading && document.visibilityState==="visible") markRead([id]);
+  }, READ_DELAY_MS);
+}
+function toast(text, ms=4500){
+  const t=document.getElementById("toast"); t.textContent=text; t.classList.add("show");
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"), ms);
+}
+function paintRead(id){
+  document.querySelectorAll(".mrow[data-mid]").forEach(b=>{ if(b.dataset.mid===id){ b.classList.remove("unread"); b.closest(".mswipe")?.setAttribute("data-unread","0"); } });
+  if(state.mail.sel===id){
+    document.querySelectorAll("#reader .upill, #reader [data-markread]").forEach(el=>{ el.classList.add("fading"); setTimeout(()=>el.remove(),320); });
+  }
+}
+async function markRead(ids){
+  const fresh=ids.map(id=>arr("messages").find(m=>m.id===id)).filter(m=>m && isUnread(m));
+  if(!fresh.length) return;
+  fresh.forEach(m=>seen.add(m.id+"|"+(m.timestamp||""))); saveSeen();       // med det samme på denne enhed
+  fresh.forEach(m=>paintRead(m.id)); updateBadge();
+  if(state.server?.mark_read_enabled){                                      // og i Aula + på de andre enheder, via serveren
+    try{
+      const r=await fetch("api/messages/read",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},body:JSON.stringify({ids:fresh.map(m=>m.id)})});
+      if(r.status===401){ toLogin(); return; }
+      if(!r.ok) throw new Error(r.status);
+    }catch{ toast("Kunne ikke gemme i Aula lige nu – beskeden er kun markeret som læst her."); }
+  }
+}
+// Stryg mod venstre på en række (touch/pen) for at afsløre "Læst". Et langt stryg markerer med det samme.
+const SWIPE_REVEAL=96;
+function closeSwipe(li){ li.classList.add("snapping"); li.classList.remove("open","dragging"); li.style.setProperty("--dx","0px"); }
+function closeOtherSwipes(except){ document.querySelectorAll(".mswipe.open").forEach(l=>{ if(l!==except) closeSwipe(l); }); }
+function commitSwipe(li,id){
+  li.classList.add("snapping"); li.classList.remove("open"); li.style.setProperty("--dx",`-${li.clientWidth}px`);
+  markRead([id]);
+  setTimeout(()=>{ li.classList.remove("dragging"); li.style.setProperty("--dx","0px"); if(state.mail.filter==="unread") renderMail(); },260);
+}
+function wireSwipe(li,id){
+  const row=li.querySelector(".mrow"); let pid=null,x0=0,y0=0,dx=0,decided=false,dragging=false,base=0;
+  li.querySelector(".mactbtn").onclick=e=>{ e.stopPropagation(); commitSwipe(li,id); };
+  row.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse") return;
+    pid=e.pointerId; x0=e.clientX; y0=e.clientY; decided=dragging=false; li._swiped=false;
+    base=li.classList.contains("open")?-SWIPE_REVEAL:0; closeOtherSwipes(li); li.classList.remove("snapping");
+  });
+  row.addEventListener("pointermove",e=>{
+    if(e.pointerId!==pid) return;
+    const mx=e.clientX-x0, my=e.clientY-y0;
+    if(!decided){
+      if(Math.abs(mx)<8 && Math.abs(my)<8) return;
+      decided=true; dragging = Math.abs(mx)>Math.abs(my)*1.3 && (mx<0 || base<0);          // vandret hensigt – ellers får browseren lov til at rulle
+      if(!dragging){ pid=null; return; }
+      li.classList.add("dragging"); li._swiped=true; try{ row.setPointerCapture(pid); }catch{}
+    }
+    dx=Math.max(-li.clientWidth, Math.min(0, base+mx)); li.style.setProperty("--dx",dx+"px");
+  });
+  const end=e=>{
+    if(e.pointerId!==pid) return; pid=null;
+    if(!dragging) return; dragging=false; li.classList.add("snapping");
+    if(dx < -Math.min(li.clientWidth*0.45, 200)) commitSwipe(li,id);
+    else if(dx < -SWIPE_REVEAL/2){ li.classList.add("open"); li.style.setProperty("--dx",`-${SWIPE_REVEAL}px`); }
+    else closeSwipe(li);
+    setTimeout(()=>{ li._swiped=false; },350);
+  };
+  row.addEventListener("pointerup",end); row.addEventListener("pointercancel",end);
+}
+document.addEventListener("pointerdown",e=>{ if(!e.target.closest?.(".mswipe")) closeOtherSwipes(null); },true);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible"){ cancelReadTimer(); return; }
+  if(state.view==="mail" && state.mail.opened===state.mail.sel) scheduleRead(state.mail.sel);
+});
+
+function selectMail(id, userAction){
+  state.mail.sel=id;
+  cancelReadTimer();
+  document.getElementById("mail").classList.toggle("reading", !!id);
+  document.body.classList.toggle("mail-reading", !!id);
+  renderMail(); updateBadge();
+  if(userAction){
+    state.mail.opened=id;
+    [...document.querySelectorAll("[data-mid]")].find(b=>b.dataset.mid===id)?.focus({preventScroll:false});
+    scheduleRead(id);
+  }
+}
+function renderReader(){
+  const r=document.getElementById("reader"), m=arr("messages").find(x=>x.id===state.mail.sel);
+  const key = m ? m.id+"|"+m.timestamp+"|"+state.revealed.has(m.id)+"|"+(m.thread||[]).length+"|"+state.mail.q+"|"+state.mail.showPrivate+"|"+isUnread(m) : "none";
+  if(key===state.mail.readerKey) return;            // bevar scroll-position ved automatisk opdatering
+  state.mail.readerKey=key; r.scrollTop=0;
+  if(!m){ r.innerHTML=`<div class="rempty">Vælg en besked</div>`; return; }
+  const hide = privHidden(m);
+  const thread = (m.thread && m.thread.length) ? m.thread : [{from:m.from,timestamp:m.timestamp,text:m.text,images:m.images||[],files:[]}];
+  const cat = MCAT[m.category] && !m.private ? `<span class="flag" style="margin:0;background:color-mix(in srgb,#2F6FDE 15%,var(--surface));color:var(--ink)">${MCAT[m.category]}</span>` : "";
+  const people = `<span class="people">${pavsFor(m.people)} ${esc(whoText(m.people))}</span>`;
+  const todo = !hide && extracted(m) ? `<div class="todo">${extracted(m)}</div>` : "";
+  const msgs = hide
+    ? `<div class="private" style="margin-top:18px">${icon("lock")} ${searchTerms().length && searchTerms().every(t=>haystack(m).includes(t)) ? "Søgningen har træf i denne private samtale." : "Privat samtale med skolen."} <button data-reveal-mail="${esc(m.id)}">Vis besked</button></div>`
+    : `<div class="msgs">${thread.map((x,i)=>`
+      <article class="msg1${i>0?" collapsed":""}">
+        <button class="mh" aria-expanded="${i===0}"><b>${esc(x.from||"Ukendt")}</b><span>${x.timestamp?when(x.timestamp):""}</span></button>
+        <div class="snip2">${esc(flatText(x.text).slice(0,140))}</div>
+        <div class="mb rich">${richHTML(x.text) || `<span class="meta">Ingen tekst – åbn tråden i Aula</span>`}</div>
+        ${(x.images||[]).length?`<div class="mimgs">${x.images.map(src=>`<button data-img="${esc(src)}" aria-label="Vis billede"><img src="${esc(src)}" alt="" loading="lazy"></button>`).join("")}</div>`:""}
+        ${(x.files||[]).length?`<div class="mfiles">${icon("post")} ${x.files.map(esc).join(", ")} – åbn i Aula</div>`:""}
+      </article>`).join("")}</div>`;
+  const unreadNow = isUnread(m);
+  r.innerHTML = `<button class="back" data-back>‹ Beskeder</button>
+    <div class="rhead"><div class="rtop"><h2>${esc(m.subject)}</h2>
+      <div class="rtools">${unreadNow?`<span class="upill">Ulæst</span><button class="rbtn" data-markread>${icon("check")} Markér som læst</button>`:""}</div></div>
+      <div class="rmeta">${cat}${people}${m.participants&&m.participants.length?`<span>Deltagere: ${esc(m.participants.join(", "))}</span>`:""}</div></div>
+    ${todo}${hide?"":calOptsHTML(m.cal)}${msgs}`;
+  const terms=searchTerms();
+  if(terms.length){
+    r.querySelectorAll(".rhead h2, .todo, .msg1 .mb, .mfiles").forEach(el=>highlightIn(el, terms));
+    r.querySelectorAll(".msg1").forEach(a=>{ if(a.querySelector(".mb mark, .mfiles mark")){ a.classList.remove("collapsed"); a.querySelector(".mh")?.setAttribute("aria-expanded","true"); } });
+    requestAnimationFrame(()=>r.querySelector(".msg1 .mb mark")?.scrollIntoView({block:"center"}));
+  }
+  r.querySelectorAll(".msg1 .mh").forEach(h=>h.onclick=()=>{const a=h.parentElement; a.classList.toggle("collapsed"); h.setAttribute("aria-expanded",!a.classList.contains("collapsed"));});
+  r.querySelectorAll(".mimgs").forEach(g=>{
+    const srcs=[...g.querySelectorAll("[data-img]")].map(b=>b.dataset.img);
+    g.querySelectorAll("[data-img]").forEach((b,i)=>b.onclick=()=>openLightbox(srcs,i,m.subject));
+  });
+  r.querySelector("[data-reveal-mail]")?.addEventListener("click",async()=>{
+    if(m.redacted && !(await unlockPrivate())) return;
+    state.revealed.add(m.id); state.mail.readerKey=null; renderMail(); if(state.mail.opened===m.id) scheduleRead(m.id);
+  });
+  r.querySelector("[data-markread]")?.addEventListener("click",()=>{ cancelReadTimer(); markRead([m.id]); });
+  r.querySelector("[data-back]").onclick=()=>{cancelReadTimer(); state.mail.sel=null; document.getElementById("mail").classList.remove("reading"); document.body.classList.remove("mail-reading"); state.mail.readerKey=null; renderMail(); window.scrollTo(0,0);};
+}
+function sizeMail(){
+  const el=document.getElementById("mail"); if(!el || el.offsetParent===null) return;
+  const top=el.getBoundingClientRect().top + window.scrollY, seg=document.querySelector(".seg");
+  const bar = seg && getComputedStyle(seg).position==="fixed" ? seg.offsetHeight : 0;      // bundmenuen på telefon (inkl. sikkert område)
+  el.style.setProperty("--mailh", bar ? `calc(100dvh - ${Math.round(top)+bar+12}px)` : `calc(100dvh - ${Math.round(top)+16}px - env(safe-area-inset-bottom,0px))`);
+}
+window.addEventListener("resize", ()=>state.view==="mail"&&sizeMail());
+document.getElementById("msearch").addEventListener("input", e=>{state.mail.q=e.target.value; renderMail();});
+document.querySelectorAll("[data-mf]").forEach(b=>b.onclick=()=>{state.mail.filter=b.dataset.mf; renderMail();});
+document.getElementById("mpriv").onclick=async()=>{
+  if(!state.mail.showPrivate && hasRedacted() && !(await unlockPrivate())) return;
+  state.mail.showPrivate=!state.mail.showPrivate; renderMail();
+};
+document.addEventListener("keydown", e=>{
+  if(state.view!=="mail" || e.target.matches?.("input,textarea") || document.getElementById("detail").open) return;
+  if(e.key==="m" && !e.ctrlKey && !e.metaKey && state.mail.sel){ cancelReadTimer(); markRead([state.mail.sel]); return; }
+  if(!["ArrowDown","ArrowUp","j","k"].includes(e.key)) return;
+  const list=mailList(); if(!list.length) return;
+  const i=list.findIndex(m=>m.id===state.mail.sel);
+  const n = (e.key==="ArrowDown"||e.key==="j") ? Math.min(list.length-1,i+1) : Math.max(0,i-1);
+  e.preventDefault(); selectMail(list[n].id,true);
+});
+function updateBadge(){
+  const unread=arr("messages").filter(isUnread).length, badge=document.getElementById("unreadCount");
+  badge.textContent=unread; badge.classList.toggle("hidden",!unread);
+  const n=pendingSugg().length, sb=document.getElementById("suggCount");
+  sb.textContent=n; sb.classList.toggle("hidden",!n);
+}
+// ---------- Kioskvisning
+state.kiosk=false;
+let kioskTick=null, kioskLoad=null, kioskExitTimer=null, wakeLock=null;
+const pad2=n=>String(n).padStart(2,"0");
+async function requestWake(){ try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release",()=>{wakeLock=null;}); } }catch{} }
+function enterKiosk(){
+  state.kiosk=true; document.body.classList.add("kiosk");
+  try{ history.replaceState(null,"",location.pathname+"?kiosk=1"); }catch{}
+  requestWake();
+  clearInterval(kioskTick); kioskTick=setInterval(()=>{ if(state.kiosk) renderKiosk(); },30000);          // klokken og "nu"-markeringen
+  clearInterval(kioskLoad); kioskLoad=setInterval(()=>{ if(state.kiosk) load(); },2*60*1000);               // frisk data hvert andet minut
+  render();
+}
+function exitKiosk(){
+  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit");
+  try{ history.replaceState(null,"",location.pathname); }catch{}
+  clearInterval(kioskTick); clearInterval(kioskLoad); try{ wakeLock?.release(); }catch{} wakeLock=null;
+  render();
+}
+document.addEventListener("visibilitychange",()=>{ if(state.kiosk && document.visibilityState==="visible"){ if(!wakeLock) requestWake(); load(); } });
+document.getElementById("kioskView").addEventListener("pointerdown",()=>{                       // tryk på skærmen viser "Afslut" i seks sekunder
+  document.body.classList.add("k-showexit"); clearTimeout(kioskExitTimer); kioskExitTimer=setTimeout(()=>document.body.classList.remove("k-showexit"),6000);
+});
+document.getElementById("kExit").onclick=exitKiosk;
+document.addEventListener("keydown",e=>{ if(state.kiosk && e.key==="Escape") exitKiosk(); });
+
+const tasksFor=(k,day)=>state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day) && tPeople(t).includes(k.id)).map(t=>t.title);
+function kidCard(k,day,now,isToday){
+  const evs=state.data.events.filter(e=>onDay(e,day)&&e.people.includes(k.id));
+  const ls=evs.flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
+  const other=evs.filter(e=>!lessonsOf(e).length && !isSchoolBlock(e));
+  const toMin=t=>{ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; };
+  const nowMin=now.getHours()*60+now.getMinutes();
+  let head=other.length||tasksFor(k,day).length ? "" : `<div class="k-line k-none">Intet på programmet</div>`, nowLine="";
+  if(ls.length){
+    const last=ls.reduce((mx,l)=>(l.end||l.start)>mx?(l.end||l.start):mx, ls[0].end||ls[0].start);
+    head=`<div class="k-hours">${ls[0].start.replace(":",".")}–${last.replace(":",".")}</div>`;
+    if(isToday){
+      const cur=ls.find((l,i)=>{ const s=toMin(l.start), e=toMin(l.end)??toMin(ls[i+1]?.start)??s+45; return nowMin>=s&&nowMin<e; });
+      const nxt=ls.find(l=>toMin(l.start)>nowMin);
+      nowLine = cur ? `<div class="k-line k-now">Nu: ${esc(cur.title)}${cur.location?` · ${esc(cur.location)}`:""}</div>` : nxt ? `<div class="k-line">Næste: ${esc(nxt.title)} kl. ${nxt.start.replace(":",".")}</div>` : `<div class="k-line k-none">Skoledagen er slut</div>`;
+    }
+  }
+  const subs=ls.filter(l=>l.substitute).map(l=>`${esc(l.title)} ${l.start.replace(":",".")}`);
+  const key=ymd(day);
+  const tasks=tasksFor(k,day);
+  const plans=arr("weekplan").filter(w=>w.person===k.id && w.date===key && w.category && !["undervisning","anden_klasse"].includes(w.category)).map(w=>planSummary(w) && `${esc(w.subject||w.title)}: ${esc(planSummary(w))}`);
+  return `<article class="k-kid" style="--c:${k.color}"><h3>${pav(k)}${esc(k.name)}</h3>${head}${nowLine}
+    ${subs.length?`<div class="k-line">Vikar i ${subs.join(", ")}<span class="k-sub">vikar</span></div>`:""}
+    ${other.map(e=>`<div class="k-line">${icon("event")} ${esc(e.title)}${e.allDay?"":` · ${hm(new Date(e.start))}`}</div>`).join("")}
+    ${tasks.map(t=>`<div class="k-line">${icon("task")} ${esc(t)}</div>`).join("")}
+    ${plans.map(t=>`<div class="k-line">${icon("note")} ${t}</div>`).join("")}</article>`;
+}
+function renderKiosk(){
+  const now=new Date(), day=focusDay(), off=dayOffset();
+  document.getElementById("kClock").textContent=`${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  document.getElementById("kDay").textContent=off===0?"I dag":"I morgen";
+  document.getElementById("kDate").textContent=`${DAYS[day.getDay()]} ${day.getDate()}. ${MONTHS[day.getMonth()]}`;
+  const g=new Date(state.data.generated), old=(now-g)>36e5, sv=state.server, bad=[];
+  if(old) bad.push("Data er over en time gamle");
+  if(sv && ["login_required","waiting_for_login"].includes(sv.aula)) bad.push("Aula-login er udløbet");
+  if(state.data.health?.google?.ok===false) bad.push("Google Kalender ikke hentet");
+  document.getElementById("kStatus").innerHTML = (bad.length?`<div class="bad">${bad.map(esc).join(" · ")}</div>`:"")+`<div>Opdateret ${hm(g)}</div>`;
+  document.getElementById("kKids").innerHTML = state.data.people.filter(p=>p.role==="child").map(k=>kidCard(k,day,now,off===0)).join("");
+  // Husk og frister: overblikket for dagen, hvis det handler om samme dag – ellers dagens opgaver
+  const b=state.briefing?.day, fresh=b?.period && b.period[0]<=ymd(day) && ymd(day)<=b.period[1];
+  let items=[];
+  if(fresh) items=(b.afsnit||[]).flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
+  else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));
+  document.getElementById("kRemember").innerHTML = items.slice(0,10).map(i=>`<li>${i.who.map(pav).join("")}<span>${esc(i.text)}${i.sec&&fresh?`<small>${esc(i.sec)}</small>`:""}</span></li>`).join("") || `<li class="k-none">Intet særligt ${dayWord()}</li>`;
+  document.getElementById("kAptTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";
+  document.getElementById("kApts").innerHTML = timelineItems(day);
+  fitKiosk();
+}
+// En vægvisning kan ikke rulles: skrumper teksten, til alt er på skærmen (dog ikke under 14 px)
+function fitKiosk(){
+  const v=document.getElementById("kioskView"); v.style.fontSize="";
+  let fs=parseFloat(getComputedStyle(v).fontSize);
+  while(document.documentElement.scrollHeight>innerHeight+1 && fs>14){ fs-=1; v.style.fontSize=fs+"px"; }
+}
+window.addEventListener("resize",()=>{ if(state.kiosk) fitKiosk(); });
+
+// ---------- Kalender: forslag og "føj til kalender"
+// Med serveren og en servicekonto oprettes aftalen direkte i familiekalenderen. Uden åbnes Google Kalender med aftalen udfyldt.
+const CAL_LOCAL_KEY="fp-cal-local";
+state.cal={loaded:false,enabled:false,problem:null,calendar_id:null,created:{},dismissed:[],applied:[],bySource:{},learned:[]};
+const localCal=()=>{ try{ return {created:{},dismissed:[],...JSON.parse(localStorage.getItem(CAL_LOCAL_KEY)||"{}")}; }catch{ return {created:{},dismissed:[]}; } };
+const saveLocalCal=()=>{ try{ localStorage.setItem(CAL_LOCAL_KEY,JSON.stringify({created:state.cal.created,dismissed:state.cal.dismissed})); }catch{} };
+async function loadCal(){
+  if(state.server){
+    try{
+      const r=await fetch("api/calendar",{cache:"no-store"});
+      if(r.status===401){ toLogin(); return; }
+      if(r.ok){
+        const j=await r.json(); Object.assign(state.cal,{loaded:true,enabled:!!j.enabled,problem:j.problem,calendar_id:j.calendar_id,created:j.created||{},dismissed:j.dismissed||[],applied:j.applied||[],bySource:j.by_source||{}});
+        try{ const l=await fetch("api/learned",{cache:"no-store"}); if(l.ok) state.cal.learned=(await l.json()).rules||[]; }catch{}
+        return;
+      }
+    }catch{}
+  }
+  const l=localCal(); Object.assign(state.cal,{loaded:true,enabled:false,problem:null,created:l.created,dismissed:l.dismissed});
+}
+// En aktivitet er "oprettet", hvis dens eget id er det – eller hvis noget fra samme kilde og dag er (fx oprettet manuelt, før en lært regel fandt den)
+const srcIds=o=>[...(o.sources||[]).map(x=>x.id),...(o.source?[o.source.id]:[])];
+const calEntry=o=>state.cal.created[o.id]||srcIds(o).map(i=>state.cal.bySource?.[i+"|"+o.start]).find(Boolean);
+const calStatus=o=>calEntry(o)?"created":state.cal.applied.includes(o.id)?"applied":state.cal.dismissed.includes(o.id)?"dismissed":"new";
+const pendingSugg=()=>(state.data?.suggestions||[]).filter(s=>calStatus(s)==="new" && personVisible(s.people?.length?s.people:["family"]));
+function calIndex(){
+  const idx={}; (state.data.suggestions||[]).forEach(x=>idx[x.id]=x);
+  ["messages","posts","weekplan"].forEach(k=>arr(k).forEach(it=>(it.cal||[]).forEach(o=>{ if(!idx[o.id]) idx[o.id]=o; })));
+  return idx;
+}
+const fmtDay=iso=>{ const d=new Date(iso+"T12:00"); return `${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`; };
+function fmtWhen(o){
+  const e=o.end||o.start; let t = o.start===e ? fmtDay(o.start) : `${fmtDay(o.start)} – ${fmtDay(e)}`;
+  t += o.start_time ? ` · ${o.start_time.replace(":",".")}${o.end_time?"–"+o.end_time.replace(":","."):""}` : " · hele dagen";
+  return t;
+}
+const CAT_COLOR={lejrskole:"#1F9E89",tur:"#2F6FDE",turnering:"#E4572E",test:"#8E5CD6",møde:"#D9971E",fødselsdag:"#D9467A",arrangement:"#2F6FDE",lukket:"#5F6B7D",omlagt:"#5F6B7D"};
+
+function calOptsHTML(opts){
+  const list=(opts||[]).filter(o=>o && !o.exists);
+  if(!list.length) return "";
+  return `<div class="calopts"><h3 class="calhead">${icon("calplus")} Føj til kalender</h3>${list.map(o=>{
+    const st=calStatus(o), link=calEntry(o)?.html_link;
+    return `<div class="calopt"><div><b>${esc(o.calendar_title)}</b><span class="meta">${esc(fmtWhen(o))}${o.location?" · "+esc(o.location):""}</span></div>
+      ${st==="created" ? `<span class="done">${icon("check")} I kalenderen${link?` · <a href="${esc(link)}" target="_blank" rel="noopener">Åbn</a>`:""}</span>` : `<button class="btn" data-addcal="${esc(o.id)}">Føj til kalender</button>`}</div>`;
+  }).join("")}</div>`;
+}
+
+async function calPost(path, body){
+  const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},body:JSON.stringify(body)});
+  if(r.status===401){ toLogin(); throw new Error("Log ind igen"); }
+  let j={}; try{ j=await r.json(); }catch{}
+  if(!r.ok) throw new Error(j.error||`Fejl ${r.status}`);
+  return j;
+}
+function gcalLink(p){
+  const pad=n=>String(n).padStart(2,"0"), d=iso=>iso.replace(/-/g,"");
+  const next=iso=>{ const x=new Date(iso+"T12:00"); x.setDate(x.getDate()+1); return `${x.getFullYear()}${pad(x.getMonth()+1)}${pad(x.getDate())}`; };
+  const t=(iso,hm)=>`${d(iso)}T${hm.replace(":","")}00`;
+  let dates;
+  if(p.all_day) dates=`${d(p.date)}/${next(p.end_date||p.date)}`;
+  else { const end=p.end_time||`${pad((+p.start_time.slice(0,2)+1)%24)}:${p.start_time.slice(3,5)}`; dates=`${t(p.date,p.start_time)}/${t(p.end_date||p.date,end)}`; }
+  const q=new URLSearchParams({action:"TEMPLATE",text:p.title,dates,details:p.description||"",location:p.location||"",ctz:"Europe/Copenhagen"});
+  if(state.cal.calendar_id) q.set("src",state.cal.calendar_id);
+  return "https://calendar.google.com/calendar/render?"+q.toString();
+}
+
+const evEl=id=>document.getElementById(id);
+let evKey=null, evOpt=null;
+
+// ---------- Datovælger: tekstfelt der forstår mange skrivemåder + kalender at vælge i
+const DP=(()=>{
+  const MONTHLOOKUP={jan:1,januar:1,feb:2,februar:2,mar:3,marts:3,apr:4,april:4,maj:5,jun:6,juni:6,jul:7,juli:7,aug:8,august:8,sep:9,sept:9,september:9,okt:10,oktober:10,nov:11,november:11,dec:12,december:12};
+  const WDLOOKUP={man:1,tirs:2,ons:3,tors:4,fre:5,lør:6,lor:6,søn:0,son:0};
+  const pad=n=>String(n).padStart(2,"0");
+  const isoOf=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const fromIso=s=>{ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d,12); };
+  const add=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+  const mk=(y,m,d)=>{ if(y<2000||y>2100) return null; const x=new Date(y,m-1,d,12); return x.getFullYear()===y&&x.getMonth()===m-1&&x.getDate()===d?x:null; };
+  const fmtDK=iso=>{ const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
+  const longDK=iso=>{ const d=fromIso(iso); return `${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+
+  // Returnerer "" (tomt), en ISO-dato, eller null (kan ikke læses). Året udelades ofte: "12/10" betyder den kommende 12. oktober.
+  function parse(text, now=new Date()){
+    const t=String(text||"").trim().toLowerCase().replace(/\s+/g," ");
+    if(!t) return "";
+    const today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
+    const guess=(day,mon)=>{ let x=mk(today.getFullYear(),mon,day); if(x&&x<add(today,-60)) x=mk(today.getFullYear()+1,mon,day); return x; };
+    const yr=y=>y<100?2000+y:y;
+    let m, x;
+    if(/^i ?dag$/.test(t)) return isoOf(today);
+    if(/^i ?morgen$/.test(t)) return isoOf(add(today,1));
+    if(/^i ?overmorgen$/.test(t)) return isoOf(add(today,2));
+    if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return (x=mk(+m[1],+m[2],+m[3]))?isoOf(x):null;
+    if((m=t.match(/^(\d{1,2})[ ./-](\d{1,2})(?:[ ./-](\d{2}|\d{4}))?$/))) return (x=m[3]?mk(yr(+m[3]),+m[2],+m[1]):guess(+m[1],+m[2]))?isoOf(x):null;
+    if((m=t.match(/^(\d{1,2})\.? ?([a-zæøå]+)\.?(?: (\d{2}|\d{4}))?$/)) && MONTHLOOKUP[m[2]]) return (x=m[3]?mk(yr(+m[3]),MONTHLOOKUP[m[2]],+m[1]):guess(+m[1],MONTHLOOKUP[m[2]]))?isoOf(x):null;
+    if(/^\d+$/.test(t)){                                                  // 1210 · 121026 · 12102026 · 512
+      const d=t.length===3?[t.slice(0,1),t.slice(1,3)]:t.length>=4?[t.slice(0,2),t.slice(2,4)]:null;
+      if(!d) return null;
+      const y=t.length===6?yr(+t.slice(4)):t.length===8?+t.slice(4):null;
+      if(![3,4,6,8].includes(t.length)) return null;
+      return (x=y?mk(y,+d[1],+d[0]):guess(+d[0],+d[1]))?isoOf(x):null;
+    }
+    if((m=t.match(/^(man|tirs|ons|tors|fre|lør|lor|søn|son)[a-zæøå]*$/)) && (m[0].endsWith("dag")||m[0]===m[1])){   // "mandag" = førstkommende mandag
+      const wd=WDLOOKUP[m[1]]; return isoOf(add(today,(wd-today.getDay()+7)%7));
+    }
+    return null;
+  }
+
+  const panel=document.getElementById("dpCal");
+  let cur=null, view=null, focusIso=null;
+  const slots=new Map();             // input → {btn, hint, min}
+
+  function setHint(input, state){
+    const sl=slots.get(input), v=input.value.trim();
+    input.setAttribute("aria-invalid", state==="bad"?"true":"false");
+    sl.hint.className="dphint"+(state==="bad"?" bad":"");
+    sl.hint.textContent = state==="bad" ? "Kan ikke læses – skriv fx 12/10/2026 eller 12. oktober" : (input.dataset.iso ? longDK(input.dataset.iso) : (v&&v.length>=3?"Skriv fx 12/10/2026":""));
+  }
+  function set(input, iso){
+    input.value = iso ? fmtDK(iso) : ""; input.dataset.iso = iso||"";
+    if(slots.has(input)) setHint(input, "ok");
+  }
+  function read(input){
+    const iso=input.dataset.iso||"", has=!!input.value.trim();
+    return {iso, invalid: has && !iso};
+  }
+  function minOf(input){ const f=slots.get(input)?.min; return f?f():""; }
+
+  function render(){
+    const first=new Date(view.getFullYear(),view.getMonth(),1,12);
+    const startOffset=(first.getDay()+6)%7;                              // ugen starter mandag
+    const gridStart=add(first,-startOffset);
+    const sel=cur.input.dataset.iso||"", other=[...slots.keys()].find(i=>i!==cur.input), otherIso=other?.dataset.iso||"";
+    const lo=[sel,otherIso].filter(Boolean).sort()[0], hi=[sel,otherIso].filter(Boolean).sort().slice(-1)[0];
+    const min=minOf(cur.input), todayIso=isoOf(new Date());
+    const title=`${MONTHS[first.getMonth()]} ${first.getFullYear()}`;
+    let rows="";
+    for(let r=0;r<6;r++){
+      rows+="<tr>";
+      for(let c=0;c<7;c++){
+        const d=add(gridStart,r*7+c), iso=isoOf(d), out=d.getMonth()!==first.getMonth();
+        const cls=["dpday",out?"out":"",iso===todayIso?"today":"",iso===sel?"sel":"",(lo&&hi&&lo!==hi&&iso>lo&&iso<hi)?"range":""].filter(Boolean).join(" ");
+        rows+=`<td><button type="button" class="${cls}" data-iso="${iso}" tabindex="${iso===focusIso?0:-1}" aria-label="${longDK(iso)}"${iso===sel?' aria-pressed="true"':""}${min&&iso<min?" disabled":""}>${d.getDate()}</button></td>`;
+      }
+      rows+="</tr>";
+    }
+    panel.innerHTML=`<div class="dphead"><button type="button" data-nav="-12" aria-label="Forrige år">«</button><button type="button" data-nav="-1" aria-label="Forrige måned">‹</button>
+      <div class="dptitle" aria-live="polite">${title}</div><button type="button" data-nav="1" aria-label="Næste måned">›</button><button type="button" data-nav="12" aria-label="Næste år">»</button></div>
+      <table class="dpgrid" role="grid" aria-label="${title}"><thead><tr>${["Ma","Ti","On","To","Fr","Lø","Sø"].map((d,i)=>`<th scope="col" abbr="${["mandag","tirsdag","onsdag","torsdag","fredag","lørdag","søndag"][i]}">${d}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>
+      <div class="dpfoot"><button type="button" data-act="today">I dag</button><button type="button" data-act="clear">Ryd</button><button type="button" data-act="close">Luk</button></div>`;
+  }
+  function open(input, focus=true){
+    const sl=slots.get(input); close(false);
+    cur={input}; const iso=input.dataset.iso||minOf(input)||isoOf(new Date());
+    view=fromIso(iso); view=new Date(view.getFullYear(),view.getMonth(),1,12); focusIso=iso;
+    sl.btn.setAttribute("aria-expanded","true"); panel.hidden=false; render();
+    panel.scrollIntoView({block:"nearest"});
+    if(focus) panel.querySelector(`[data-iso="${focusIso}"]`)?.focus();
+  }
+  function close(refocus=true){
+    if(!cur) { panel.hidden=true; return; }
+    const input=cur.input; slots.get(input).btn.setAttribute("aria-expanded","false"); panel.hidden=true; cur=null;
+    if(refocus) input.focus();
+  }
+  function pick(iso){
+    const input=cur.input; set(input,iso);
+    const other=[...slots.keys()].find(i=>i!==input);
+    // vælger man en start efter en eksisterende slutdato, giver slutdatoen ikke mening længere
+    if(input.id==="evDate" && other?.dataset.iso && other.dataset.iso<iso) set(other,"");
+    close(true);
+  }
+  function moveFocus(iso){
+    focusIso=iso; const d=fromIso(iso);
+    if(d.getMonth()!==view.getMonth()||d.getFullYear()!==view.getFullYear()) view=new Date(d.getFullYear(),d.getMonth(),1,12);
+    render(); panel.querySelector(`[data-iso="${iso}"]`)?.focus();
+  }
+  panel.addEventListener("click",e=>{
+    const day=e.target.closest(".dpday"), nav=e.target.closest("[data-nav]"), act=e.target.closest("[data-act]");
+    if(day&&!day.disabled) return pick(day.dataset.iso);
+    if(nav){ view=new Date(view.getFullYear(),view.getMonth()+(+nav.dataset.nav),1,12); focusIso=isoOf(view); render(); panel.querySelector(`[data-nav="${nav.dataset.nav}"]`)?.focus(); }
+    if(act?.dataset.act==="today"){ const t=isoOf(new Date()); const min=minOf(cur.input); if(!(min&&t<min)) pick(t); }
+    if(act?.dataset.act==="clear"){ set(cur.input,""); close(true); }
+    if(act?.dataset.act==="close") close(true);
+  });
+  panel.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){ e.stopPropagation(); e.preventDefault(); return close(true); }
+    const day=e.target.closest(".dpday"); if(!day) return;
+    const d=fromIso(day.dataset.iso), step={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];
+    if(step){ e.preventDefault(); return moveFocus(isoOf(add(d,step))); }
+    if(e.key==="Home"||e.key==="End"){ e.preventDefault(); return moveFocus(isoOf(add(d,e.key==="Home"?-((d.getDay()+6)%7):6-((d.getDay()+6)%7)))); }
+    if(e.key==="PageUp"||e.key==="PageDown"){ e.preventDefault(); const n=(e.key==="PageUp"?-1:1)*(e.shiftKey?12:1); const t=new Date(d.getFullYear(),d.getMonth()+n,1,12); const last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); t.setDate(Math.min(d.getDate(),last)); return moveFocus(isoOf(t)); }
+  });
+  document.addEventListener("pointerdown",e=>{ if(cur&&!panel.contains(e.target)&&!e.target.closest(".dpbtn")&&!e.target.closest(".dpin")) close(false); });
+  function bind(input, btn, hint, min){
+    slots.set(input,{btn,hint,min});
+    input.addEventListener("input",()=>{ const iso=parse(input.value); input.dataset.iso=iso||""; setHint(input,"ok"); if(cur&&cur.input===input&&iso){ view=new Date(fromIso(iso).getFullYear(),fromIso(iso).getMonth(),1,12); focusIso=iso; render(); } });
+    input.addEventListener("blur",()=>{ const iso=parse(input.value); if(iso){ set(input,iso); } else if(input.value.trim()){ input.dataset.iso=""; setHint(input,"bad"); } });
+    input.addEventListener("keydown",e=>{
+      if(e.key==="Enter"){ e.preventDefault(); const iso=parse(input.value); if(iso) set(input,iso); else if(input.value.trim()) setHint(input,"bad"); close(false); }   // Enter afslutter feltet – det sender ikke formularen
+      if(e.key==="ArrowDown"&&!cur){ e.preventDefault(); open(input); }
+    });
+    btn.addEventListener("click",()=>{ cur&&cur.input===input ? close(true) : open(input); });
+  }
+  return {bind,set,read,parse,close,open};
+})();
+DP.bind(document.getElementById("evDate"),document.getElementById("evDateBtn"),document.getElementById("evDateHint"));
+DP.bind(document.getElementById("evEnd"),document.getElementById("evEndBtn"),document.getElementById("evEndHint"),()=>document.getElementById("evDate").dataset.iso||"");
+function openEvDialog(o){
+  evKey=o.id; evOpt=o;
+  evEl("evHead").textContent = o.kind==="move" ? "Flyt aftalen" : o.type==="suggestion" ? "Opret forslag i kalenderen" : "Føj til kalender";
+  evEl("evSrc").textContent = o.source ? `Fra ${o.source.label} «${o.source.title}»` : (o.sources?.[0] ? `Fra ${o.sources[0].label} «${o.sources[0].title}»` : "");
+  evEl("evTitle").value=o.kind==="move" ? (o.target?.title||o.calendar_title) : (o.calendar_title||o.title||"");
+  DP.close(false); DP.set(evEl("evDate"),o.start||""); DP.set(evEl("evEnd"),(o.end&&o.end!==o.start)?o.end:"");
+  const all=!!o.all_day || !o.start_time;
+  evEl("evAll").checked=all; evEl("evSt").value=o.start_time||""; evEl("evEn").value=o.end_time||"";
+  evEl("evLoc").value=o.location||""; evEl("evDesc").value=o.description||"";
+  evEl("evErr").textContent="";
+  // Lær af manuelt tilføjede aktiviteter (kræver serveren, som gemmer reglerne)
+  const cands = state.server && o.suggested===false && o.kind!=="move" ? (o.learn||[]) : [];
+  evEl("evLearn").classList.toggle("hidden",!cands.length);
+  evEl("evLearnOn").checked=true; evEl("evLearnCustom").value=""; evEl("evLearnBody").style.display="";
+  evEl("evLearnChips").innerHTML=cands.map(c=>`<label class="lchip${c.default?" on":""}"><input type="checkbox" data-kind="${esc(c.kind)}" data-text="${esc(c.text)}" data-anchor="${esc(c.anchor)}"${c.default?" checked":""}> ${esc(c.text)}${c.kind==="phrase"?" <small>(vending)</small>":""}</label>`).join("");
+  autoTick();
+  evEl("evMode").textContent = state.cal.enabled ? "Aftalen oprettes i familiens Google Kalender."
+    : "Google Kalender åbnes med aftalen udfyldt – du vælger kalender og gemmer dér." + (state.cal.problem && state.server ? ` (Direkte oprettelse: ${state.cal.problem}.)` : "");
+  evEl("evOk").textContent = o.kind==="move" ? "Flyt aftalen" : state.cal.enabled ? "Opret i kalender" : "Åbn i Google Kalender";
+  syncAll(); document.getElementById("detail").open && document.getElementById("detail").close();
+  evEl("evDlg").showModal();
+}
+function syncAll(){ evEl("evTimes").style.display = evEl("evAll").checked ? "none" : ""; }
+evEl("evAll").addEventListener("change",syncAll);
+evEl("evLearnOn").addEventListener("change",()=>{ evEl("evLearnBody").style.display=evEl("evLearnOn").checked?"":"none"; });
+evEl("evLearnChips").addEventListener("change",e=>{ e.target.closest(".lchip")?.classList.toggle("on",e.target.checked); });
+// Skriver du en titel, der indeholder et af ordene, vælges det automatisk – titlen er dit eget bud på, hvad aktiviteten er
+function autoTick(){
+  const words=evEl("evTitle").value.split(":").pop().toLowerCase().match(/[a-zæøå][\wæøå-]{3,}/g)||[];
+  evEl("evLearnChips").querySelectorAll("input").forEach(i=>{
+    // kun enkeltord forvælges; en vending er et aktivt valg
+    if(!i.checked && i.dataset.kind==="keyword" && words.some(w=>w.slice(0,6)===i.dataset.anchor.slice(0,6))){ i.checked=true; i.closest(".lchip").classList.add("on"); }
+  });
+}
+evEl("evTitle").addEventListener("input",autoTick);
+async function learnFrom(p){
+  // Returnerer en tekst til beskeden; fejl her må aldrig fortryde, at aftalen er oprettet
+  if(!evEl("evLearnOn").checked || evEl("evLearn").classList.contains("hidden")) return "";
+  const rules=[...evEl("evLearnChips").querySelectorAll("input:checked")].map(i=>({kind:i.dataset.kind,text:i.dataset.text,anchor:i.dataset.anchor}));
+  const custom=evEl("evLearnCustom").value.trim();
+  if(custom){ const multi=/\s/.test(custom); rules.push({kind:multi?"phrase":"keyword",text:custom,anchor:custom.split(/\s+/).pop()}); }
+  if(!rules.length) return "";
+  try{
+    const j=await calPost("api/learned",{rules,example:{title:p.title,sentence:(evOpt?.description||"").split("\n\n")[1]||"",source:evOpt?.source?`${evOpt.source.label} «${evOpt.source.title}»`:""}});
+    await loadCal(); setTimeout(load,6000);
+    const ok=j.added.length?` Husker ${j.added.map(r=>"«"+r.text+"»").join(", ")} – du får forslag, når det nævnes med en dato.`:"";
+    const no=j.rejected.length?` ${j.rejected.map(r=>"«"+r.text+"» blev ikke gemt: "+r.reason+".").join(" ")}`:"";
+    return ok+no;
+  }catch(x){ return ` Reglen kunne ikke gemmes: ${x.message}`; }
+}
+evEl("evCancel").onclick=()=>evEl("evDlg").close();
+evEl("evDlg").addEventListener("close",()=>DP.close(false));
+// Esc lukker først kalenderen – ikke hele dialogen (så man ikke mister det, man har skrevet)
+evEl("evDlg").addEventListener("cancel",e=>{ if(!evEl("dpCal").hidden){ e.preventDefault(); DP.close(false); } });
+evEl("evForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const srcRef=evOpt?.source||evOpt?.sources?.[0]||null;
+  const d1=DP.read(evEl("evDate")), d2=DP.read(evEl("evEnd"));
+  const p={key:evKey,source:srcRef?{type:srcRef.type,id:srcRef.id}:null,title:evEl("evTitle").value.trim(),date:d1.iso,end_date:d2.iso||d1.iso,all_day:evEl("evAll").checked,
+           start_time:evEl("evSt").value,end_time:evEl("evEn").value,location:evEl("evLoc").value.trim(),description:evEl("evDesc").value};
+  const err=m=>{ evEl("evErr").textContent=m; };
+  if(!p.title) return err("Giv aftalen en titel.");
+  if(d1.invalid) return err("Datoen kan ikke læses – skriv fx 12/10/2026 eller vælg i kalenderen.");
+  if(!p.date) return err("Vælg en dato.");
+  if(d2.invalid) return err("Slutdatoen kan ikke læses – skriv fx 16/10/2026 eller vælg i kalenderen.");
+  if(p.end_date<p.date) return err("Slutdatoen ligger før startdatoen.");
+  if(!p.all_day && !p.start_time) return err("Angiv mindst et starttidspunkt, eller vælg Hele dagen.");
+  if(!p.all_day && p.end_time && p.end_date===p.date && p.end_time<=p.start_time) return err("Sluttidspunktet skal ligge efter starttidspunktet.");
+  const ok=evEl("evOk");
+  if(evOpt?.kind==="move"){                                              // flyt en aftale, appen har oprettet
+    ok.disabled=true; ok.textContent="Flytter …";
+    try{
+      await calPost("api/calendar/move",{...p,key:evKey,target_key:evOpt.target.key});
+      state.cal.applied.push(evKey); evEl("evDlg").close(); toast("Aftalen er flyttet"); afterCalChange(); setTimeout(load,1500);
+    }catch(x){ err(x.message); }
+    finally{ ok.disabled=false; ok.textContent="Flyt aftalen"; }
+    return;
+  }
+  if(state.cal.enabled){
+    ok.disabled=true; ok.textContent="Opretter …";
+    try{
+      const j=await calPost("api/calendar/events",p);
+      state.cal.created[evKey]={html_link:j.html_link};
+      const more=await learnFrom(p);
+      evEl("evDlg").close(); toast("Oprettet i familiekalenderen ✓"+more,more?8000:4500); afterCalChange(); setTimeout(load,1500);
+    }catch(x){ err(x.message); }
+    finally{ ok.disabled=false; ok.textContent="Opret i kalender"; }
+  } else {
+    window.open(gcalLink(p),"_blank","noopener");                       // skal ske direkte i klikket, ellers blokerer iOS det
+    state.cal.created[evKey]={html_link:null,local:true}; saveLocalCal();
+    const more=await learnFrom(p);
+    evEl("evDlg").close(); toast("Google Kalender er åbnet – husk at gemme aftalen dér."+more,more?8000:4500); afterCalChange();
+  }
+});
+function afterCalChange(){ updateBadge(); if(state.view==="sugg") renderSugg(); else if(state.view==="mail"){ state.mail.readerKey=null; renderMail(); } else render(); }
+document.addEventListener("click",e=>{
+  const b=e.target.closest?.("[data-addcal]"); if(!b) return;
+  const o=calIndex()[b.dataset.addcal]; if(o) openEvDialog(o);
+});
+
+async function calAct(kind,key){
+  try{
+    if(state.server){ await calPost("api/calendar/"+kind,{key}); }
+    if(kind==="dismiss"){ if(!state.cal.dismissed.includes(key)) state.cal.dismissed.push(key); }
+    if(kind==="restore"){ state.cal.dismissed=state.cal.dismissed.filter(k=>k!==key); }
+    if(kind==="remove"){ delete state.cal.created[key]; }
+    if(!state.server) saveLocalCal();
+    afterCalChange();
+    if(kind==="remove") setTimeout(load,800);
+  }catch(x){ toast(x.message); }
+}
+function openSource(type,id){
+  if(type==="message"){ state.view="mail"; render(); selectMail(id,false); }
+  else if(type==="post"){ state.view="aula"; state.feedType="post"; render(); }
+  else if(type==="weekplan"){ showPlan(id); }
+}
+
+// ---------- Aflysninger, udsættelser og flytninger: ændringer til aftaler, der allerede står i kalenderen
+const CHANGE_VERB={cancel:"er aflyst",hold:"er udsat",move:"er flyttet"};
+function changeCard(s,mode){
+  const t=s.target||{}, src=(s.sources||[])[0], who=(s.people||[]).map(person).filter(Boolean).map(pav).join("");
+  const canAct = !!(state.server && state.cal.enabled && t.source==="app" && t.key);
+  const tdate = t.start===t.end ? fmtDay(t.start) : `${fmtDay(t.start)} – ${fmtDay(t.end)}`;
+  const actions = mode==="applied" ? `<span class="done" style="color:#0E6B5B;font-weight:700;display:inline-flex;gap:6px;align-items:center">${icon("check")} ${s.kind==="move"?"Aftalen er flyttet":"Aftalen er fjernet fra kalenderen"}</span>`
+    : mode==="dismissed" ? `<button class="btn" data-sg="restore">Fortryd</button>`
+    : canAct ? (s.kind==="move" ? `<button class="btn primary" data-ch="move">Flyt aftalen …</button><button class="btn" data-sg="dismiss">Afvis</button>`
+                                : `<button class="btn primary" data-ch="cancel">Fjern fra kalender</button><button class="btn" data-sg="dismiss">Behold aftalen</button>`)
+    : `<p class="snote" style="flex:1 1 100%;margin:0">Aftalen er ikke oprettet via appen, så ret den selv i Google Kalender.</p><a class="btn primary" href="https://calendar.google.com/" target="_blank" rel="noopener">Åbn Google Kalender</a><button class="btn" data-sg="dismiss">Forstået</button>`;
+  return `<article class="sg change${mode!=="new"?" isdone":""}" style="--cc:#C23A15" data-key="${esc(s.id)}">
+    <div class="sgtop"><span class="catchip">${icon("event")} ${esc(s.label)}</span>${s.confidence==="middel"?`<span class="maybe" title="${esc(s.reason||"")}">Måske</span>`:""}</div>
+    <h3>${esc(s.title)} ${CHANGE_VERB[s.kind]}</h3>
+    <div class="sgmeta"><span>${icon("event")} I kalenderen: «${esc(t.title)}» · ${esc(tdate)}</span>${s.kind==="move"?`<span>${icon("calplus")} Ny tid: ${esc(fmtWhen(s))}</span>`:""}</div>
+    ${who?`<div class="sgwho">${who}</div>`:""}
+    <p class="sgsrc">${src?`Fra ${esc(src.label)} «${esc(src.title)}»${src.date?` · ${esc(fmtDay(src.date))}`:""} <button class="linklike" data-src="${esc(src.type)}|${esc(src.id)}">Vis</button> · `:""}<span>${esc(s.reason||"")}</span></p>
+    <div class="sgact">${actions}</div></article>`;
+}
+async function applyChange(s,kind){
+  const t=s.target;
+  try{
+    if(kind==="cancel"){
+      if(!confirm(`Fjern «${t.title}» fra familiekalenderen?`)) return;
+      await calPost("api/calendar/cancel",{key:s.id,target_key:t.key});
+    }
+    state.cal.applied.push(s.id); toast(kind==="cancel"?"Aftalen er fjernet fra kalenderen":"Aftalen er flyttet"); afterCalChange(); setTimeout(load,1500);
+  }catch(x){ toast(x.message); }
+}
+function sgCard(s,mode){
+  if(["cancel","hold","move"].includes(s.kind)) return changeCard(s,mode);
+  const st=calStatus(s), done=mode!=="new", src=(s.sources||[])[0];
+  const who=(s.people||[]).map(person).filter(Boolean).map(pav).join("");
+  const isNew=!done && s.first_seen && (Date.now()-new Date(s.first_seen))<2*864e5;
+  return `<article class="sg${done?" isdone":""}" style="--cc:${CAT_COLOR[s.category]||"#2F6FDE"}" data-key="${esc(s.id)}">
+    <div class="sgtop"><span class="catchip">${icon("calplus")} ${esc(s.label)}</span>${s.confidence==="middel"?`<span class="maybe" title="${esc(s.reason||"")}">Måske</span>`:""}${isNew?`<span class="newtag">Ny</span>`:""}</div>
+    <h3>${esc(s.calendar_title)}</h3>
+    <div class="sgmeta"><span>${icon("event")} ${esc(fmtWhen(s))}</span>${s.location?`<span>${icon("pin")} ${esc(s.location)}</span>`:""}</div>
+    ${who?`<div class="sgwho">${who}</div>`:""}
+    <p class="sgsrc">${src?`Fra ${esc(src.label)} «${esc(src.title)}»${src.date?` · ${esc(fmtDay(src.date))}`:""} <button class="linklike" data-src="${esc(src.type)}|${esc(src.id)}">Vis</button> · `:""}<span>${esc(s.reason||"")}</span></p>
+    <div class="sgact">${
+      mode==="new" ? `<button class="btn primary" data-sg="create">${state.cal.enabled?"Opret i kalender":"Åbn i Google Kalender"}</button><button class="btn" data-sg="edit">Rediger</button><button class="btn" data-sg="dismiss">Afvis</button>`
+      : mode==="created" ? `<span class="done" style="color:#0E6B5B;font-weight:700;display:inline-flex;gap:6px;align-items:center">${icon("check")} ${calEntry(s)?.local?"Åbnet i Google Kalender":"I kalenderen"}</span>${calEntry(s)?.html_link?`<a class="btn" href="${esc(calEntry(s).html_link)}" target="_blank" rel="noopener">Åbn i Google Kalender</a>`:""}${state.server&&state.cal.enabled?`<button class="btn" data-sg="remove">Fjern fra kalender</button>`:`<button class="btn" data-sg="remove">Fortryd</button>`}`
+      : `<button class="btn" data-sg="restore">Fortryd afvisning</button>`}</div>
+  </article>`;
+}
+function renderSugg(){
+  const root=evEl("suggRoot");
+  const wasOpen=new Set([...root.querySelectorAll("details[open] summary")].map(x=>x.textContent.split(" (")[0]));      // åbne afsnit skal forblive åbne
+  const all=(state.data.suggestions||[]).filter(s=>personVisible(s.people?.length?s.people:["family"]));
+  const by=m=>all.filter(s=>calStatus(s)===m);
+  const nw=by("new"), cr=by("created"), ap=by("applied"), di=by("dismissed");
+  root.innerHTML=`<div class="sintro"><h2>Forslag til kalenderen</h2>
+    <p>Aktiviteter fra ugeplan, opslag og beskeder, der ser ud til at fortjene en plads i familiekalenderen: lejrskole, ture, test, møder, invitationer og lignende. Fødselsdage i klassen og temadage bliver i Aula.</p>
+    ${state.cal.enabled ? "" : `<p class="snote">${state.server ? `Direkte oprettelse er ikke sat op${state.cal.problem?` (${esc(state.cal.problem)})`:""}. ` : ""}Knappen åbner Google Kalender med aftalen udfyldt, så du vælger kalender og gemmer dér.</p>`}</div>
+    ${nw.length ? nw.map(s=>sgCard(s,"new")).join("") : `<p class="empty">Ingen nye forslag lige nu. Nye aktiviteter dukker op her, når data opdateres.</p>`}
+    ${cr.length?`<details class="sdone"><summary>Oprettet (${cr.length})</summary>${cr.map(s=>sgCard(s,"created")).join("")}</details>`:""}
+    ${ap.length?`<details class="sdone"><summary>Behandlet (${ap.length})</summary>${ap.map(s=>sgCard(s,"applied")).join("")}</details>`:""}
+    ${di.length?`<details class="sdone"><summary>Afvist (${di.length})</summary>${di.map(s=>sgCard(s,"dismissed")).join("")}</details>`:""}
+    ${state.server?`<details class="sdone"><summary>Lærte regler (${(state.cal.learned||[]).length})</summary>
+      <p class="evnote">Ord og vendinger, appen har lært af aktiviteter, du selv har tilføjet. Hvor de nævnes sammen med en dato, foreslås aktiviteten. Appen lærer nye regler, når du tilføjer en aktivitet manuelt og vælger "Foreslå lignende aktiviteter fremover".</p>
+      ${(state.cal.learned||[]).map(r=>`<div class="rule${r.enabled?"":" off"}" data-rid="${esc(r.id)}"><div><b>«${esc(r.text)}»</b> <span class="meta">${r.kind==="phrase"?"vending":"ord"} · står i ${r.matches??0} sætning${r.matches===1?"":"er"} i de seneste data</span>${r.example?.title?`<span class="meta">Lært af: ${esc(r.example.title)}</span>`:""}</div>
+        <div class="ract"><button class="btn" data-rule="toggle">${r.enabled?"Slå fra":"Slå til"}</button><button class="btn" data-rule="remove">Fjern</button></div></div>`).join("")||`<p class="empty">Ingen regler endnu.</p>`}
+    </details>`:""}`;
+  root.querySelectorAll("details").forEach(d=>{ if(wasOpen.has(d.querySelector("summary").textContent.split(" (")[0])) d.open=true; });
+  const idx=Object.fromEntries(all.map(s=>[s.id,s]));
+  root.querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>{
+    const s=idx[b.closest(".sg").dataset.key]; if(b.dataset.ch==="move") openEvDialog(s); else applyChange(s,b.dataset.ch);
+  });
+  root.querySelectorAll("[data-sg]").forEach(b=>b.onclick=()=>{
+    const key=b.closest(".sg").dataset.key, s=idx[key], k=b.dataset.sg;
+    if(k==="create"||k==="edit") openEvDialog(s); else calAct(k,key);
+  });
+  root.querySelectorAll("[data-src]").forEach(b=>b.onclick=()=>{ const [t,i]=b.dataset.src.split("|"); openSource(t,i); });
+  root.querySelectorAll("[data-rule]").forEach(b=>b.onclick=async()=>{
+    const row=b.closest(".rule"), id=row.dataset.rid, r=state.cal.learned.find(x=>x.id===id);
+    try{
+      if(b.dataset.rule==="remove"){ await calPost("api/learned/remove",{id}); state.cal.learned=state.cal.learned.filter(x=>x.id!==id); }
+      else { await calPost("api/learned/toggle",{id,enabled:!r.enabled}); r.enabled=!r.enabled; }
+      renderSugg(); setTimeout(load,5000);
+    }catch(x){ toast(x.message); }
+  });
+}
+
+function render(){
+  renderChrome();
+  document.getElementById("kioskView").classList.toggle("hidden",!state.kiosk);
+  if(state.kiosk){ ["todayView","weekView","mailView","suggView","aulaView"].forEach(i=>document.getElementById(i).classList.add("hidden")); renderKiosk(); return; }
+  const v=state.view;
+  document.body.classList.toggle("mode-mail", v==="mail");
+  if(v!=="mail") document.body.classList.remove("mail-reading");
+  if(v!=="mail") lockPrivate(false);                                       // lås private samtaler igen, når man går fra Beskeder
+  for(const [btn,sec] of [["v-today","todayView"],["v-week","weekView"],["v-mail","mailView"],["v-sugg","suggView"],["v-aula","aulaView"]]){
+    const on = btn==="v-"+v;
+    document.getElementById(btn).setAttribute("aria-pressed",on);
+    document.getElementById(sec).classList.toggle("hidden",!on);
+  }
+  document.getElementById("weeknav").classList.toggle("hidden",v!=="week");
+  updateBadge();
+  ({today:renderToday,week:renderWeek,mail:renderMail,sugg:renderSugg,aula:renderAula})[v]();
+}
+document.getElementById("v-today").onclick=()=>{state.view="today";render();};
+document.getElementById("v-week").onclick=()=>{state.view="week"; render();};
+document.getElementById("v-aula").onclick=()=>{state.view="aula";render();};
+document.getElementById("v-sugg").onclick=()=>{state.view="sugg";render();};
+document.getElementById("v-mail").onclick=()=>{state.view="mail";state.mail.readerKey=null;render();};
+document.getElementById("prev").onclick=()=>{state.weekStart=addDays(state.weekStart,-7);render();};
+document.getElementById("next").onclick=()=>{state.weekStart=addDays(state.weekStart,7);render();};
+document.getElementById("now").onclick=()=>{state.weekStart=startOfWeek(new Date());render();};
+load().then(()=>{ if(new URLSearchParams(location.search).has("kiosk")) enterKiosk(); });
+setInterval(load, 5*60*1000); // hent nye data hvert 5. minut
+</script>
+</body>
+</html>

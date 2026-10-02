@@ -1,0 +1,11 @@
+# Direkte afhængigheder (det er HER du ændrer noget). requirements.txt genereres ud fra denne fil – se README, afsnittet "Opdatér afhængigheder".
+aula==1.12.0            # uofficiel Aula-klient; kræver Python 3.14. Fastlåst, fordi en ny version kan ændre adfærd uden varsel
+icalendar>=6
+recurring-ical-events>=3
+httpx
+anthropic               # kun nødvendig, hvis familieassistenten bruger Claude (assistant.provider = "claude")
+fastapi
+uvicorn
+tzdata
+google-auth             # skriver forslag til Google Kalender (servicekonto)
+requests

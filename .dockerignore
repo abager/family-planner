@@ -1,0 +1,17 @@
+# Intet hemmeligt eller hentet må ende i billedet
+config.toml
+.env
+data/
+secrets/
+web/family.json
+web/briefing*.json
+web/media/
+aula_dump.json
+weekplan.json
+aula_feed.json
+__pycache__/
+tests/
+requirements-dev.*
+requirements.in
+pytest.ini
+*.zip

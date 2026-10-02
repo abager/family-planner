@@ -1,0 +1,4 @@
+# Kun til tests og udvikling. Installeres oveni requirements.txt.
+-c requirements.txt
+pytest
+playwright              # browsertests; kør bagefter: python -m playwright install chromium
