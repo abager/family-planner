@@ -40,7 +40,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-import activities
 import fetch_family
 import ops
 import private as private_mod
@@ -79,7 +78,6 @@ class Settings:
         self.trust_proxy = bool(s.get("trust_proxy", False))
         self.ntfy = str(s.get("notify_ntfy", "")).strip()
         self.public_url = str(s.get("public_url", "")).rstrip("/")
-        self.notify_suggestions = bool(s.get("notify_suggestions", True))
         self.mark_read = bool(s.get("mark_read_in_aula", True))     # skriv "læst" tilbage til Aula, når en besked åbnes i appen
         d = cfg.get("display", {})
         self.evening_hour = int(d.get("evening_hour", 17))          # efter dette klokkeslæt handler "I dag" om i morgen
@@ -257,8 +255,6 @@ class Runner:
                 if before != "login_required" or (st.notified_at and time.time() - st.notified_at > 24 * 3600):
                     st.notified_at = time.time()
                     await self.notifier.send("Familieplan", "Aula-login er udløbet. Åbn Familieplan og log ind med MitID igen.", path="/auth", tags=("warning",))
-            if res.get("new_suggestions") and self.s.notify_suggestions:
-                await self.notifier.send("Familieplan", f"{res['new_suggestions']} nye forslag til familiekalenderen.", path="/", tags=("calendar",))
             log.info("Kørsel færdig: Aula=%s%s", st.aula, f" ({st.last_error})" if st.last_error else "")
         await self.maybe_evening_push()
 
@@ -824,70 +820,6 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
                           **({"endInferred": True} if ev.get("endInferred") else {})})
         runner.trigger()                                  # opdatér data hurtigt, så andre enheder også ser den
         return {"status": "created", "already": res.get("already", False), "html_link": res.get("html_link")}
-
-    # ----- lærte regler: ord og vendinger fra aktiviteter, du selv har tilføjet
-    learned = sugg.Learned(out_dir / "learned_rules.json")
-    RID = re.compile(r"^lr_[0-9a-f]{10}$")
-
-    def current_data() -> dict:
-        try:
-            return json.loads((out_dir / "family.json").read_text("utf-8"))
-        except (OSError, ValueError):
-            return {}
-
-    @app.get("/api/learned")
-    async def learned_list():
-        learned.reload()
-        return {"rules": learned.rules}
-
-    @app.post("/api/learned")
-    async def learned_add(request: Request):
-        try:
-            body = await request.json()
-        except ValueError:
-            return JSONResponse({"error": "bad request"}, status_code=400)
-        rules = body.get("rules") if isinstance(body, dict) else None
-        if not (isinstance(rules, list) and 0 < len(rules) <= 6 and all(isinstance(r, dict) for r in rules)):
-            return JSONResponse({"error": "bad request"}, status_code=400)
-        example = body.get("example") if isinstance(body.get("example"), dict) else {}
-        data, today = current_data(), dt.date.today()
-        limit = int(cfg.get("suggestions", {}).get("max_rule_matches", 25))
-        added, rejected = [], []
-        for r in rules:
-            kind = str(r.get("kind", ""))
-            text, err = activities.valid_rule_text(kind, r.get("text"))
-            if err:
-                rejected.append({"text": str(r.get("text", ""))[:60], "reason": err})
-                continue
-            n = activities.count_matches(activities.rule_pattern(kind, text), data, today, int(cfg.get("suggestions", {}).get("max_age_days", 120)))
-            if n > limit:
-                rejected.append({"text": text, "reason": f"står i {n} sætninger i de seneste data – det ville give alt for mange forslag"})
-                continue
-            anchor, a_err = activities.valid_rule_text("keyword", r.get("anchor") or "")
-            added.append(learned.add(kind, text, None if a_err else anchor, example, n))
-        if added:
-            runner.trigger()                                   # find forslag efter den nye regel med det samme
-        return {"added": added, "rejected": rejected}
-
-    @app.post("/api/learned/remove")
-    async def learned_remove(request: Request):
-        body = await request.json() if request.headers.get("content-length") else {}
-        rid = str(body.get("id", "")) if isinstance(body, dict) else ""
-        if not RID.match(rid):
-            return JSONResponse({"error": "bad request"}, status_code=400)
-        ok = learned.remove(rid)
-        runner.trigger()
-        return {"removed": ok}
-
-    @app.post("/api/learned/toggle")
-    async def learned_toggle(request: Request):
-        body = await request.json() if request.headers.get("content-length") else {}
-        rid = str(body.get("id", "")) if isinstance(body, dict) else ""
-        if not RID.match(rid):
-            return JSONResponse({"error": "bad request"}, status_code=400)
-        ok = learned.toggle(rid, bool(body.get("enabled")))
-        runner.trigger()
-        return {"updated": ok}
 
     @app.post("/api/calendar/dismiss")
     async def cal_dismiss(request: Request):

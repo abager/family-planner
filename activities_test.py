@@ -62,58 +62,9 @@ MANUAL = [
 ]
 
 
-def learn_tests() -> tuple[int, int]:
-    """Lær af manuelt tilføjede aktiviteter."""
-    ok = bad = 0
-
-    def check(name, cond, detail=""):
-        nonlocal ok, bad
-        ok, bad = ok + bool(cond), bad + (not cond)
-        print(f"{'OK ' if cond else 'FEJL'} {name:58} {detail}")
-
-    def rule(kind, text, anchor=None):
-        """Som serveren: reglens titel er ankerordets (så en vending og et ord om det samme giver samme forslag)."""
-        t, err = A.valid_rule_text(kind, text)
-        assert not err, err
-        return {"id": "lr_" + A._sha(kind, t), "kind": kind, "text": t, "pattern": A.rule_pattern(kind, t), "title": A._cap(anchor or t), "enabled": True}
-
-    def run_learned(text, learned, subject="Besked", ref="2026-10-01"):
-        data = {"messages": [{"id": "msg:1", "subject": subject, "text": text, "timestamp": ref + "T10:00+02:00", "people": ["carla"]}], "posts": [], "weekplan": [], "events": []}
-        return A.find_all(data, {}, D(ref), PEOPLE, learned)[0]
-
-    names = list(PEOPLE.values())
-    c = A.learn_candidates("Hugo: Tandlæge", "Hugo skal til tandlæge d. 14/10 kl. 15.30", names)
-    check("kandidater: ordet fra titlen er forvalgt", c and c[0]["text"] == "tandlæge" and c[0]["default"], str([x["text"] for x in c]))
-    check("kandidater: vending tilbydes, men er ikke forvalgt", any(x["kind"] == "phrase" and x["text"] == "skal til tandlæge" and not x["default"] for x in c))
-    check("kandidater: fornavne og tal bliver ikke til regler", not any("hugo" in x["text"] or any(ch.isdigit() for ch in x["text"]) for x in c))
-    check("kandidater: kun almindelige ord giver ingen forslag", not A.learn_candidates("X", "Husk at tage madpakke med i skolen i dag", names))
-    text = "Carla har tandlæge torsdag den 22. oktober kl. 14.15."
-    check("uden regel: ingen forslag", not run_learned(text, []))
-    sg = run_learned(text, [rule("keyword", "tandlæge")])
-    check("med regel: forslag med dato og tid", sg and sg[0]["start"] == "2026-10-22" and sg[0]["start_time"] == "14:15" and sg[0]["title"] == "Tandlæge", str([(s["title"], s["start"]) for s in sg]))
-    check("med regel: mærket som lært, og begrundelsen nævner reglen", sg and sg[0]["label"] == "Lært regel" and "din regel" in sg[0]["reason"])
-    check("regel slået fra: ingen forslag", not run_learned(text, [{**rule("keyword", "tandlæge"), "enabled": False}]))
-    mot = "Motionsdag fredag den 9/10 kl. 8.00 på stadion."
-    check("temadag uden regel: bliver i Aula", not run_learned(mot, []))
-    check("temadag med lært regel: kommer med (dit eget ønske)", bool(run_learned(mot, [rule("keyword", "motionsdag")])))
-    P = [rule("phrase", "skal til tandlæge")]
-    check("vending rammer bøjede former", bool(run_learned("Hugo skal til tandlægen d. 5/11 kl. 9.", P)))
-    check("vending rammer ikke ordet alene", not run_learned("Tandlægen sender breve d. 5/11 kl. 9.", P))
-    two = run_learned(text, [rule("keyword", "tandlæge"), rule("phrase", "har tandlæge", "tandlæge")])
-    check("overlappende regler giver ét forslag, ikke to", len(two) == 1, str(len(two)))
-    a = run_learned(text, [rule("keyword", "tandlæge")])[0]["id"]
-    b = run_learned(text, [rule("phrase", "har tandlæge", "tandlæge")])[0]["id"]
-    check("forslagets id afhænger ikke af hvilken regel der fandt det", a == b)
-    for kind, bad_text in (("keyword", "mødes"), ("keyword", "skolen"), ("keyword", "ab"), ("keyword", "(a+)+$"), ("keyword", "to ord"), ("phrase", "i skolen"), ("regex", ".*")):
-        _, err = A.valid_rule_text(kind, bad_text)
-        check(f"regel afvises: {kind} {bad_text!r}", bool(err), err or "")
-    check("regel accepteres: tandlæge", A.valid_rule_text("keyword", "Tandlæge") == ("tandlæge", None))
-    return ok, bad
-
-
 def main():
     ok = bad = 0
-    print("=== Automatiske forslag")
+    print("=== Kategorier (bruges til titler på \"Føj til kalender\" og til aflysninger)")
     for name, kind, subj, text, ref, cat, start, st in CASES:
         default = D(ref) if kind == "weekplan" else None
         sg, _ = run(kind, subj, text, ref, default=default)
@@ -128,9 +79,6 @@ def main():
         good = got == exp
         ok, bad = ok + good, bad + (not good)
         print(f"{'OK ' if good else 'FEJL'} {name:36} → {got or '(ingen mulighed)'}" + ("" if good else f"   forventet {exp}"))
-    print("\n=== Lær af manuelle aktiviteter")
-    lo, lb = learn_tests()
-    ok, bad = ok + lo, bad + lb
     print(f"\n{ok} bestået, {bad} fejlet")
 
     if len(sys.argv) > 1:

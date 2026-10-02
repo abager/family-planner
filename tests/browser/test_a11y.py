@@ -11,7 +11,7 @@ import pytest
 AXE = os.environ.get("AXE_JS", "")
 pytestmark = pytest.mark.skipif(not (AXE and Path(AXE).exists()), reason="sæt AXE_JS til axe.min.js for at køre tilgængelighedstesten")
 KNOWN: set[str] = set()      # tilføj kun midlertidigt og med en forklaring
-VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-sugg", "Forslag"), ("v-aula", "Feed")]
+VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-aula", "Feed")]
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])

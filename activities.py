@@ -269,8 +269,7 @@ class Cat:
     label: str
     base: int
     rx: re.Pattern
-    title: str | None = None           # lærte regler har en fast titel
-    learned_text: str | None = None    # ordet/udtrykket, reglen blev lært af
+    title: str | None = None
 
 
 def _rx(p: str) -> re.Pattern:
@@ -400,8 +399,8 @@ def _negated(s: str) -> bool:
     return False
 
 
-def _hit_cats(s: str, ctx: str, subject_has: set[str], disabled: set[str], extra: tuple = ()) -> list[str]:
-    """Kategorier i en sætning – efter at past/tema-reglerne er anvendt. Lærte regler (extra) springer temafilteret over."""
+def _hit_cats(s: str, ctx: str, subject_has: set[str], disabled: set[str]) -> list[str]:
+    """Kategorier i en sætning – efter at past/tema-reglerne er anvendt."""
     if R_PAST.search(s):
         return []
     hits = [c.key for c in CATS if c.key not in disabled and c.rx.search(s)]
@@ -410,7 +409,6 @@ def _hit_cats(s: str, ctx: str, subject_has: set[str], disabled: set[str], extra
             hits.append("fødselsdag")
     if R_THEME.search(s):
         hits = [h for h in hits if h in ("omlagt", "lukket")]      # temadage mv. bliver i Aula – medmindre dagen ændres
-    hits += [c.key for c in extra if c.key not in disabled and c.rx.search(s) and c.key not in hits]
     return hits
 
 
@@ -418,7 +416,7 @@ def _nearest(hits: list[DateHit], cat_span: tuple[int, int]) -> DateHit:
     return min(hits, key=lambda h: min(abs(h.a - cat_span[1]), abs(cat_span[0] - h.b)))
 
 
-def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | None, cfg: dict, extra: tuple = ()) -> tuple[list[dict], list[dict]]:
+def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | None, cfg: dict) -> tuple[list[dict], list[dict]]:
     """Returnerer (kandidater i kategorier, generelle dato+tid-fund til den manuelle vej). Datoer er date-objekter."""
     disabled = set(cfg.get("disabled_categories", []))
     body = split_sentences(text)
@@ -428,13 +426,13 @@ def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | No
     for s in sents:
         dh = find_dates(s, ref)
         info.append({"s": s, "dates": dh, "times": find_times(s, dh)})
-    subj_cats = {c.key for c in (*CATS, *extra) if subj and c.rx.search(subj)}
-    cats_by_key = {**CAT_BY_KEY, **{c.key: c for c in extra}}
+    subj_cats = {c.key for c in CATS if subj and c.rx.search(subj)}
+    cats_by_key = CAT_BY_KEY
     cands: list[dict] = []
     for i, it in enumerate(info):
         s = it["s"]
         ctx = " ".join(x["s"] for x in info[max(0, i - 1): i + 2])
-        for key in _hit_cats(s, ctx, subj_cats, disabled, extra):
+        for key in _hit_cats(s, ctx, subj_cats, disabled):
             cat = cats_by_key[key]
             m = cat.rx.search(s)
             span = (m.start(), m.end()) if m else (0, 0)
@@ -461,7 +459,7 @@ def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | No
                         hits_for = [DateHit(lo, hi, ds[0].a, ds[-1].b, "range")]
             else:
                 for j in (i + 1, i - 1, i + 2):
-                    if 0 <= j < len(info) and info[j]["dates"] and not _hit_cats(info[j]["s"], info[j]["s"], subj_cats, disabled, extra):
+                    if 0 <= j < len(info) and info[j]["dates"] and not _hit_cats(info[j]["s"], info[j]["s"], subj_cats, disabled):
                         via, hits_for = "neighbor", [info[j]["dates"][0]]
                         break
             if not hits_for and default_date:
@@ -512,7 +510,7 @@ def _scan_text(text: str, ref: dt.date, subject: str, default_date: dt.date | No
                           "start": h.start if h else None, "end": h.end if h else None, "change": change, "old_start": old_start,
                           "start_time": st, "end_time": en, "location": loc, "score": score,
                           "confidence": "høj" if score >= 5 else "middel", "evidence": s, "idx": i, "via": via,
-                          "reason": (f"matcher din regel «{cat.learned_text}»" if cat.learned_text else f"nævner «{(m[0] if m else key).strip()}»") + {"same": " og en dato", "neighbor": " og en dato i nabosætningen", "default": " på ugeplanens dag", "none": ""}[via]})
+                          "reason": f"nævner «{(m[0] if m else key).strip()}»" + {"same": " og en dato", "neighbor": " og en dato i nabosætningen", "default": " på ugeplanens dag", "none": ""}[via]})
     # samme kategori i samme tekst: behold det mest specifikke datointerval (en dag slår en hel uge)
     out: list[dict] = [c for c in cands if c["change"]]
     for c in sorted((c for c in cands if not c["change"]), key=lambda c: ((c["end"] - c["start"]).days, -c["score"])):
@@ -645,7 +643,10 @@ def _describe(src: Source, evidence: str) -> str:
     return f"Fra {src.label}{subj}{when}\n\n{evidence.strip()[:500]}\n\nOprettet fra Familieplan"
 
 
-def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], learned: list[dict] | None = None,
+CHANGE_KINDS = ("cancel", "hold", "move")       # aflyst, udsat, flyttet – de eneste forslag, appen viser (på beskeden selv)
+
+
+def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str],
              targets: list[dict] | None = None) -> tuple[list[dict], dict[str, list[dict]]]:
     """Returnerer (forslag, manuelle muligheder pr. kilde-id). Datoer er ISO-tekster.
 
@@ -653,14 +654,13 @@ def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], 
     flytning kobles til en af dem; findes den ikke, er der intet at aflyse (og en flytning behandles som en ny aktivitet)."""
     scfg = cfg.get("suggestions", {})
     targets = targets or []
-    extra = tuple(cats_from_rules(learned or []))
     horizon = today + dt.timedelta(days=int(scfg.get("horizon_days", 270)))
     cal = [e for e in data.get("events", []) if e.get("source") == "google"]
     raw: list[dict] = []
     opts_raw: dict[str, list[dict]] = {}
     for src in build_sources(data, today, int(scfg.get("max_age_days", 120))):
         for text, ref in src.texts:
-            cands, options = _scan_text(text, ref, src.subject, src.default_date, scfg, extra)
+            cands, options = _scan_text(text, ref, src.subject, src.default_date, scfg)
             for c in cands:
                 c["src"] = src
                 raw.append(c)
@@ -669,8 +669,7 @@ def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], 
                 opts_raw.setdefault(src.id, []).append(o)
 
     def cat_key(c: dict) -> str:
-        """Alle lærte regler regnes for én kategori: overlappende regler må ikke give dobbelte forslag."""
-        return "lært" if c["cat"].startswith("lr_") else c["cat"]
+        return c["cat"]
 
     # --- ændringer: aflysning / udsættelse / flytning
     changes = [c for c in raw if c.get("change")]
@@ -737,7 +736,7 @@ def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], 
     merged: dict[tuple, dict] = {}
 
     def named(k: str) -> bool:
-        return k in ("fødselsdag", "tur", "lært")         # her er titlen en del af identiteten (hvem / hvor / hvilket ord)
+        return k in ("fødselsdag", "tur")                 # her er titlen en del af identiteten (hvem / hvor)
 
     for c in sorted(raw, key=lambda c: -c["score"]):
         if not (today <= c["start"] <= horizon):
@@ -788,119 +787,11 @@ def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], 
             if oid in seen:
                 continue
             seen.add(oid)
-            learn = [] if sg else learn_candidates(title, o["evidence"], list(people_map.values()))
             options.setdefault(sid_, []).append({
-                "id": oid, "suggested": bool(sg), "learn": learn, "title": title, "calendar_title": calendar_title(title, people, people_map),
+                "id": oid, "title": title, "calendar_title": calendar_title(title, people, people_map),
                 "start": o["start"].isoformat(), "end": o["end"].isoformat(), "start_time": o["start_time"], "end_time": o["end_time"],
                 "all_day": False, "location": o["location"], "people": people, "description": _describe(src, o["evidence"]),
                 "exists": in_calendar(cal, o["start"], o["end"], title),
                 "source": {"type": src.kind, "id": src.id, "title": src.subject.strip(" ."), "label": src.label},
             })
     return suggestions, options
-
-
-# ---------------------------------------------------------------- lær af manuelle aktiviteter
-_STOP = set("""og i på til af for med om at er vi de det den en et skal kan har bliver blev var være ikke også men så hvis hos fra ved under over
-efter før inden samt eller som der her dem jer jeres vores deres hans hendes min din sin alle kommer tager skulle ville kunne have haft blive når
-da nu lige mere meget bare jo godt gerne igen mellem hele kun nogle andre selv nok tage give gøre huske bruge medbringe hente sende skrive""".split())
-_GENERIC = set("""skole skolen klasse klassen børn børnene dag dagen uge ugen tid tidspunkt besked aula lærer lærerne forældre information husk vigtigt
-hilsen hilsner mødes starter slutter laver arbejder timen time timer lektion lektioner fag aktivitet aktiviteter program planen plan tilbage hjem
-madpakke tøj jeres hermed vedhæftet emne emnet fælles sammen mandag tirsdag onsdag torsdag fredag lørdag søndag""".split())
-_WORD = r"[A-Za-zÆØÅæøå][\wæøå-]*"
-
-
-def _strip_names(title: str) -> str:
-    """"Hugo + Carla: Tandlæge" → "Tandlæge"."""
-    head, sep, tail = title.partition(":")
-    return tail.strip() if sep and len(head) < 40 else title.strip()
-
-
-def learn_candidates(title: str, evidence: str, names: list[str]) -> list[dict]:
-    """Ord og vendinger i en manuelt tilføjet aktivitet, som kunne give forslag fremover.
-
-    Ordene fra den titel, du selv gav aktiviteten, vægter tyngst – det er dem, du mener beskriver den. Fornavne,
-    ugedage, måneder, tal og meget almindelige ord (skolen, mødes, husk …) udelades.
-    """
-    names_l = {n.lower() for n in names}
-    title_toks = {t.lower() for t in re.findall(_WORD, _strip_names(title)) if len(t) >= 4}
-    toks = [(m[0], m.start(), m.end()) for m in re.finditer(_WORD, evidence)]
-
-    def usable(w: str) -> bool:
-        lw = w.lower()
-        return (len(lw) >= 4 and not any(c.isdigit() for c in lw) and lw not in _STOP and lw not in _GENERIC
-                and lw not in names_l and lw not in MONTHS and lw not in WEEKDAYS)
-
-    scored: dict[str, int] = {}
-    for w, _, _ in toks:
-        lw = w.lower()
-        if lw in scored or not usable(w):
-            continue
-        in_title = any(lw[:6] == t[:6] for t in title_toks)
-        scored[lw] = (3 if in_title else 0) + (1 if len(lw) >= 7 else 0)
-    ranked = sorted(scored, key=lambda w: (-scored[w], -len(w)))[:3]
-    if not ranked:
-        return []
-    out = [{"kind": "keyword", "text": w, "anchor": w, "default": i == 0 and scored[w] >= 3} for i, w in enumerate(ranked)]
-
-    # vending: ordet sammen med de nærmeste ord (op til to før og ét efter), hvis de står lige op ad hinanden
-    anchor = ranked[0]
-    idx = next((i for i, (w, _, _) in enumerate(toks) if w.lower() == anchor), None)
-    if idx is not None:
-        def plain(i: int) -> bool:
-            lw = toks[i][0].lower()
-            return not any(c.isdigit() for c in lw) and lw not in names_l and lw not in MONTHS and lw not in WEEKDAYS and len(lw) >= 2
-        lo, hi = idx, idx
-        while lo > 0 and idx - lo < 2 and plain(lo - 1) and not evidence[toks[lo - 1][2]:toks[lo][1]].strip():
-            lo -= 1
-        if hi + 1 < len(toks) and plain(hi + 1) and len(toks[hi + 1][0]) >= 3 and not evidence[toks[hi][2]:toks[hi + 1][1]].strip():
-            hi += 1
-        words = [toks[i][0].lower() for i in range(lo, hi + 1)]
-        if 2 <= len(words) <= 4:
-            out.append({"kind": "phrase", "text": " ".join(words), "anchor": anchor, "default": False})
-    return out
-
-
-def valid_rule_text(kind: str, text: str) -> tuple[str, str | None]:
-    """(normaliseret tekst, fejl). Kun bogstaver og bindestreg – reglen bygges derefter af os, aldrig af klienten."""
-    t = re.sub(r"\s+", " ", str(text or "").strip().lower()).strip(" .,:;!?\"'«»")
-    if kind not in ("keyword", "phrase"):
-        return t, "Ukendt type"
-    if not re.fullmatch(r"[a-zæøå][a-zæøå-]*( [a-zæøå-]+){0,3}", t):
-        return t, "Brug kun bogstaver (og bindestreg)"
-    words = t.split()
-    if kind == "keyword" and (len(words) != 1 or not 4 <= len(t) <= 40):
-        return t, "Et ord skal være på 4–40 bogstaver"
-    if kind == "phrase" and not 2 <= len(words) <= 4:
-        return t, "En vending skal være på 2–4 ord"
-    if all(w in _STOP or w in _GENERIC for w in words):
-        return t, "Det er for almindeligt til at kunne bruges som regel"
-    return t, None
-
-
-def rule_pattern(kind: str, text: str) -> str:
-    words = text.lower().split()
-    if kind == "keyword":
-        return r"\b" + re.escape(words[0]) + r"\w*"
-    return r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\w*"
-
-
-def count_matches(pattern: str, data: dict, today: dt.date, max_age: int = 120) -> int:
-    """Hvor mange sætninger i de seneste data reglen ville ramme? Bruges til at afvise ord, der er for almindelige."""
-    rx = re.compile(pattern, re.I)
-    n = 0
-    for src in build_sources(data, today - dt.timedelta(days=1), max_age):
-        for text, _ in src.texts:
-            n += sum(1 for sent in split_sentences(text) if rx.search(sent))
-    return n
-
-
-def cats_from_rules(rules: list[dict]) -> list[Cat]:
-    out = []
-    for r in rules:
-        if not r.get("enabled", True):
-            continue
-        try:
-            out.append(Cat(r["id"], "Lært regel", 3, re.compile(r["pattern"], re.I), title=r.get("title") or _cap(r["text"]), learned_text=r["text"]))
-        except (re.error, KeyError):
-            continue
-    return out

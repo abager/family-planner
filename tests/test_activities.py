@@ -20,7 +20,7 @@ def run(texts, targets=(), ref="2026-10-01"):
     for i, x in enumerate(texts):
         t, when = (x, ref) if isinstance(x, str) else x
         msgs.append({"id": f"msg:{i}", "subject": "Besked", "text": t, "timestamp": when + "T10:00+02:00", "people": ["hugo"]})
-    sg, opts = A.find_all({"messages": msgs, "posts": [], "weekplan": [], "events": []}, {}, D(ref), PEOPLE, None, list(targets))
+    sg, opts = A.find_all({"messages": msgs, "posts": [], "weekplan": [], "events": []}, {}, D(ref), PEOPLE, list(targets))
     return sg, [o for lst in opts.values() for o in lst]
 
 

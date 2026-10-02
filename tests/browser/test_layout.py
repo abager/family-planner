@@ -4,7 +4,7 @@ import datetime as dt
 import pytest
 
 NOW = dt.datetime(2026, 10, 1, 10, 0)
-VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-sugg", "Forslag"), ("v-aula", "Feed")]
+VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-aula", "Feed")]
 
 
 @pytest.mark.parametrize("w,h,expected", [(390, 844, 358), (810, 1080, 560), (1080, 810, 560), (1440, 900, 720), (1920, 1080, 860)])

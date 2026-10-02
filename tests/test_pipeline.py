@@ -158,6 +158,18 @@ def test_a_cancellation_is_linked_to_the_event_the_app_created(cfg, fake_aula):
     assert [x for x in family(cfg)["suggestions"] if x.get("kind") is None and "Zoo" in x["title"]] == []     # og ingen ny "Tur til Zoo"
 
 
+def test_new_activities_are_only_offered_manually_never_suggested(cfg, fake_aula):
+    d, txt = day(10)
+    fake_aula.messages = [msg(8, "Lejrskole", f"6.B tager på lejrskole d. {txt} kl. 8.00. Husk sovepose.", f"{TODAY}T08:00:00+02:00")]
+    go(cfg, use_aula=True)
+    data = family(cfg)
+    assert data["suggestions"] == []                                                  # intet automatisk forslag
+    (m,) = [x for x in data["messages"] if x["id"].endswith("8") or "Lejrskole" in (x.get("subject") or "")]
+    (opt,) = m["cal"]
+    assert opt["start"] == d.isoformat() and opt["start_time"] == "08:00" and "Lejrskole" in opt["title"]   # men "Føj til kalender" findes
+    assert "learn" not in opt
+
+
 def test_a_move_of_a_google_only_event_is_information_not_an_action(cfg, ical, fake_aula):
     old, old_txt = day(10)
     new, new_txt = day(17)

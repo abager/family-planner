@@ -1190,8 +1190,10 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
             store = sugg_store.Store(out_path.with_name("suggestions_state.json"))
             people_map = {p["id"]: p["name"] for p in cfg["people"]}
             view = {"messages": extra["messages"], "posts": extra["posts"], "weekplan": extra["weekplan"], "events": events}
-            learned = sugg_store.Learned(out_path.with_name("learned_rules.json")).active()
-            suggestions_list, options = activities.find_all(view, cfg, now.date(), people_map, learned, change_targets(store, events))
+            found, options = activities.find_all(view, cfg, now.date(), people_map, change_targets(store, events))
+            # Kun aflysninger og flytninger af aftaler i kalenderen vises (på beskeden selv). Nye aktiviteter foreslås ikke
+            # automatisk – de oprettes kun manuelt via "Føj til kalender", som bruger forslagenes titler.
+            suggestions_list = [s for s in found if s.get("kind") in activities.CHANGE_KINDS]
             for kind in ("messages", "posts", "weekplan"):
                 for item in extra[kind]:
                     item["cal"] = options.get(item["id"], [])
@@ -1233,7 +1235,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         log.warning("Overblik springes over: %s", e)
     except Exception as e:  # noqa: BLE001
         log.warning("Kunne ikke lave overblik: %s", e)
-    return {"aula": aula_state, "error": aula_error, "generated": data["generated"], "new_suggestions": len(new_ids), "google_ok": not google_failed,
+    return {"aula": aula_state, "error": aula_error, "generated": data["generated"], "google_ok": not google_failed,
             "counts": {"events": len(events), **{k: len(extra[k]) for k in extra_keys},
                        "suggestions": sum(1 for x in suggestions_list if x.get("status") == "new")}}
 

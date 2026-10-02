@@ -16,7 +16,7 @@ def at(h, m=0, day=1):
 
 def state(page):
     return page.evaluate("""({off:dayOffset(),focus:ymd(focusDay()),skema:skemaTitle.textContent,apt:dayTitle.textContent,info:infoTitle.textContent,
-        brief:(document.querySelector('#briefDay h2')||{}).textContent||null,pressed:[dtToday.getAttribute('aria-pressed'),dtTomorrow.getAttribute('aria-pressed')],note:dtNote.textContent})""")
+        brief:(document.querySelector('#briefDay h2')||{}).textContent||null,toggle:!!document.getElementById('dayToggle')})""")
 
 
 def brief_for(day):
@@ -28,37 +28,27 @@ def brief_for(day):
 def test_before_the_evening_hour_the_view_is_today(make_page):
     page, *_ = make_page(now=at(10), fixed=True)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"], s["pressed"], s["note"]) == (0, "2026-10-01", "Skema i dag", "Dagens aftaler", "Vigtig info i dag", ["true", "false"], "")
+    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (0, "2026-10-01", "Skema i dag", "Dagens aftaler", "Vigtig info i dag")
+    assert s["toggle"] is False                                         # ingen I dag/I morgen-vælger – skiftet sker kun automatisk
 
 
 def test_after_the_evening_hour_the_view_is_tomorrow(make_page):
     page, *_ = make_page(now=at(17, 30), fixed=True)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"], s["pressed"]) == (1, "2026-10-02", "Skema i morgen", "Aftaler i morgen", "Vigtig info i morgen", ["false", "true"])
-    assert "fredag 2. oktober" in s["note"] and "skifter automatisk efter kl. 17" in s["note"]
+    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (1, "2026-10-02", "Skema i morgen", "Aftaler i morgen", "Vigtig info i morgen")
 
 
-def test_the_switch_happens_by_itself_while_the_page_is_open_and_resets_at_midnight(make_page):
+def test_the_switch_happens_by_itself_while_the_page_is_open_and_back_at_midnight(make_page):
     page, *_ = make_page(now=at(16, 50))
     assert state(page)["off"] == 0
     page.clock.run_for(11 * 60 * 1000)                                  # → 17.01
     page.wait_for_timeout(300)
-    assert state(page)["off"] == 1
-    page.click("#dtToday")                                              # man kan selv kigge på i dag
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["pressed"]) == (0, "2026-10-01", "Skema i dag", ["true", "false"])
+    assert (s["off"], s["focus"], s["skema"]) == (1, "2026-10-02", "Skema i morgen")
     page.clock.run_for(7 * 3600 * 1000)                                 # → efter midnat
     page.wait_for_timeout(300)
     s = state(page)
-    assert (s["off"], s["focus"]) == (0, "2026-10-02")                  # valget er nulstillet; nu er det rigtig nok "i dag"
-
-
-def test_in_the_morning_you_can_peek_at_tomorrow_and_it_stays_until_the_automatic_value_changes(make_page):
-    page, *_ = make_page(now=at(9), fixed=True)
-    page.click("#dtTomorrow")
-    assert state(page)["off"] == 1 and state(page)["focus"] == "2026-10-02"
-    page.click("#dtToday")
-    assert state(page)["off"] == 0
+    assert (s["off"], s["focus"]) == (0, "2026-10-02")                  # efter midnat: i dag igen
 
 
 def test_the_evening_hour_comes_from_the_data(make_page):
@@ -75,8 +65,14 @@ def test_the_overview_follows_the_day_and_is_hidden_when_it_is_about_another_day
     page.reload()
     page.wait_for_timeout(500)
     assert state(page)["brief"] == "Overblik i morgen"
-    page.click("#dtToday")
-    assert page.evaluate("document.getElementById('briefDay').classList.contains('hidden')")      # overblikket handler om i morgen: ikke vist under "i dag"
+
+
+def test_an_overview_about_another_day_is_not_shown(make_page):
+    page, fake, _ = make_page(now=at(10), fixed=True)
+    fake.briefing = brief_for("2026-10-02")                             # om i morgen, men klokken er 10: "I dag" handler om i dag
+    page.reload()
+    page.wait_for_timeout(500)
+    assert page.evaluate("document.getElementById('briefDay').classList.contains('hidden')")
 
 
 def test_deadlines_in_the_task_list_say_tomorrow_when_it_is(make_page):

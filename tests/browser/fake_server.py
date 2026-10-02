@@ -13,7 +13,6 @@ class FakeServer:
         self.mark_read = True
         self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
                     "default_people": ["family"], "created": {}, "dismissed": [], "applied": [], "by_source": {}}
-        self.learned: list[dict] = []
         self.fail_event = False
         self.fail_change = None                         # fx 403 for aflys/flyt
         self.private_code = "4711"
@@ -83,24 +82,6 @@ class FakeServer:
                 return self._json(route, {"error": "Google svarede 403: Forbidden"}, self.fail_change)
             self.cal["applied"].append(body["key"])
             return self._json(route, {"status": "applied"})
-        if path == "/api/learned" and m == "GET":
-            return self._json(route, {"rules": self.learned})
-        if path == "/api/learned":
-            added, rej = [], []
-            for r in body["rules"]:
-                if r["text"] == "mødes":
-                    rej.append({"text": "mødes", "reason": "Det er for almindeligt til at kunne bruges som regel"})
-                    continue
-                rule = {"id": "lr_" + str(len(self.learned)).zfill(10), "kind": r["kind"], "text": r["text"], "enabled": True, "matches": 2, "example": body["example"]}
-                self.learned.append(rule)
-                added.append(rule)
-            return self._json(route, {"added": added, "rejected": rej})
-        if path == "/api/learned/toggle":
-            [r.update(enabled=body["enabled"]) for r in self.learned if r["id"] == body["id"]]
-            return self._json(route, {"updated": True})
-        if path == "/api/learned/remove":
-            self.learned[:] = [r for r in self.learned if r["id"] != body["id"]]
-            return self._json(route, {"removed": True})
         # private tråde
         if path == "/api/private/status":
             return self._json(route, {"configured": self.private_configured, "unlocked": self.unlocked, "expires_in": self.expires if self.unlocked else 0, "protect": True})

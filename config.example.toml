@@ -107,7 +107,6 @@ interval_minutes = 15           # hentning om dagen
 night_interval_minutes = 120    # og om natten (23.00–05.30)
 aula = true
 session_days = 90               # hvor længe en enhed forbliver logget ind
-# notify_suggestions = true    # ntfy: kort besked, når der er nye kalenderforslag (kræver notify_ntfy)
 mark_read_in_aula = true        # åbner du en besked i appen, markeres den også som læst i Aula (se README)
 # trust_proxy = true            # sæt når en reverse proxy (fx Caddy) står foran
 # public_url = "https://familieplan.eksempel.dk"

@@ -13,13 +13,16 @@ PARSE = [("12/10", "2026-10-12"), ("12.10.2026", "2026-10-12"), ("12-10-26", "20
 
 
 def open_dialog(page, fake=None):
+    """Åbner "Føj til kalender" fra den første besked (der er ingen forslagsfane længere)."""
     if fake:                                    # med server: kun her kan dialogen gemme
         fake.use_demo(page)
         page.reload()
         page.wait_for_timeout(600)
-    page.click("#v-sugg")
+    page.click("#v-mail")
     page.wait_for_timeout(250)
-    page.locator(".suggwrap > .sg").first.locator('[data-sg="edit"]').click()
+    page.locator(".mrow").first.click()
+    page.wait_for_timeout(250)
+    page.locator("[data-addcal]").first.click()
     page.wait_for_timeout(200)
 
 
@@ -64,8 +67,10 @@ def test_calendar_opens_on_the_chosen_month_and_picking_a_day_fills_the_field(ma
 def test_picking_a_start_after_the_end_clears_the_end(make_page):
     page, *_ = make_page(now=NOW, fixed=True)
     open_dialog(page)
-    assert page.input_value("#evEnd") != ""
     page.fill("#evDate", "13/10/2026")
+    page.fill("#evEnd", "16/10/2026")
+    page.press("#evEnd", "Tab")
+    assert page.input_value("#evEnd") != ""
     page.click("#evDateBtn")
     page.locator('.dpday[data-iso="2026-10-20"]').click()
     assert page.input_value("#evEnd") == ""
@@ -143,9 +148,11 @@ def test_a_typed_date_ends_up_in_the_created_event(make_page):
 @pytest.mark.parametrize("device", ["iPhone 13"])
 def test_calendar_fits_a_phone_and_has_big_enough_touch_targets(make_page, device):
     page, *_ = make_page(now=NOW, fixed=True, device=device)
-    page.locator("#v-sugg").tap()
+    page.locator("#v-mail").tap()
     page.wait_for_timeout(250)
-    page.locator(".suggwrap > .sg").first.locator('[data-sg="edit"]').tap()
+    page.locator(".mrow").first.tap()
+    page.wait_for_timeout(300)
+    page.locator("[data-addcal]").first.tap()
     page.wait_for_timeout(250)
     page.locator("#evDateBtn").tap()
     page.wait_for_timeout(300)
