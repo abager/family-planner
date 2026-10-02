@@ -1190,7 +1190,8 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
             store = sugg_store.Store(out_path.with_name("suggestions_state.json"))
             people_map = {p["id"]: p["name"] for p in cfg["people"]}
             view = {"messages": extra["messages"], "posts": extra["posts"], "weekplan": extra["weekplan"], "events": events}
-            found, options = activities.find_all(view, cfg, now.date(), people_map, change_targets(store, events))
+            import calendar_ai               # AI afgør, hvor den kan; reglerne i activities.py er reserve pr. punkt
+            found, options = calendar_ai.find_all(view, cfg, now.date(), people_map, change_targets(store, events))
             # Kun aflysninger og flytninger af aftaler i kalenderen vises (på beskeden selv). Nye aktiviteter foreslås ikke
             # automatisk – de oprettes kun manuelt via "Føj til kalender", som bruger forslagenes titler.
             suggestions_list = [s for s in found if s.get("kind") in activities.CHANGE_KINDS]

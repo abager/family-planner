@@ -307,6 +307,13 @@ class Client:
             self._cache_put(ckey, result)
         return result
 
+    def cache_get(self, key: str) -> dict | None:
+        """Gemt svar for ét punkt (fx et kalendertjek af én besked), uafhængigt af hvilken samlet forespørgsel det kom fra."""
+        return self._cache_get(content_key("punkt", self.s.provider, self.s.model, key))
+
+    def cache_put(self, key: str, value: dict) -> None:
+        self._cache_put(content_key("punkt", self.s.provider, self.s.model, key), value)
+
     def status(self) -> dict:
         """Til /api/status og log. Ingen nøgler, intet indhold."""
         u = self._usage()
