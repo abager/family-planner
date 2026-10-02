@@ -65,7 +65,9 @@ def ok(obj):
     return 200, {"candidates": [{"content": {"parts": [{"text": json.dumps(obj, ensure_ascii=False)}]}, "finishReason": "STOP"}]}
 
 
-GOOD = {"afsnit": [{"titel": "Husk", "punkter": [{"tekst": "Carla: drikkedunk og fodboldsko", "hvem": ["Carla"], "refs": ["O1"]}]}]}
+STORY = ["Torsdag starter med, at I skal huske drikkedunk og fodboldsko til Carla, inden I går ud ad døren.",
+         "Resten af dagen er rolig, så der er tid til at lande, når alle er hjemme igen."]
+GOOD = {"fortaelling": STORY, "kilder": ["O1"]}
 QUOTA = (429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "quota"}})
 
 
@@ -101,7 +103,7 @@ def test_ai_writes_the_briefing_with_readable_sources(acfg):
     fake = Fake(ok(GOOD))
     b = brief(acfg, fake)
     assert b["method"] == "ai" and b["provider"] == "gemini" and b["model"] == "gemini-3.5-flash-lite"
-    assert b["afsnit"][0]["punkter"][0]["kilder"] == ["Medbring drikkedunk og fodboldsko"]
+    assert b["fortaelling"] == STORY and b["kilde_ids"] == ["O1"] and "afsnit" not in b
     assert "ai_fallback" not in b and "ai_stale" not in b
     assert saved(acfg)["method"] == "ai" and len(fake.requests) == 1
 
@@ -160,7 +162,7 @@ def test_the_stale_mark_keeps_its_start_time_and_goes_away_when_ai_works_again(a
     brief(acfg, Fake(QUOTA), data=family_data("a"), now=t1)
     b = brief(acfg, Fake(QUOTA), data=family_data("b"), now=t2, model="andet")   # anden model = ingen cache, ingen pause
     assert b["ai_stale"]["since"] == t1.isoformat(timespec="minutes")
-    fixed = {"afsnit": [{"titel": "Husk", "punkter": [{"tekst": "Hugo: læs", "hvem": ["Hugo"], "refs": ["O2"]}]}]}
+    fixed = {"fortaelling": ["Torsdag skal Hugo læse, og Carla skal have drikkedunk og fodboldsko med i skole."], "kilder": ["O1", "O2"]}
     b = brief(acfg, Fake(ok(fixed)), data=family_data("b"), now=t3, model="tredje")
     assert b["method"] == "ai" and "ai_stale" not in b and b["generated"] == t3.isoformat(timespec="minutes")
 
@@ -180,14 +182,71 @@ def test_an_ai_briefing_for_another_day_is_not_kept(acfg):
     assert b["method"] == "offline" and b["ai_fallback"]["reason"] == "kvote"
 
 
-def test_points_without_a_valid_source_are_dropped(acfg):
-    reply = {"afsnit": [{"titel": "Husk", "punkter": [
-        {"tekst": "Carla: drikkedunk", "hvem": ["Carla"], "refs": ["O1", "X9"]},
-        {"tekst": "Leo: opdigtet tur til zoo", "hvem": ["Leo"], "refs": ["Z1"]},
-        {"tekst": "Uden kilde", "hvem": []}]}]}
-    b = brief(acfg, Fake(ok(reply)))
-    pts = b["afsnit"][0]["punkter"]
-    assert [p["tekst"] for p in pts] == ["Carla: drikkedunk"] and pts[0]["refs"] == ["O1"]
+def test_unknown_source_ids_are_dropped_but_one_valid_is_needed(acfg):
+    b = brief(acfg, Fake(ok({"fortaelling": STORY, "kilder": ["O1", "X9"]})))
+    assert b["method"] == "ai" and b["kilde_ids"] == ["O1"]
+    b = B.make_briefing(acfg, family_data("ny lektie"), "day", now=NOW, force=True,
+                        client=client(acfg, Fake(ok({"fortaelling": STORY, "kilder": ["X9"]})), model="anden"))
+    assert b["ai_stale"]["reason"] == "ugyldigt_svar"                  # det gyldige AI-overblik beholdes
+
+
+@pytest.mark.parametrize("story", [
+    ["Carla har fodbold kl. 16.30, så husk drikkedunk og fodboldsko."],                 # tid findes ikke i data
+    ["- Carla: drikkedunk og fodboldsko", "- Hugo: lektier"],                            # punktopstilling
+    ["**Torsdag** skal Carla have drikkedunk og fodboldsko med."],                       # fed skrift
+    ["Kort."],                                                                            # for kort
+    [" ".join(["ord"] * 300)],                                                            # for lang
+    [],
+], ids=["opdigtet-tid", "punkter", "fed", "for-kort", "for-lang", "tom"])
+def test_a_narrative_that_breaks_the_rules_falls_back(acfg, story):
+    b = brief(acfg, Fake(ok({"fortaelling": story, "kilder": ["O1"]})))
+    assert b["method"] == "offline" and b["ai_fallback"]["reason"] == "ugyldigt_svar"
+
+
+def test_times_that_are_in_the_data_are_allowed(acfg):
+    d = family_data()
+    d["events"] = [{"id": "e1", "title": "Fodbold", "start": "2026-10-01T16:30:00+02:00", "end": "2026-10-01T18:00:00+02:00",
+                    "people": ["carla"], "source": "google", "location": "Kunstgræsbanen"}]
+    story = ["Torsdag skal Carla have drikkedunk og fodboldsko med, for hun har fodbold kl. 16.30 til 18 på Kunstgræsbanen."]
+    b = brief(acfg, Fake(ok({"fortaelling": story, "kilder": ["A1", "O1"]})), data=d)
+    assert b["method"] == "ai" and b["fortaelling"] == story
+
+
+def test_a_single_string_is_split_into_paragraphs(acfg):
+    b = brief(acfg, Fake(ok({"fortaelling": STORY[0] + "\n\n" + STORY[1], "kilder": ["O1"]})))
+    assert b["fortaelling"] == STORY
+
+
+def test_the_ai_gets_calendar_messages_and_posts_but_not_the_normal_timetable(acfg):
+    d = family_data()
+    d["events"] = [
+        {"id": "e1", "title": "Tandlæge", "start": "2026-10-01T14:00:00+02:00", "end": "2026-10-01T14:30:00+02:00",
+         "people": ["hugo"], "source": "google", "location": "Torvet 3", "notes": "Husk sundhedskort"},
+        {"id": "s1", "title": "Skole", "start": "2026-10-01T08:00:00+02:00", "end": "2026-10-01T14:00:00+02:00", "people": ["hugo"],
+         "lessons": [{"start": "08:00", "end": "08:45", "title": "Dansk"},
+                     {"start": "10:00", "end": "10:45", "title": "Matematik", "substitute": True}]},
+        {"id": "s2", "title": "Skole", "start": "2026-10-01T08:00:00+02:00", "end": "2026-10-01T12:00:00+02:00", "people": ["carla"],
+         "lessons": [{"start": "08:00", "end": "12:00", "title": "Engelsk"}]}]
+    d["messages"].append({"id": "m2", "subject": "Forældremøde", "text": "Forældremøde tirsdag kl. 19", "from": "Lærer",
+                          "timestamp": "2026-09-30T10:00:00", "people": ["carla"], "category": "info"})
+    d["posts"] = [{"id": "p1", "title": "Motionsdag", "text": "Motionsdag på fredag", "timestamp": "2026-09-30T09:00:00", "people": ["leo"]}]
+    fake = Fake(ok(GOOD))
+    brief(acfg, fake, data=d)
+    payload = json.loads(json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"].split("Data:\n", 1)[1])
+    assert [a["titel"] for a in payload["aftaler"]] == ["Tandlæge"]
+    assert payload["aftaler"][0]["sted"] == "Torvet 3" and payload["aftaler"][0]["note"] == "Husk sundhedskort"
+    assert payload["skema"] == [{"dato": "2026-10-01", "hvem": ["Hugo"], "vikar": [{"fag": "Matematik", "tid": "10:00"}]}]
+    assert "Dansk" not in json.dumps(payload) and "Engelsk" not in json.dumps(payload)          # normalt skema sendes ikke
+    assert payload["nye_beskeder"][0]["emne"] == "Forældremøde" and payload["nye_opslag"][0]["titel"] == "Motionsdag"
+    assert PRIVATE not in json.dumps(payload)
+
+
+def test_the_prompt_asks_for_a_warm_chronological_narrative_without_the_timetable(acfg):
+    fake = Fake(ok(GOOD))
+    brief(acfg, fake)
+    system = json.loads(fake.requests[0].content)["systemInstruction"]["parts"][0]["text"]
+    for phrase in ("Kronologisk", "Tal direkte til forældrene", "Nævn IKKE det normale skoleskema", "ca. 150 ord", '"fortaelling"'):
+        assert phrase in system
 
 
 def test_unchanged_data_costs_no_new_request(acfg):
@@ -207,7 +266,7 @@ def test_the_week_briefing_goes_through_the_ai_too(acfg):
     fake = Fake(ok(GOOD))
     b = brief(acfg, fake, mode="week")
     assert b["method"] == "ai" and saved(acfg, "briefing_uge.json")["method"] == "ai"
-    assert "ugens overblik" in json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"]
+    assert "ugens fortælling" in json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"]
 
 
 def test_an_old_claude_config_goes_through_ai_py_to_claude(cfg):
@@ -247,14 +306,15 @@ def with_weather(*days):
 
 
 def test_the_ai_gets_coarse_weather_for_the_day_with_a_source_id(acfg):
-    fake = Fake(ok({"afsnit": [{"titel": "Vejr", "punkter": [{"tekst": "Regn om eftermiddagen, 8–11° – regntøj", "hvem": [], "refs": ["V1"]}]}]}))
+    fake = Fake(ok({"fortaelling": ["Torsdag bliver grå med regn om eftermiddagen og 8 til 11 grader, så pak regntøj og gummistøvler."],
+                    "kilder": ["V1"]}))
     b = brief(acfg, fake, data=with_weather(wx(), wx("2026-10-02", "fredag")))
     sent = json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"]
     payload = json.loads(sent.split("Data:\n", 1)[1])
     assert [v["dato"] for v in payload["vejr"]] == ["2026-10-01"]          # kun dagen overblikket handler om
     assert payload["vejr"][0]["id"] == "V1" and "lat" not in sent and "tekst" not in payload["vejr"][0]
-    assert b["afsnit"][0]["titel"] == "Vejr" and b["afsnit"][0]["punkter"][0]["kilder"] == ["Vejr (DMI)"]
-    assert '"Vejr"' in json.loads(fake.requests[0].content)["systemInstruction"]["parts"][0]["text"]
+    assert b["method"] == "ai" and b["kilde_ids"] == ["V1"]
+    assert "Væv vejret ind" in json.loads(fake.requests[0].content)["systemInstruction"]["parts"][0]["text"]
 
 
 def test_the_week_gets_only_the_days_dmi_covers(acfg):

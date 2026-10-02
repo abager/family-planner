@@ -172,38 +172,35 @@ def build_digest(data: dict, start: dt.date, end: dt.date, now: dt.datetime) -> 
 
 
 # ---------------------------------------------------------------- prompt
-SYSTEM = """Du er familiens assistent for en dansk familie. Du skriver et kort, varmt og praktisk overblik
-til forældrene ud fra de data, du får. Data er allerede renset og struktureret: stol på datoer, tider,
-frister og hvem-feltet præcis som de står.
+SYSTEM = """Du er familiens assistent for en dansk familie. Du skriver en varm, personlig fortælling om dagen
+(eller ugen) til forældrene ud fra de data, du får. Data er allerede renset og struktureret: stol på datoer, tider,
+steder, frister og hvem-feltet præcis som de står.
 
 Regler:
-- Brug KUN oplysninger fra data. Gæt aldrig tider, steder eller aftaler.
-- Overblikket handler KUN om det, der er særligt for dagen/ugen. Prioritér: 1) ting der skal huskes eller med,
-  og frister – det vigtigste, 2) ting forældrene skal gøre, 3) afvigelser (vikar, omlagt dag, tidligt fri,
-  lukkedag, noter fra skolen). Nævn IKKE almindelige aftaler, det normale skema, nyheder fra skolen eller
-  stående lektier ("hver dag") i dagsoverblikket – de vises andre steder i appen.
-- Opgaver med sikkerhed "middel" er usikre – formulér dem som "muligvis".
-- Saml ting der hører sammen (fx en frist og det der skal med til den).
-- Skriv kort og læsevenligt: hvert punkt højst ca. 15 ord, det vigtigste først ("Carla: drikkedunk og fodboldsko").
-  Ingen indledende floskler, ingen gentagelser.
-- Hvert punkt skal have "refs" med kilde-id'erne (fx "A3", "O1") fra data.
-- Følg familiens egne regler, hvis de er givet, fx hvem der plejer at hente.
-- Vejr: findes "vejr" i data, så start med afsnittet "Vejr" – ét punkt pr. dag i data, med kort prognose og
-  praktiske råd til børnene, fx "Regn om eftermiddagen, 8–11° – regntøj og gummistøvler til Hugo og Carla".
-  "raad" i data er forslag; brug dem eller formulér dem bedre. Nævn kun dage, der står i "vejr", gæt aldrig
-  vejret, og udelad afsnittet, hvis der ingen vejrdata er. Refs er dagens "V"-id.
-- Skriv aldrig "i dag", "i morgen" eller "i går" – overblikket læses på forskellige tidspunkter. Brug ugedagen
-  ("onsdag", "på fredag") eller udelad dagen, når overblikket kun handler om én dag.
+- Brug KUN oplysninger fra data. Gæt aldrig tider, steder, aftaler eller hvem der henter/bringer – nævn det kun,
+  hvis det står i data eller i familiens egne regler.
+- Kronologisk: fra morgen til aften. Start med det, der skal med ud ad døren, så skoledagen, så eftermiddag
+  (afhentning, fritid, aftaler) og til sidst aftenen. I ugens fortælling: dag for dag i rækkefølge; stille dage kan
+  samles i én sætning.
+- Tal direkte til forældrene: "I skal huske …", "Monica, du …" (kun når data siger, hvem). Brug fornavne, aldrig
+  "barnet". Varm, rolig tone uden floskler, udråbstegn eller emojis.
+- Nævn IKKE det normale skoleskema (fag og tider) – det står allerede i appen. Nævn kun afvigelser fra "skema"
+  (vikar, noter fra læreren).
+- Væv vejret ind, hvor det betyder noget (regntøj om morgenen, koldt til fodbold). Gæt aldrig vejret.
+- Opgaver med sikkerhed "middel" er usikre – skriv "muligvis".
+- Tider skrives som "kl. 16.30". Datoer i ord ("fredag", "den 23. oktober") – aldrig 23/10 eller 23.10.
+- Skriv aldrig "i dag", "i morgen" eller "i går" – fortællingen læses på forskellige tidspunkter. Brug ugedagen.
+- Længde: dagens fortælling ca. 150 ord, ugens højst ca. 220 ord. 2–5 korte afsnit (fx morgen, eftermiddag, aften).
+- Ren tekst: ingen markdown, punkttegn, overskrifter eller fed skrift.
+- "kilder" skal indeholde kilde-id'erne (fx "A3", "O1", "V1") for alt, du nævner.
 
 Svar KUN med JSON (ingen markdown, ingen forklaring) i dette format:
 {
-  "oplaesning": "samme overblik skrevet til at blive LÆST HØJT (se regler for oplæsning)",
-  "afsnit": [
-    {"titel": "Vejr" | "Husk" | "Skal gøres" | "Særligt" | "Kommende frister",
-     "punkter": [{"tekst": "…", "hvem": ["navn", …], "refs": ["A1"]}]}
-  ]
+  "oplaesning": "samme fortælling skrevet til at blive LÆST HØJT (se regler for oplæsning)",
+  "fortaelling": ["første afsnit", "andet afsnit", …],
+  "kilder": ["A1", "O2", …]
 }
-Udelad tomme afsnit. Er der intet særligt, så sig det kort.
+Er der intet særligt, så skriv kort og venligt, at det er en stille dag.
 
 Regler for "oplaesning" – teksten læses op af en talesyntese og skal lyde som en person, der fortæller:
 - Flydende talesprog i hele sætninger bundet sammen med "og", "men", "så", "bagefter". Ingen punktopstilling.
@@ -223,17 +220,59 @@ def system_prompt(speech: bool) -> str:
 
 
 def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[dict]:
-    from offline_briefing import _is_closure
-    # Almindelige aftaler og skolens nyheder indgår ikke i overblikket – og sendes derfor heller ikke til modellen
-    payload = {k: v for k, v in digest.items() if not k.startswith("_") and k not in ("nye_beskeder", "nye_opslag")}
-    payload["aftaler"] = [e for e in digest.get("aftaler", []) if _is_closure(e)]
-    task = ("Lav ugens overblik: fokus på det, der kræver planlægning i løbet af ugen, dag for dag hvor det giver mening."
-            if mode == "week" else f"Lav overblikket for {headline}.")
+    """Alt fra Aula, Google Kalender og DMI til fortællingen – undtagen det normale skoleskema (det står i appen)."""
+    payload = {k: v for k, v in digest.items() if not k.startswith("_")}
+    # Kun afvigelser fra skemaet: vikar og noter fra læreren. Fag, lektionstider og mødetider sendes ikke.
+    payload["skema"] = [{k: e[k] for k in ("dato", "hvem", "vikar", "noter") if k in e}
+                        for e in digest.get("skema", []) if e.get("vikar") or e.get("noter")]
+    task = ("Skriv ugens fortælling, dag for dag." if mode == "week" else f"Skriv fortællingen for {headline}.")
     content = f"{task}\n\nFamiliens egne regler:\n{rules.strip() or '(ingen)'}\n\nData:\n{json.dumps(payload, ensure_ascii=False, indent=1)}"
     return [{"role": "user", "content": content}]
 
 
 SECTION_TITLES = {"Vejr", "Husk", "Skal gøres", "Særligt", "Kommende frister"}
+
+
+_TIME = re.compile(r"\bkl\.?\s*(\d{1,2})(?:[.:](\d{2}))?\b|\b(\d{1,2})[.:](\d{2})\b")
+_FORMATTING = re.compile(r"(^\s*([-*•#>]|\d+\.)\s)|\*\*|__|`", re.M)
+
+
+def _times(text: str) -> set[str]:
+    out = set()
+    for m in _TIME.finditer(text or ""):
+        h, mi = (m.group(1), m.group(2) or "00") if m.group(1) else (m.group(3), m.group(4))
+        if int(h) <= 23 and int(mi) <= 59:
+            out.add(f"{int(h):02d}:{mi}")
+    return out
+
+
+def validate_narrative(result: dict, refs: dict[str, str], data_text: str, mode: str = "day") -> None:
+    """Fortællingen skal have en form, appen kan vise, pege på rigtige kilder og kun bruge klokkeslæt fra data.
+    Rejser ValueError – så bruges reserven."""
+    f = result.get("fortaelling")
+    if isinstance(f, str):
+        f = [p for p in re.split(r"\n\s*\n", f) if p.strip()]
+    if not isinstance(f, list) or not f or not all(isinstance(p, str) and p.strip() for p in f):
+        raise ValueError("mangler 'fortaelling'")
+    f = [re.sub(r"\s+", " ", p).strip() for p in f]
+    if len(f) > 8:
+        raise ValueError("for mange afsnit")
+    text = "\n".join(f)
+    words = len(text.split())
+    if words < 8 or words > (330 if mode == "week" else 260):
+        raise ValueError(f"forkert længde ({words} ord)")
+    if _FORMATTING.search(text):
+        raise ValueError("indeholder formatering")
+    unknown = _times(text) - _times(data_text)
+    if unknown:
+        raise ValueError(f"klokkeslæt, der ikke står i data: {', '.join(sorted(unknown))}")
+    kilder = [r for r in (result.get("kilder") or []) if isinstance(r, str) and r in refs]
+    if refs and not kilder:
+        raise ValueError("ingen gyldige kilder")
+    if "oplaesning" in result and not isinstance(result["oplaesning"], str):
+        raise ValueError("'oplaesning' skal være tekst")
+    result["fortaelling"], result["kilder"] = f, kilder
+    result.pop("afsnit", None)
 
 
 def validate_result(result: dict, refs: dict[str, str]) -> None:
@@ -343,9 +382,10 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
 
     client = client or ai_client(cfg)
     speech = acfg.get("speech", False)
+    data_text = messages[0]["content"].split("Data:", 1)[1] + "\n" + rules
     try:
         result = client.generate_json(system_prompt(speech), messages[0]["content"],
-                                      validate=lambda r: validate_result(r, digest["_refs"]),
+                                      validate=lambda r: validate_narrative(r, digest["_refs"], data_text, mode),
                                       cache_key="|".join([fingerprint, mode, headline, *period, str(speech)]))
     except ai.AIUnavailable as e:
         prev = (old or {}).get("ai_stale") or (old or {}).get("ai_fallback") or {}
@@ -357,9 +397,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
             return old_ai
         return offline({"ai_fallback": flag})
 
-    for sec in result.get("afsnit", []):           # oversæt kilde-id'er til læsbare kilder til appen
-        for p in sec.get("punkter", []):
-            p["kilder"] = [digest["_refs"][r] for r in p.get("refs", []) if r in digest["_refs"]]
+    result["kilde_ids"] = result.pop("kilder", [])  # id'erne gemmes, så man kan se, hvad fortællingen bygger på
     s = client.s
     briefing = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "ai", "provider": s.provider,
                 "model": s.model, "headline_label": headline, "period": period, "fingerprint": fingerprint, **result}
