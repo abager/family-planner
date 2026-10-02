@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Familieassistent – fase 1: dagens/ugens overblik skrevet af Claude.
+"""Familieassistent: dagens/ugens overblik skrevet af en sprogmodel (ai.py) – med appens egne regler som reserve.
 
 Princippet: jeres egne regler (homework.py, messages.py) står for fakta – datoer, frister,
-hvem der har hvad. Sprogmodellen får kun et færdigt, struktureret uddrag og skal
-formulere og prioritere. Private samtaler sendes ALDRIG med.
+hvem der har hvad. Sprogmodellen får kun et færdigt, renset uddrag og skal formulere og
+prioritere. Private samtaler sendes ALDRIG med. Kan sprogmodellen ikke bruges (ingen nøgle,
+kvote brugt, fejl, ugyldigt svar), bruges det seneste AI-overblik for samme periode – markeret
+som måske forældet – eller ellers offline_briefing.py. Appen viser så "AI ikke tilgængelig".
 
-  python briefing.py --offline          # overblik uden sprogmodel (standard) – intet forlader maskinen
-  python briefing.py --dry-run          # vis hvad der ville blive lavet/sendt uden at gemme eller sende
+  python briefing.py --offline          # overblik uden sprogmodel – intet forlader maskinen
+  python briefing.py --dry-run          # vis hvad der ville blive sendt, uden at gemme eller sende
   python briefing.py                    # lav overblik for i dag
   python briefing.py --week             # ugens overblik
 """
@@ -17,12 +19,13 @@ import datetime as dt
 import hashlib
 import json
 import logging
-import os
 import re
 import sys
 import tomllib
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+import ai
 
 TZ = ZoneInfo("Europe/Copenhagen")
 log = logging.getLogger("familieplanner.briefing")
@@ -218,49 +221,92 @@ def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[d
     return [{"role": "user", "content": content}]
 
 
-def call_claude(messages: list[dict], cfg: dict) -> dict:
-    import anthropic  # først her, så --dry-run virker uden pakken
-    key = os.environ.get(cfg.get("api_key_env", "ANTHROPIC_API_KEY"))
-    if not key:
-        raise SystemExit(f"Mangler API-nøgle i miljøvariablen {cfg.get('api_key_env', 'ANTHROPIC_API_KEY')}")
-    client = anthropic.Anthropic(api_key=key)
-    resp = client.messages.create(model=cfg.get("model", "claude-sonnet-5-5"), max_tokens=cfg.get("max_tokens", 2000),
-                                  system=system_prompt(cfg.get("speech", False)), messages=messages)
-    text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
-    return json.loads(text)
+SECTION_TITLES = {"Husk", "Skal gøres", "Særligt", "Kommende frister"}
+
+
+def validate_result(result: dict, refs: dict[str, str]) -> None:
+    """Svaret skal have den form, appen kan vise. Punkter uden en gyldig kilde fjernes (de kan være opdigtede).
+    Rejser ValueError, hvis formen er forkert – så bruges reserven."""
+    secs = result.get("afsnit")
+    if not isinstance(secs, list):
+        raise ValueError("mangler 'afsnit'")
+    kept = []
+    for sec in secs:
+        if not isinstance(sec, dict) or sec.get("titel") not in SECTION_TITLES or not isinstance(sec.get("punkter"), list):
+            raise ValueError(f"ugyldigt afsnit: {str(sec)[:80]}")
+        points = []
+        for p in sec["punkter"]:
+            if not isinstance(p, dict) or not isinstance(p.get("tekst"), str) or not p["tekst"].strip():
+                raise ValueError(f"ugyldigt punkt: {str(p)[:80]}")
+            if not isinstance(p.get("hvem", []), list) or not all(isinstance(h, str) for h in p.get("hvem", [])):
+                raise ValueError("'hvem' skal være en liste af navne")
+            good = [r for r in (p.get("refs") or []) if isinstance(r, str) and r in refs]
+            if not good:
+                log.info("AI-punkt uden gyldig kilde fjernet: %s", p["tekst"][:60])
+                continue
+            points.append({**p, "refs": good})
+        if points:
+            kept.append({**sec, "punkter": points})
+    if "oplaesning" in result and not isinstance(result["oplaesning"], str):
+        raise ValueError("'oplaesning' skal være tekst")
+    result["afsnit"] = kept
 
 
 # ---------------------------------------------------------------- samlet kørsel
 def assistant_mode(acfg: dict) -> str:
-    """"offline" (standard – ingen sprogmodel), "claude" eller "off". Ældre config med enabled = true betyder claude."""
-    if acfg.get("mode") in ("offline", "claude", "off"):
+    """"ai" (sprogmodel via ai.py, reserve: offline), "offline" (kun egne regler), "off" (intet overblik).
+    "claude" virker stadig og betyder "ai" med Claude som udbyder. Uden mode: ældre enabled = true betyder claude."""
+    if acfg.get("mode") in ("offline", "ai", "claude", "off"):
         return acfg["mode"]
     return "claude" if acfg.get("enabled") else "offline"
 
 
+def _read_json(path: Path) -> dict | None:
+    try:
+        d = json.loads(path.read_text("utf-8"))
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _write(path: Path, briefing: dict) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(briefing, ensure_ascii=False, indent=1), "utf-8")
+    tmp.replace(path)                             # atomisk, så appen aldrig læser en halv fil
+
+
+def ai_client(cfg: dict) -> ai.Client:
+    out_dir = Path(cfg.get("output", "web/family.json")).parent
+    return ai.Client(ai.settings_from(cfg), state_dir=out_dir)
+
+
 def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | None = None,
-                  force: bool = False, dry_run: bool = False, provider: str | None = None) -> dict | None:
+                  force: bool = False, dry_run: bool = False, provider: str | None = None,
+                  client: ai.Client | None = None) -> dict | None:
     acfg = cfg.get("assistant", {})
     provider = provider or assistant_mode(acfg)
     if provider == "off":
         return None
     now = now or dt.datetime.now(TZ)
     start, end, headline = target_window(mode, now, int(cfg.get("display", {}).get("evening_hour", 17)))
+    period = [start.isoformat(), end.isoformat()]
     digest = build_digest(data, start, end, now)
     out_path = Path(cfg.get("output", "web/family.json")).with_name(f"briefing{'_uge' if mode == 'week' else ''}.json")
 
-    if provider == "offline":
+    def offline(extra: dict | None = None) -> dict:
         from offline_briefing import offline_briefing
         result = offline_briefing(digest, mode, now)
-        briefing = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "offline",
-                    "headline_label": headline, "period": [start.isoformat(), end.isoformat()], **result}
+        b = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "offline",
+             "headline_label": headline, "period": period, **result, **(extra or {})}
         if dry_run:
-            print(json.dumps(briefing, ensure_ascii=False, indent=1))
-            return briefing
-        out_path.write_text(json.dumps(briefing, ensure_ascii=False, indent=1), "utf-8")
-        log.info("Skrev %s (uden sprogmodel)", out_path)
-        return briefing
+            print(json.dumps(b, ensure_ascii=False, indent=1))
+            return b
+        _write(out_path, b)
+        log.info("Skrev %s (uden sprogmodel%s)", out_path, ", AI ikke tilgængelig" if extra else "")
+        return b
+
+    if provider == "offline":
+        return offline()
 
     rules_path = Path(acfg.get("rules_file", "familie_regler.md"))
     rules = rules_path.read_text("utf-8") if rules_path.exists() else ""
@@ -270,25 +316,51 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
         return None
 
     fingerprint = hashlib.sha1((messages[0]["content"].split("Data:")[1].replace(digest["nu"], "") + rules).encode()).hexdigest()
-    if out_path.exists() and not force:
-        old = json.loads(out_path.read_text("utf-8"))
-        age = (now - dt.datetime.fromisoformat(old["generated"])).total_seconds() / 60
-        if old.get("fingerprint") == fingerprint and old.get("period") == [start.isoformat(), end.isoformat()]:
+    old = _read_json(out_path) if out_path.exists() else None
+    old_ai = old if old and old.get("method") in ("ai", "claude") and old.get("period") == period else None
+    if old_ai and not force:
+        if old_ai.get("fingerprint") == fingerprint:
+            if old_ai.pop("ai_stale", None):       # data er som da det blev skrevet: overblikket er ikke forældet
+                _write(out_path, old_ai)
             log.info("Overblik uændret – springer over")
-            return old
-        if age < acfg.get("min_minutes_between", 60) and old.get("period") == [start.isoformat(), end.isoformat()]:
+            return old_ai
+        age = (now - dt.datetime.fromisoformat(old_ai["generated"])).total_seconds() / 60
+        if age < acfg.get("min_minutes_between", 60) and not old_ai.get("ai_stale"):
             log.info("Overblik lavet for %d min siden – venter", age)
-            return old
+            return old_ai
 
-    result = call_claude(messages, acfg)
+    client = client or ai_client(cfg)
+    speech = acfg.get("speech", False)
+    try:
+        result = client.generate_json(system_prompt(speech), messages[0]["content"],
+                                      validate=lambda r: validate_result(r, digest["_refs"]),
+                                      cache_key="|".join([fingerprint, mode, headline, *period, str(speech)]))
+    except ai.AIUnavailable as e:
+        prev = (old or {}).get("ai_stale") or (old or {}).get("ai_fallback") or {}
+        flag = {"reason": e.reason, "since": prev.get("since") or now.isoformat(timespec="minutes")}
+        if old_ai:                               # behold det seneste AI-overblik for perioden, men sig, at det måske er forældet
+            old_ai["ai_stale"] = flag
+            _write(out_path, old_ai)
+            log.warning("AI ikke tilgængelig (%s) – beholder overblikket fra %s", e.reason, old_ai["generated"])
+            return old_ai
+        return offline({"ai_fallback": flag})
+
     for sec in result.get("afsnit", []):           # oversæt kilde-id'er til læsbare kilder til appen
         for p in sec.get("punkter", []):
             p["kilder"] = [digest["_refs"][r] for r in p.get("refs", []) if r in digest["_refs"]]
-    briefing = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "claude", "headline_label": headline,
-                "period": [start.isoformat(), end.isoformat()], "fingerprint": fingerprint, **result}
-    out_path.write_text(json.dumps(briefing, ensure_ascii=False, indent=1), "utf-8")
-    log.info("Skrev %s", out_path)
+    s = client.s
+    briefing = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "ai", "provider": s.provider,
+                "model": s.model, "headline_label": headline, "period": period, "fingerprint": fingerprint, **result}
+    _write(out_path, briefing)
+    log.info("Skrev %s (%s)", out_path, s.provider)
     return briefing
+
+
+def ai_status(cfg: dict) -> dict | None:
+    """Til /api/status: hvordan det går med sprogmodellen. None, når overblikket ikke bruger en."""
+    if assistant_mode(cfg.get("assistant", {})) not in ("ai", "claude"):
+        return None
+    return ai_client(cfg).status()
 
 
 def main() -> None:

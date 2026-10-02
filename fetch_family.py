@@ -1223,7 +1223,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     log.info("Skrev %s (%d aftaler, %s)", out_path, len(events),
              ", ".join(f"{len(extra[k])} {k}" for k in extra_keys))
 
-    # Overblik: standard er "offline" (ingen sprogmodel); "claude" kræver API-nøgle
+    # Overblik: "ai" = sprogmodel via ai.py med egne regler som reserve; "offline" = kun egne regler (standard uden config)
     acfg = cfg.get("assistant", {})
     try:
         import briefing
