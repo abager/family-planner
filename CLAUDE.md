@@ -113,11 +113,11 @@ Version: **v0.7.0** (first version in git; previously developed as zip files).
 
 Known gaps and open work:
 
-- Aula login, pagination, mark-as-read and Google Calendar writes have **only been tested against simulations**.
+- Aula login, pagination, mark-as-read, Google Calendar writes and API reads have **only been tested against simulations**.
+  The claim that event reminders only reach the service account (why `reminder_minutes` was removed) comes from
+  Google's API docs and is unverified.
   First real run should be `python server.py --selftest`.
 - The Docker image had never been built before CI was added.
-- Accessibility: low contrast on past lessons and the blue accent in dark mode; missing `<main>`/`<nav>` landmarks
-  (whitelisted in `tests/browser/test_a11y.py` as `KNOWN`; remove from the list once fixed).
 - Homework is only fetched from Min Uddannelse; Meebook/EasyIQ homework not supported.
 - README "Kom i gang" still describes the old `fetch_family.py` + `python -m http.server` flow; `server.py` is now
   the normal way to run it.
@@ -132,6 +132,14 @@ Planned restructuring (do in small steps, tests green after each):
 3. Move modules into a package (`src/familieplanner/`); move root debug scripts to `tools/`.
 4. Split `fetch_family.py`, `server.py` and `activities.py` by responsibility.
 5. Shorten README to overview + quick start; move detailed sections into `docs/`.
+
+## Calendar and time conventions
+
+- The app writes only to the calendar chosen by `suggestions.write_target()`; there is no "open Google" fallback.
+- An event's `end` is always set (the UI needs a slot), but `endInferred: true` means nobody gave an end time:
+  show only the start. Never invent an end without setting the flag. Lessons default to `lesson_minutes` (45).
+- All time display in `web/index.html` goes through `evRange()` / `lessonRange()`; don't format times inline.
+- Text colour for links/accents is `var(--accent)`, never `#2F6FDE` (fails contrast).
 
 ## Working agreements
 

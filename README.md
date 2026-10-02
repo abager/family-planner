@@ -62,7 +62,9 @@ Meebook-ugeplanen analyseres sætning for sætning og hvert punkt får en katego
 
 ## Skema
 
-"I dag" viser børnenes skema for dagen øverst. Lektionerne kommer fra Aulas skemabegivenheder, og hvis skolen i stedet skriver skemaet som tekst i en aftale ("08.00-08.45 Dansk"), hentes aftalens beskrivelse og skemaet læses ud af den. Nuværende lektion markeres, overståede tones ned, og vikarer vises.
+"I dag" viser børnenes skema for dagen øverst. Lektionerne kommer fra Aulas skemabegivenheder, og hvis skolen i stedet skriver skemaet som tekst i en aftale ("08.00-08.45 Dansk"), hentes aftalens beskrivelse og skemaet læses ud af den. Hver lektion vises med start og slut (fx 08.00–08.45). Nuværende lektion markeres, overståede får et ✓, og vikarer vises.
+
+**Tider.** Overalt i appen vises en aftale med både start- og sluttid, når den har en sluttid. Mangler sluttiden (fx en Google-aftale uden sluttid, eller en aktivitet i en besked, hvor kun starttidspunktet er nævnt), vises kun starttidspunktet med "sluttid ukendt" – appen finder ikke selv på en sluttid. En lektion uden sluttid varer 45 minutter (`lesson_minutes` under `[aula]`), og det samme gælder forslag om test og prøver eller aktiviteter "i 3. lektion", hvor kun starttidspunktet står.
 
 Skemaet gøres læsevenligt (`schedule.py`): fagene skrives ud (DAN → Dansk), lærere forkortes ("Anni C."), vikarer vises med navn, og timer, der følger klassen og ikke barnet, udelades (INK = støttelærer til en anden elev, PS = klassepædagogen). Hvad der skjules, og hvad forkortelser betyder, styres i `config.toml` (`hidden_subjects`, `secondary_subjects`, `[subjects]`). Har en lektion en note fra skolen (fx til vikaren), hentes den og vises under timen.
 
@@ -159,9 +161,9 @@ Aktiviteter i ugeplan, opslag og beskeder kan overføres til familiekalenderen p
 
 Datoer regnes ud fra, hvornår beskeden er skrevet, så "testen i morgen (torsdag)", "lejrskole i næste uge" og "på fredag" bliver til rigtige datoer. Fund uden dato, i fortiden eller i private samtaler bliver aldrig til forslag. Usikre forslag er mærket "Måske". Forslag, der ligner en aftale, der allerede findes i kalenderen samme dag, vises ikke.
 
-**2. Manuelt.** På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står en knap "Føj til kalender" – uanset om reglerne ville have foreslået det. Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i en kalender; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
+**2. Manuelt.** På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står en knap "Føj til kalender" – uanset om reglerne ville have foreslået det. Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Øverst står, hvilken kalender aftalen oprettes i, og hvem den tildeles ud fra navnene i titlen. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i en kalender; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
 
-Aftalen oprettes med børnenes navne i titlen ("Hugo + Carla: Tur til Zoo"), fordi appen tildeler kalenderaftaler til personer ud fra navne i titlen. Beskrivelsen peger tilbage på beskeden. Aftaler, du opretter via appen, vises med det samme, selv om Googles iCal-adresse først opdateres senere.
+Aftalen oprettes med børnenes navne i titlen ("Hugo + Carla: Tur til Zoo"), fordi appen tildeler kalenderaftaler til personer ud fra navne i titlen. Beskrivelsen peger tilbage på beskeden. Aftaler, du opretter via appen, vises med det samme. Lige efter oprettelsen kan du trykke "Fortryd" i bekræftelsen. Angiver du kun et starttidspunkt, får Google en sluttid en time senere, men appen viser kun starttidspunktet.
 
 ### Lær af dine manuelle aktiviteter
 
@@ -175,19 +177,26 @@ Tilføjer du en aktivitet manuelt, som reglerne ikke selv ville have foreslået 
 
 ### Sæt direkte oprettelse op (én gang)
 
-Uden dette åbner knappen Google Kalender med aftalen udfyldt, så du selv vælger kalender og gemmer – det virker straks og kræver ingen opsætning. Vil du have, at ét tryk opretter aftalen, skal serveren have lov til at skrive til kalenderen. Det sker med en *servicekonto* (en robotbruger), som familiekalenderen deles med:
+Appen opretter aftaler direkte i familiekalenderen – du forlader aldrig appen, og aftalen kan ikke havne i en forkert kalender. Det kræver, at serveren har lov til at skrive til kalenderen. Det sker med en *servicekonto* (en robotbruger), som familiekalenderen deles med. Indtil det er sat op, er knappen "Opret i kalender" slået fra, og appen skriver hvorfor.
 
-1. Gå til console.cloud.google.com og opret et projekt, fx "Familieplan".
-2. Slå **Google Calendar API** til (APIs & Services → Library).
-3. Opret en servicekonto (IAM & Admin → Service Accounts → Create). Den behøver ingen roller.
-4. Åbn servicekontoen → Keys → Add key → Create new key → **JSON**. Gem filen som `secrets/google_service_account.json` (i Docker: `data/secrets/`). Behandl den som en adgangskode.
-5. Kopiér servicekontoens e-mailadresse (slutter på `.iam.gserviceaccount.com`).
-6. I Google Kalender: familiekalenderens indstillinger → **Del med bestemte personer eller grupper** → tilføj e-mailadressen med tilladelsen **Foretag ændringer i begivenheder**.
-7. Sæt `enabled = true` under `[calendar_write]` i `config.toml`, og genstart serveren. Kalender-id'et udledes af iCal-adressen; ellers sæt `calendar_id`.
+**Tjekliste** (ca. 15 minutter):
+
+- [ ] Gå til console.cloud.google.com og opret et projekt, fx "Familieplan".
+- [ ] Slå **Google Calendar API** til (APIs & Services → Library).
+- [ ] Opret en servicekonto (IAM & Admin → Service Accounts → Create). Den behøver ingen roller.
+- [ ] Åbn servicekontoen → Keys → Add key → Create new key → **JSON**. Gem filen som `secrets/google_service_account.json` (i Docker: `data/secrets/`). Behandl den som en adgangskode.
+- [ ] Kopiér servicekontoens e-mailadresse (slutter på `.iam.gserviceaccount.com`).
+- [ ] I Google Kalender: familiekalenderens indstillinger → **Del med bestemte personer eller grupper** → tilføj e-mailadressen med tilladelsen **Foretag ændringer i begivenheder**.
+- [ ] I `config.toml`: sæt `write = true` på familiekalenderen under `[[google]]` (nødvendigt, hvis du har flere Google-kalendere – appen gætter aldrig), og `enabled = true` under `[calendar_write]`. Kalender-id'et udledes af iCal-adressen; ellers sæt `calendar_id` på kalenderen.
+- [ ] Påmindelser: hver forælder åbner familiekalenderens indstillinger i Google Kalender → **Standardunderretninger** og vælger fx "1 dag før". Google giver kun påmindelser til den, der opretter en aftale – her servicekontoen – så appen kan ikke sætte dem for jer. Fjern `reminder_minutes`, hvis den står i din config.
+- [ ] Genstart serveren og kør `python server.py --selftest`. Den opretter og sletter en prøveaftale langt ude i fremtiden og tjekker, at kalenderen også kan læses via API'et. Alt skal være ✔.
+- [ ] Prøv i appen: opret et forslag, og se at dialogen skriver "Oprettes i **Familiekalender**", at aftalen dukker op i Google Kalender, og at "Fortryd" i bekræftelsen fjerner den igen.
 
 Menuernes navne hos Google kan ændre sig lidt. Får du en fejl, forklarer appen den (fx "er kalenderen delt med servicekontoen?"). Hver aftale får et fast id, så den aldrig kan oprettes to gange, og "Fjern fra kalender" sletter den igen.
 
-Indstillinger: `[suggestions]` (`disabled_categories`, `horizon_days`) og `[calendar_write]` (`reminder_minutes`; standard er en påmindelse dagen før). Med ntfy slået til får du en kort besked, når der er nye forslag (`notify_suggestions = false` slår det fra). Test reglerne på dine egne data uden Aula: `python activities_test.py aula_feed.json`.
+**Læsning via API.** Når servicekontoen virker, læses familiekalenderen også via Googles API i stedet for iCal-adressen (`read_via_api = true`, standard). Ændringer ses så ved næste hentning i stedet for efter Googles iCal-forsinkelse, og appen kan kende de aftaler, den selv har oprettet. Fejler API'et, bruges iCal-adressen som reserve, hvis den står i config. Andre Google-kalendere læses stadig via iCal.
+
+Indstillinger: `[suggestions]` (`disabled_categories`, `horizon_days`) og `[calendar_write]` (`calendar_id`, `read_via_api`). Med ntfy slået til får du en kort besked, når der er nye forslag (`notify_suggestions = false` slår det fra). Test reglerne på dine egne data uden Aula: `python activities_test.py aula_feed.json`.
 
 ## Markér som læst
 
@@ -307,10 +316,12 @@ Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, de
 | `test_activities.py` | genkendelse af aktiviteter; aflysning, udsættelse, flytning |
 | `test_pipeline.py` | hele hentningen: Google-udfald, private tråde, ændringer mod rigtige aftaler, overblik efter kl. 17 |
 | `test_ops.py` | planlægger, aftenpush, tilsyn, push-beskeder |
-| `test_gcal.py` | oprettelse, flytning, sletning i Google Kalender |
+| `test_gcal.py` | oprettelse, flytning, sletning i Google Kalender; valg af skrivekalender |
+| `test_google_api_read.py` | familiekalenderen læst via Google API, sider, reserve til iCal |
+| `test_times.py` | sluttider: rigtige, tænkte (`endInferred`) og 45-minutters lektioner |
 | `test_server.py` | adgang, CSRF, spærring, private tråde og billeder, aflys/flyt |
 | `test_selftest.py` | selvtesten mod sunde og ødelagte opsætninger |
-| `browser/` | datovælger, layout, beskeder (læst, stryg, private), kalender-UI, aften og kiosk, tilgængelighed |
+| `browser/` | datovælger, layout, beskeder (læst, stryg, private), kalender-UI (oprettelse, fortryd, modtager), tider i alle visninger, aften og kiosk, tilgængelighed |
 
 `homework_test.py` og `messages_test.py` i roden er ældre hjælpescripts, der kører genkendelsen mod **dine egne filer** (`python homework_test.py weekplan.json`, `python messages_test.py aula_feed.json`) og indgår ikke i `pytest`.
 
@@ -321,7 +332,6 @@ Tilgængelighedstesten er valgfri: `npm install axe-core`, og sæt `AXE_JS=…/n
 - Aula-adgangen er uofficiel (via `nickknissen/aula`) og kan gå i stykker, når Aula ændrer noget. Scriptet genbruger så de seneste Aula-data, og appen viser en advarsel, når data er over en time gamle.
 - Lektier hentes kun, hvis skolen bruger Min Uddannelse. Meebook/EasyIQ kan tilføjes senere.
 - Hvis MitID-tokens udløber, skal du køre scriptet interaktivt igen og scanne QR-koden.
-- **Aula og Google er kun afprøvet mod simuleringer.** Loginet, sideinddelingen, markér-som-læst og skrivningen til Google Kalender er aldrig kørt mod de rigtige tjenester; det er det, `--selftest` er til. Docker-billedet er heller ikke bygget i udviklingsmiljøet.
-- **Tilgængelighed:** axe-core finder stadig lav kontrast i de nedtonede, overståede lektioner i skemaet og i den blå accentfarve i mørk tilstand, og siden mangler `<main>`/`<nav>`-områder. Ellers er der ingen kritiske fund.
+- **Aula og Google er kun afprøvet mod simuleringer.** Loginet, sideinddelingen, markér-som-læst, skrivningen til og læsningen fra Google Kalender via API og påmindelsernes adfærd er aldrig kørt mod de rigtige tjenester; det er det, `--selftest` er til. Docker-billedet er heller ikke bygget i udviklingsmiljøet.
 - Private samtaler kan ikke beskyttes uden serveren (se ovenfor). Aulas "læst" kan være synlig for andre.
 - Aflysninger og flytninger kan kun ændre aftaler, appen selv har oprettet.
