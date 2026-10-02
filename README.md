@@ -91,16 +91,28 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 Øverst i "I dag" og "Ugen" står et overblik over det, der er **særligt** for dagen eller ugen: *Husk* (ting der skal med), *Skal gøres* (forældrehandlinger med frist), *Særligt* (vikarer, lukkedage, noter fra skolen, praktisk info) og *Kommende frister* (de næste tre uger). Almindelige aftaler, nyheder fra skolen og stående lektier ("hver dag") er med vilje udeladt i dagsoverblikket – de står i "Dagens aftaler", Beskeder og Feed. Hvert punkt viser barnets ikon og kilde.
 
-**Standard: `mode = "offline"`.** Overblikket samles af jeres egne regler uden sprogmodel. Det er gratis, kræver ingen nøgle og intet forlader maskinen. Det laves hver gang `fetch_family.py` kører. Se resultatet: `python briefing.py --offline --dry-run` (dagens) eller med `--week`.
+**`mode = "ai"`: sprogmodellen skriver overblikket.** Appens egne regler finder fakta (datoer, frister, hvem); sprogmodellen formulerer og prioriterer. Standard er Google Gemini på det gratis niveau. Hvis sprogmodellen ikke kan bruges (ingen nøgle, kvoten er brugt, Google er nede, svaret er ugyldigt), sker der dette:
 
-**Senere: `mode = "claude"`.** Claude kan skrive overblikket mere smidigt og prioritere på tværs af kilder. Det kræver en API-nøgle:
+- Findes der et AI-overblik for samme dag/uge, vises det stadig, og et banner øverst siger *"AI ikke tilgængelig – overblikket er fra kl. … og er måske ikke opdateret"*.
+- Ellers laver appens egne regler overblikket, og banneret siger *"AI ikke tilgængelig – overblikket er lavet af appens egne regler"*.
+- Banneret vises også på kioskskærmen. Den tekniske grund står i serverens log og i `/api/status` (kun efter login).
 
-1. Lav en nøgle på platform.claude.com under Settings → API keys, helst med en privat mailadresse. Sæt den: `setx ANTHROPIC_API_KEY "din-nøgle"` (åbn derefter et nyt vindue).
-2. Skriv jeres egne regler i `familie_regler.md` (hvem henter, faste aktiviteter …).
-3. Se præcis hvad der sendes: `python briefing.py --dry-run` (med `mode = "claude"`).
-4. Sæt `mode = "claude"` i `config.toml`. Der laves kun nyt overblik, når data har ændret sig, og højst én gang i timen.
+**`mode = "offline"`:** kun egne regler, intet forlader maskinen. **`mode = "off"`:** intet overblik.
 
-Begge tilstande bruger samme filtrerede uddrag: private samtaler, telefonnumre og mailadresser indgår aldrig. `mode = "off"` slår overblikket fra.
+### Sæt Gemini op (gratis niveau)
+
+1. Gå til aistudio.google.com med en privat Google-konto og lav en API-nøgle i et projekt. **Projektets fakturering (billing) skal forblive slået fra** – så kan det gratis niveau aldrig koste penge. Begræns nøglen til "Generative Language API".
+2. Skriv nøglen i `.env` på én linje, uden mellemrum og uden anførselstegn: `GEMINI_API_KEY=din-nøgle`.
+3. Find jeres grænser i AI Studio (requests per minute = RPM, requests per day = RPD) for modellen, og sæt `[ai] rpm` til højst RPM og `[ai] daily_cap` lidt under RPD i `config.toml`. Uden tal bruges 5 i minuttet og 100 om dagen – appen bruger normalt 15–30 om dagen.
+4. Sæt `[assistant] mode = "ai"` i `config.toml`, og genstart serveren.
+5. Prøv for alvor: `python server.py --selftest --no-notify`. Linjen *Familieassistent* skal stå med ✔. Står der ✖, forklarer den, hvad der er galt.
+6. Se præcis hvad der sendes: `python briefing.py --dry-run`.
+
+**Vilkår, I selv har taget stilling til:** På Googles gratis niveau må Google bruge det, der sendes, til at forbedre sine tjenester, og vilkårene er skrevet til voksne brugere, mens overblikket også vises på kioskskærmen for børnene. Derfor sendes kun et renset uddrag: private samtaler sendes aldrig, og telefonnumre, mailadresser og CPR-numre fjernes. `familie_regler.md` sendes som den er – skriv ikke telefonnumre eller CPR-numre i den.
+
+**Skift udbyder** i `config.toml` under `[ai]`: `provider = "claude"`, `model = "…"` og `api_key_env = "ANTHROPIC_API_KEY"` (nøgle fra platform.claude.com i `.env`). Ældre opsætning med `mode = "claude"` virker stadig.
+
+**Budget:** Svar gemmes i `web/ai_cache.json`, så uændrede data aldrig koster en ny forespørgsel, og forbruget tælles i `web/ai_usage.json`. Dagen tælles i Stillehavstid som hos Google, så budgettet nulstilles ved midnat i Californien (normalt kl. 9 dansk tid). Efter en fejl holder appen pause, før den prøver igen (længere for hver fejl i træk). Begge filer indeholder familiens data og må aldrig i git.
 
 ## Udseende
 

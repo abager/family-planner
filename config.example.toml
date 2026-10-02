@@ -29,14 +29,25 @@ gallery_albums = 8      # antal nyeste albums
 images_per_album = 12   # max billeder per album
 
 [assistant]
-mode = "offline"         # "offline" = overblik uden sprogmodel (gratis, intet forlader maskinen) · "claude" = Claude skriver det (kræver API-nøgle) · "off" = intet overblik
-model = "claude-sonnet-5-5"
-api_key_env = "ANTHROPIC_API_KEY"
-rules_file = "familie_regler.md"
-speech = false           # true = Claude skriver også en tekst til oplæsning og appen viser "Læs op"
+mode = "ai"              # "ai" = sprogmodellen i [ai] skriver overblikket (appens egne regler er reserve) · "offline" = kun egne regler, intet forlader maskinen · "off" = intet overblik
+rules_file = "familie_regler.md"   # sendes med til sprogmodellen som den er – skriv ikke telefonnumre eller CPR-numre i den
+speech = false           # true = sprogmodellen skriver også en tekst til oplæsning, og appen viser "Læs op"
 min_minutes_between = 60           # dagsoverblik laves højst så ofte – og kun hvis data har ændret sig
 week_min_minutes_between = 360     # ugeoverblik
-# Private samtaler sendes aldrig. Se præcis hvad der sendes med: python briefing.py --dry-run
+# Private samtaler sendes aldrig. Se præcis hvad der sendes: python briefing.py --dry-run
+
+# Sprogmodellen (ai.py). Skift udbyder her – resten af appen er ens.
+# Nøglen ligger i .env (GEMINI_API_KEY=…), aldrig her.
+[ai]
+provider = "gemini"                # "gemini" (Google, gratis niveau) eller "claude" (Anthropic, kræver betaling)
+model = "gemini-3.5-flash-lite"    # fast version, ikke "-latest", så svarene ikke ændrer sig uden varsel
+api_key_env = "GEMINI_API_KEY"     # navnet på variablen i .env – til Claude: "ANTHROPIC_API_KEY"
+daily_cap = 100                    # højst så mange forespørgsler om dagen. Sæt lidt under jeres RPD fra AI Studio
+rpm = 5                            # højst så mange i minuttet. Sæt til (højst) jeres RPM fra AI Studio
+# Dagen tælles i Stillehavstid som hos Google: budgettet nulstilles normalt kl. 9 dansk tid.
+# Normalt bruges 15–30 forespørgsler om dagen; uændrede data koster ingenting.
+# timeout_seconds = 30
+# max_output_tokens = 2000
 
 # Google-kalendere: den PRIVATE iCal-adresse fra Google Kalender →
 # kalenderens "Indstillinger og deling" → "Integrer kalender" → "Hemmelig adresse i iCal-format".

@@ -5,6 +5,27 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (AI, phase 1)
+- `ai.py`: one interface for language models. Google Gemini (free tier, `gemini-3.5-flash-lite`) is the default;
+  Claude works through the same path. Plain HTTPS with httpx, JSON output, cache by content hash
+  (`web/ai_cache.json`), daily budget and per-minute limit (`web/ai_usage.json`, day counted in Pacific time),
+  and a growing pause after 429/402/401/403/5xx/timeouts/invalid output.
+- `[assistant] mode = "ai"` and a new `[ai]` section (`provider`, `model`, `api_key_env`, `daily_cap`, `rpm`).
+  `GEMINI_API_KEY` in `.env`.
+- The day and week overviews are written by the AI. If it is unavailable, the last AI overview for the same
+  day/week is kept and marked as possibly out of date; otherwise the app's own rules make it.
+- Banner "AI ikke tilgængelig" at the top of the app and the kiosk when the shown overview did not come from the AI.
+- The selftest sends one small request without family data and explains failures (missing/rejected key,
+  payment required, quota). `/api/status` (login only) shows AI provider, usage and last error – never the key.
+
+### Changed (AI, phase 1)
+- CPR numbers are now removed from everything sent to a language model (only phone numbers and mail addresses were).
+- AI answers are validated: unknown section titles make the answer invalid, and points without a valid source are dropped.
+- `mode = "claude"` still works, but now goes through `ai.py`.
+
+### Removed (AI, phase 1)
+- The `anthropic` Python package. Claude is called over plain HTTPS instead.
+
 ### Removed (second round)
 - Automatic calendar suggestions: the Forslag tab, its badge, the "nye forslag" banner and the ntfy push
   (`notify_suggestions`). New events are only created manually via "Føj til kalender".

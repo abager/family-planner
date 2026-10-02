@@ -14,10 +14,17 @@ tablets and a kiosk screen. Events can be added to Google Calendar from any mess
 
 - **All UI text, README, code comments, docstrings and commit-facing docs are Danish.** Keep it that way.
   This file and CHANGELOG.md are in English.
-- **Rules, not a language model.** Recognition of homework, actions, activities, cancellations etc. is done with
-  explicit, explainable rules (`homework.py`, `messages.py`, `activities.py`, `schedule.py`). The only optional
-  LLM use is `briefing.py` with `[assistant] mode = "claude"`, which only *phrases* already-extracted facts.
-  The default is `mode = "offline"` (`offline_briefing.py`). Don't introduce LLM-based extraction.
+- **AI first, rules as silent fallback.** A language model (via `ai.py`) may be the primary source for
+  summaries and – in later phases – extraction. The explicit rules (`homework.py`, `messages.py`, `activities.py`,
+  `offline_briefing.py`) always stay as the fallback when the AI is unavailable, out of quota, or returns invalid
+  output. Every AI feature must: go through `ai.py` (never call a provider directly), validate the output and fall
+  back on anything unexpected, only receive scrubbed data (`briefing._scrub`), never receive private threads, and
+  tell the user when the fallback is in use. Facts the AI returns must point back to a source (refs); unsourced
+  points are dropped.
+- **Phase status of the AI work.** Phase 1 (done): `ai.py` + day/week summaries. Phase 2 (planned): homework per
+  child extracted from messages, weekly plans and feed posts, with source quote and link. Phase 3 (planned): calendar
+  suggestions only on AI-flagged items, date/time validated against the source text, never written without a click;
+  in fallback `activities.find_all()` decides flagged items.
 - **Time is an argument.** Code that depends on "now" takes the time as a parameter so tests don't depend on clocks
   (see `ops.py`). Keep that pattern.
 - **Degrade, don't break.** If Aula or a Google calendar fails, the previous data for that source is kept and the UI
@@ -30,6 +37,13 @@ tablets and a kiosk screen. Events can be added to Google Calendar from any mess
   `private_messages.json` next to the Aula tokens (outside the served folder) and is only returned by the server
   after a separate code (`FAMILIEPLAN_PRIVATE_CODE`). See `private.py`.
 - Private threads are never sent to an LLM and never produce tasks or events.
+- Everything sent to an LLM goes through `briefing._scrub` (CPR numbers, phone numbers, mail addresses).
+  `familie_regler.md` is sent as written.
+- **AI provider terms (user's informed choice):** Google Gemini **free tier**. Google may use free-tier input to
+  improve its services; the terms address adult users while the summary is also shown on the kiosk for the children;
+  EEA/consumer-use terms were discussed and accepted by the user. Keep the scrubbing strict for these reasons.
+  The project's **billing must stay disabled** so the free tier can never incur cost. Moving to the paid tier or
+  Claude is a config change (`[ai] provider/model/api_key_env`).
 - `server.py` has `DENY_NAMES`: state, tokens and config must never be servable. Add any new state file there.
 - Never commit config, tokens, fetched data or state files. `.gitignore` and the `no-family-data` pre-commit hook
   enforce this; if you add a new state file, add it to `.gitignore`, `.dockerignore`, the hook in
@@ -49,7 +63,8 @@ Data flow:
 Aula (unofficial `aula` client) ─┐
 Google Calendar (iCal)          ─┼─> fetch_family.py ─> analysis modules ─> web/family.json ─> web/index.html
 familie_regler.md (free text)   ─┘                                     └─> private_messages.json (secrets/)
-                                                 briefing.py / offline_briefing.py ─> web/briefing*.json
+                         briefing.py ─> ai.py (Gemini/Claude) ─> web/briefing*.json
+                                     └─> offline_briefing.py (fallback)
 ```
 
 | Module | Responsibility |
@@ -60,7 +75,8 @@ familie_regler.md (free text)   ─┘                                     └�
 | `messages.py` | Message analysis: which child, actions with deadlines, events, private threads |
 | `activities.py` | Finds activities worth a calendar entry; cancellations and moves |
 | `schedule.py` | Timetable cleanup: subject names, teacher abbreviations, hidden support lessons |
-| `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister") |
+| `ai.py` | The only way to call a language model: provider adapters (Gemini, Claude) over plain httpx, JSON output, content-hash cache, daily budget + RPM throttle, backoff, `AIUnavailable` |
+| `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
 | `private.py` | Storage and gating of private threads |
 | `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
@@ -70,7 +86,7 @@ familie_regler.md (free text)   ─┘                                     └�
 Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
 `private_messages.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
-`web/suggestions_state.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
+`web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
 `weekplan.json`.
 
 ## Commands
@@ -113,6 +129,12 @@ Version: **v0.7.0** (first version in git; previously developed as zip files).
 
 Known gaps and open work:
 
+- **AI (Phase 1) has only been tested against a simulated Gemini/Claude** (httpx `MockTransport`). The real
+  endpoint, the model name `gemini-3.5-flash-lite`, Google's 429 detail format (`QuotaFailure` with a `PerDay`
+  quotaId, `RetryInfo`) and JSON mode have not been exercised from this repo. First real check:
+  `python server.py --selftest --no-notify` (sends one tiny request without family data). The user's real RPD/RPM
+  values were not known when Phase 1 was written; defaults are `daily_cap = 100`, `rpm = 5`.
+
 - Aula login, pagination, mark-as-read, Google Calendar writes and API reads have **only been tested against simulations**.
   The claim that event reminders only reach the service account (why `reminder_minutes` was removed) comes from
   Google's API docs and is unverified.
@@ -132,6 +154,28 @@ Planned restructuring (do in small steps, tests green after each):
 3. Move modules into a package (`src/familieplanner/`); move root debug scripts to `tools/`.
 4. Split `fetch_family.py`, `server.py` and `activities.py` by responsibility.
 5. Shorten README to overview + quick start; move detailed sections into `docs/`.
+
+## AI conventions (`ai.py`)
+
+- Config: `[ai] provider` (`gemini` default, `claude`), `model` (pinned, never `-latest`), `api_key_env`
+  (`GEMINI_API_KEY`), `daily_cap`, `rpm`. Old `[assistant] mode = "claude"` maps to `provider = "claude"`.
+  `[assistant] mode = "ai"` turns the AI summary on; without `mode` the code still defaults to `offline`.
+- Auth: Gemini API key bound to a service account and restricted to the Generative Language API, sent as the
+  `x-goog-api-key` header (never in the URL, never logged). No SDK, no ADC/OAuth. The Google Calendar service
+  account is separate. Keys with spaces/non-ASCII are rejected as `mangler_noegle` rather than crashing.
+- `Client.generate_json(system, prompt, validate=…, cache_key=…)` returns a dict or raises `AIUnavailable(reason)`.
+  Callers catch it and use their rule-based fallback; they never let it escape.
+- Cache key = provider + model + system + (cache_key or prompt). Pass a `cache_key` that excludes volatile parts
+  (the briefing uses its fingerprint, which ignores the "now" timestamp).
+- Budget day = Pacific time (Google resets free-tier RPD at midnight Pacific). Requests are counted when sent.
+  RPM: wait up to `max_wait_seconds`, else `minutgraense`. Backoff per reason (`BACKOFF`), doubling per consecutive
+  failure; a 429 on a per-day quota pauses until Pacific midnight.
+- Briefing fallback states in `briefing*.json`: `ai_stale` (last AI briefing for the same period kept; data has
+  changed since) and `ai_fallback` (made by `offline_briefing`). Both carry `{reason, since}`. The frontend shows
+  the "AI ikke tilgængelig" banner (`#aiBanner`, top of `.wrap`, also in kiosk) for the briefing currently shown.
+  The banner never shows the technical reason; `/api/status` → `ai` does (login only, never the key).
+- Selftest uses `ignore_pause=True` so a fixed key can be verified immediately; it is not cached.
+- Tests: only `httpx.MockTransport` with a fake clock/sleep. Never a real provider, never real family data.
 
 ## Calendar and time conventions
 
