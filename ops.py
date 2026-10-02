@@ -57,6 +57,30 @@ class Notifier:
             return False
 
 
+def load_dotenv(*paths: Path) -> list[str]:
+    """Læs KEY=værdi fra .env-filer, når appen kører direkte (fx på Windows) og ikke via Docker.
+    Variabler, der allerede er sat (setx, Docker, systemd), vinder altid. Returnerer de navne, der blev sat."""
+    import os
+    done, seen = [], set()
+    for p in paths:
+        p = Path(p).resolve()
+        if p in seen or not p.is_file():
+            continue
+        seen.add(p)
+        for line in p.read_text("utf-8-sig").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key, val = key.strip().removeprefix("export ").strip(), val.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+                val = val[1:-1]
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+                done.append(key)
+    return done
+
+
 class StateFile:
     """Små ting, der skal overleve en genstart (fx at aftenpushet allerede er sendt i dag)."""
 

@@ -126,14 +126,41 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 **Hvor kan den køre?** På en maskine, der er tændt hele tiden og kan køre Python 3.14 eller Docker: en Raspberry Pi, en NAS, en lille VPS eller din egen pc. Almindeligt webhotel (PHP/cPanel) kan ikke, fordi det kræver en proces, der kører hele tiden.
 
-### Hurtig start (fx Windows, PowerShell)
+### Windows (PowerShell), trin for trin
+
+Første gang, i projektmappen:
 
 ```powershell
-$env:FAMILIEPLAN_PASSWORD = "en-lang-adgangskode"
-uv run --python 3.14 --with-requirements requirements.txt server.py --host 0.0.0.0 --port 8080
+cd C:\sti\til\family-planner
+uv venv --python 3.14                      # laver et "virtuelt miljø" (.venv) med appens egen Python
+.\.venv\Scripts\Activate.ps1               # slå det til – prompten starter nu med (family-planner)
+uv pip install -r requirements.txt         # installér appens pakker i miljøet
+Copy-Item .env.example .env                # udfyld .env (se nedenfor)
 ```
 
-Åbn http://localhost:8080 (andre enheder: http://maskinens-ip:8080). Log ind med adgangskoden. Står der "Aula-login er udløbet", så tryk på advarslen, vælg "Log ind med MitID", og scan QR-koden med MitID-appen. Det er den samme QR-kode, som ellers vises i terminalen.
+Siger PowerShell *"running scripts is disabled"*, så kør én gang `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` og prøv igen.
+
+**Hemmeligheder** (adgangskode, kode til private samtaler, AI-nøgle) kan stå to steder – vælg ét:
+
+- **I `.env`** i projektmappen, én pr. linje, uden mellemrum og anførselstegn: `FAMILIEPLAN_PASSWORD=en-lang-adgangskode`. Appen læser selv filen. `.env` er udelukket fra git.
+- **Med `setx`**: `setx FAMILIEPLAN_PASSWORD "en-lang-adgangskode"`. Virker først i et **nyt** PowerShell-vindue (eller efter genstart af VS Code). Er en variabel sat begge steder, vinder `setx`.
+
+Brug ikke `$env:NAVN = "…"` til hemmeligheder: det gælder kun i det vindue, og er væk, når det lukkes.
+
+Hver gang du starter appen:
+
+```powershell
+cd C:\sti\til\family-planner
+.\.venv\Scripts\Activate.ps1
+python server.py --selftest --no-notify    # tjek at alt er i orden
+python server.py --host 0.0.0.0 --port 8080
+```
+
+Åbn http://localhost:8080 (andre enheder: http://maskinens-ip:8080). Log ind med adgangskoden. Står der "Aula-login er udløbet", så tryk på advarslen, vælg "Log ind med MitID", og scan QR-koden med MitID-appen.
+
+Får du `ModuleNotFoundError` (fx *No module named 'fastapi'*), er det virtuelle miljø ikke slået til – kør `.\.venv\Scripts\Activate.ps1`. Mangler en af appens egne filer (fx *No module named 'activities'*), så kør `git status`; står der `deleted:`, henter `git restore .` dem tilbage uden at røre `config.toml`, `.env` eller jeres data. Kør aldrig `git add` før det er rettet.
+
+Tip: Læg projektmappen uden for Skrivebordet (fx `C:\dev\family-planner`), hvis OneDrive synkroniserer Skrivebordet – synkroniseringsprogrammer kan fjerne eller låse filer.
 
 ### Docker (Linux, NAS, Raspberry Pi)
 

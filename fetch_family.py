@@ -1255,6 +1255,10 @@ def main() -> None:
     cfg_path = Path(args.config)
     if not cfg_path.exists():
         sys.exit(f"Fandt ikke {cfg_path}. Kopiér config.example.toml til config.toml og udfyld den.")
+    import ops
+    loaded = ops.load_dotenv(Path.cwd() / ".env", cfg_path.parent / ".env")   # Docker sætter dem selv; direkte kørsel læser .env
+    if loaded:
+        logging.getLogger("familieplanner").info("Læste fra .env: %s", ", ".join(loaded))
     cfg = tomllib.loads(cfg_path.read_text("utf-8"))
 
     async def loop():

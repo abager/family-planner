@@ -82,10 +82,10 @@ def check_config(cfg: dict, use_aula: bool) -> list[Result]:
 def check_access(settings) -> list[Result]:
     pw = os.environ.get("FAMILIEPLAN_PASSWORD", "")
     out = [Result(OK if len(pw) >= 8 else FAIL, "Adgangskode til appen", "sat" if len(pw) >= 8 else "mangler eller er under 8 tegn",
-                  "" if len(pw) >= 8 else "Sæt miljøvariablen FAMILIEPLAN_PASSWORD (mindst 8 tegn).")]
+                  "" if len(pw) >= 8 else "Sæt FAMILIEPLAN_PASSWORD (mindst 8 tegn) – " + WHERE.format(env="FAMILIEPLAN_PASSWORD"))]
     code = settings.private_code
     out.append(Result(OK if len(code) >= 4 else WARN, "Kode til private samtaler", "sat" if len(code) >= 4 else "ikke sat – private samtaler kan ikke åbnes i appen",
-                      "" if len(code) >= 4 else "Sæt FAMILIEPLAN_PRIVATE_CODE (mindst 4 tegn, helst en anden end adgangskoden)."))
+                      "" if len(code) >= 4 else "Sæt FAMILIEPLAN_PRIVATE_CODE (mindst 4 tegn, helst en anden end adgangskoden) – " + WHERE.format(env="FAMILIEPLAN_PRIVATE_CODE")))
     out.append(Result(OK if settings.public_url else WARN, "Offentlig adresse", settings.public_url or "ikke sat",
                       "" if settings.public_url else "Uden server.public_url kan push-beskeder ikke åbne appen ved et tryk."))
     return out
@@ -227,8 +227,12 @@ def check_data(cfg: dict) -> list[Result]:
     return out
 
 
+# Hvor en hemmelighed skal stå. Gælder både Docker og direkte kørsel, fordi appen selv læser .env.
+WHERE = ("skriv {env}=værdi på én linje i .env i projektmappen (uden mellemrum og anførselstegn), "
+         "eller kør setx {env} \"værdi\" i PowerShell og åbn et nyt vindue. Genstart derefter appen.")
+
 AI_HINTS = {
-    "mangler_noegle": "Sæt {env}=din-nøgle i .env – uden mellemrum og uden anførselstegn – og genstart.",
+    "mangler_noegle": "Sæt {env} – " + "{where}",
     "afvist": "Tjek at nøglen er rigtig, at den er begrænset til Generative Language API, og at modellen ({model}) findes.",
     "betaling": "Udbyderen beder om betaling. På Googles gratis niveau skal fakturering forblive slået FRA i projektet.",
     "kvote": "Kvoten er brugt. Den nulstilles ved midnat Stillehavstid (kl. 9 dansk tid). Overblikket bruger imens reserven.",
@@ -256,7 +260,7 @@ def check_assistant(cfg: dict, client=None) -> Result:
                                    cache_key=f"selvtest {dt.datetime.now().isoformat()}", ignore_pause=True)
     except ai.AIUnavailable as e:
         warn = e.reason in ("kvote", "dagsbudget", "minutgraense", "serverfejl", "netvaerk")
-        hint = AI_HINTS.get(e.reason, "").format(env=s.api_key_env, model=s.model)
+        hint = AI_HINTS.get(e.reason, "").format(env=s.api_key_env, model=s.model, where=WHERE.format(env=s.api_key_env))
         return Result(WARN if warn else FAIL, title, f"{ai.REASONS.get(e.reason, e.reason)}" + (f" ({e.detail})" if e.detail else ""),
                       hint + " Indtil da laves overblikket af appens egne regler.")
     st = client.status()
@@ -309,6 +313,8 @@ def main(cfg: dict | None = None, settings=None, notify: bool = True) -> int:
             print(f"Fandt ikke {a.config}. Kopiér config.example.toml til config.toml og udfyld den.")
             return 1
         cfg = tomllib.loads(Path(a.config).read_text("utf-8"))
+        import ops
+        ops.load_dotenv(Path.cwd() / ".env", Path(a.config).parent / ".env")
         import server
         settings = server.Settings(cfg)
         settings.use_aula = settings.use_aula and not a.no_aula
