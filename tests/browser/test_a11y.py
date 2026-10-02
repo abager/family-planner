@@ -1,7 +1,6 @@
 """Tilgængelighed med axe-core. Valgfri: kør `npm install axe-core` og sæt AXE_JS=sti/til/node_modules/axe-core/axe.min.js.
 
-Kendte, endnu ikke rettede fund (se README): lav kontrast i de nedtonede, overståede lektioner og den blå accentfarve i mørk tilstand,
-samt manglende <main>/<nav>-områder. Testen sikrer, at der ikke kommer NYE kritiske fejl, og at de kendte ikke bliver værre.
+Ingen kendte fund er tilladt længere (KNOWN er tom). Testen kører i lyst og mørkt tema.
 """
 import datetime as dt
 import os
@@ -11,7 +10,7 @@ import pytest
 
 AXE = os.environ.get("AXE_JS", "")
 pytestmark = pytest.mark.skipif(not (AXE and Path(AXE).exists()), reason="sæt AXE_JS til axe.min.js for at køre tilgængelighedstesten")
-KNOWN = {"color-contrast", "landmark-one-main", "region"}
+KNOWN: set[str] = set()      # tilføj kun midlertidigt og med en forklaring
 VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-sugg", "Forslag"), ("v-aula", "Feed")]
 
 
