@@ -76,7 +76,7 @@ class FakeServer:
             self.cal["dismissed"] = [k for k in self.cal["dismissed"] if k != body["key"]]
             return self._json(route, {"status": "new"})
         if path == "/api/calendar/remove":
-            self.cal["created"].clear()
+            self.cal["created"].pop(body["key"], None)
             return self._json(route, {"status": "new"})
         if path in ("/api/calendar/cancel", "/api/calendar/move"):
             if self.fail_change:

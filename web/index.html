@@ -303,6 +303,9 @@ body.mode-mail .sub{display:none}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);max-width:min(92vw,460px);background:var(--ink);color:var(--paper);
   font:700 .9rem var(--body);padding:11px 18px;border-radius:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:60;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.show.act{pointer-events:auto}
+#toast .tbtn{margin-left:10px;background:transparent;color:inherit;border:2px solid currentColor;border-radius:10px;font:700 .88rem var(--body);padding:6px 12px;min-height:36px;cursor:pointer}
+@media (pointer:coarse){#toast .tbtn{min-height:44px}}
 .mrow .mdate{font-size:.75rem;color:var(--muted);white-space:nowrap;text-align:right}
 .mrow .msubj{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
 .mrow .mflags{display:flex;gap:4px;color:var(--muted);justify-content:flex-end}
@@ -1557,9 +1560,15 @@ function scheduleRead(id){
     if(state.view==="mail" && state.mail.sel===id && reading && document.visibilityState==="visible") markRead([id]);
   }, READ_DELAY_MS);
 }
-function toast(text, ms=4500){
-  const t=document.getElementById("toast"); t.textContent=text; t.classList.add("show");
-  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"), ms);
+// action: {label, run} giver en knap i beskeden (fx "Fortryd"); beskeden står så længe nok til at nå at trykke
+function toast(text, ms=4500, action=null){
+  const t=document.getElementById("toast"); t.textContent=text; t.classList.add("show"); t.classList.toggle("act",!!action);
+  if(action){
+    const b=document.createElement("button"); b.type="button"; b.className="tbtn"; b.textContent=action.label;
+    b.onclick=()=>{ t.classList.remove("show","act"); clearTimeout(toast._t); action.run(); };
+    t.append(" ",b);
+  }
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show","act"), ms);
 }
 function paintRead(id){
   document.querySelectorAll(".mrow[data-mid]").forEach(b=>{ if(b.dataset.mid===id){ b.classList.remove("unread"); b.closest(".mswipe")?.setAttribute("data-unread","0"); } });
@@ -2088,14 +2097,22 @@ evEl("evForm").addEventListener("submit",async e=>{
   {
     ok.disabled=true; ok.textContent="Opretter …";
     try{
-      const j=await calPost("api/calendar/events",p);
-      state.cal.created[evKey]={html_link:j.html_link};
+      const j=await calPost("api/calendar/events",p), key=evKey;
+      state.cal.created[key]={html_link:j.html_link};
       const more=await learnFrom(p);
-      evEl("evDlg").close(); toast("Oprettet i familiekalenderen ✓"+more,more?8000:4500); afterCalChange(); setTimeout(load,1500);
+      evEl("evDlg").close(); afterCalChange(); setTimeout(load,1500);
+      toast(`Oprettet i ${state.cal.calendar_name||"familiekalenderen"} ✓`+more, 9000, j.already ? null : {label:"Fortryd", run:()=>undoCreate(key)});
     }catch(x){ err(x.message); }
     finally{ ok.disabled=false; ok.textContent="Opret i kalender"; }
   }
 });
+// Fortryd lige efter oprettelse: sletter aftalen i Google igen (samme som "Fjern fra kalender")
+async function undoCreate(key){
+  try{
+    await calPost("api/calendar/remove",{key});
+    delete state.cal.created[key]; afterCalChange(); toast("Aftalen er fjernet igen"); setTimeout(load,800);
+  }catch(x){ toast("Kunne ikke fortryde: "+x.message, 8000); }
+}
 function afterCalChange(){ updateBadge(); if(state.view==="sugg") renderSugg(); else if(state.view==="mail"){ state.mail.readerKey=null; renderMail(); } else render(); }
 document.addEventListener("click",e=>{
   const b=e.target.closest?.("[data-addcal]"); if(!b) return;

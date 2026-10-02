@@ -297,3 +297,17 @@ def test_without_calendar_writing_changes_are_also_information_only(make_page):
     page.wait_for_timeout(600)
     page.click("#v-sugg")
     assert page.locator('[data-ch]').count() == 0 and "Åbn Google Kalender" in page.locator(".sg.change").inner_text()
+
+
+def test_a_new_event_can_be_undone_from_the_confirmation(make_page):
+    page, fake, _ = make_page(now=NOW, fixed=True)
+    to_server(page, fake)
+    card(page, "Zoo").locator('[data-sg="create"]').click()
+    page.click("#evOk")
+    page.wait_for_timeout(400)
+    assert "Oprettet i Familiekalender" in page.inner_text("#toast") and sections(page)[0].startswith("Oprettet")
+    page.click("#toast .tbtn")
+    page.wait_for_timeout(400)
+    assert fake.posts("/api/calendar/remove")[-1]["key"] == fake.posts("/api/calendar/events")[-1]["key"]
+    assert "fjernet igen" in page.inner_text("#toast") and page.locator("#toast .tbtn").count() == 0
+    assert card(page, "Zoo").locator('[data-sg="create"]').count() == 1                     # forslaget er nyt igen
