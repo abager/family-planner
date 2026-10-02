@@ -15,6 +15,8 @@ web/server_state.json
 web/suggestions_state.json
 web/learned_rules.json
 private_messages.json
+web/ai_cache.json
+web/ai_usage.json
 
 # Udvikling
 .venv/

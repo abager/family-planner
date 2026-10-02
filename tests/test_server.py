@@ -67,7 +67,8 @@ def test_security_headers_are_set(env):
     assert h["x-content-type-options"] == "nosniff" and h["x-frame-options"] == "DENY" and "default-src" in h["content-security-policy"]
 
 
-@pytest.mark.parametrize("name", ["private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json", "session.key", ".env"])
+@pytest.mark.parametrize("name", ["private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json", "session.key", ".env",
+                                  "ai_cache.json", "ai_usage.json"])
 def test_files_with_personal_data_or_keys_are_never_served(env, name):
     (env.out / name).write_text("hemmeligt")
     assert env.c.get("/" + name).status_code == 404
