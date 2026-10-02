@@ -213,3 +213,13 @@ def test_a_message_without_changes_shows_no_change_block(make_page):
     to_server(page, fake, suggestions=[change("cancel")])
     open_message(page, "m2")
     assert block(page).count() == 0
+
+
+def test_a_change_from_the_weekly_plan_is_shown_in_its_detail(make_page):
+    page, fake, _ = make_page(now=NOW, fixed=True)
+    wid = page.evaluate("demoData().weekplan[0].id")
+    ch = change("cancel", sources=[{"type": "weekplan", "id": wid, "title": "Ugeplan", "label": "ugeplan", "date": "2026-10-01"}])
+    to_server(page, fake, suggestions=[ch])
+    page.evaluate(f"showPlan({wid!r})")
+    page.wait_for_timeout(200)
+    assert "«Hugo: Forældremøde» er aflyst" in page.inner_text("#detail") and page.locator('#detail [data-chg="cancel"]').count() == 1

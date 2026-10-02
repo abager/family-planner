@@ -186,6 +186,11 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .feedwrap{max-width:560px;margin:0 auto}
 @media (min-width:1100px){.feedwrap{max-width:720px}}
 @media (min-width:1600px){.feedwrap{max-width:860px}}
+.fsearch{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.fsearch input{flex:1;min-width:0;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.fsearch input:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px}
+.fcount{font-size:.85rem;color:var(--muted);white-space:nowrap}
+@media (pointer:coarse){.fsearch input{min-height:44px;font-size:16px}}      /* 16px: iOS zoomer ellers ind */
 .ftabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .ftabs button{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 .9rem var(--body);padding:7px 14px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .ftabs button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
@@ -644,6 +649,8 @@ button,a,.chip,.pill{touch-action:manipulation}
   <section id="aulaView" class="hidden">
     <div class="feedwrap">
       <h2 class="sronly">Feed</h2>
+      <div class="fsearch"><input type="search" id="fsearch" placeholder="Søg i opslag og billeder" aria-label="Søg i opslag og billeder" autocomplete="off" enterkeyhint="search">
+        <span class="fcount" id="fcount" aria-live="polite"></span></div>
       <div class="ftabs" role="group" aria-label="Vis i feed">
         <button data-ft="all" aria-pressed="true">Alt</button>
         <button data-ft="post" aria-pressed="false"><svg class="ic"><use href="#i-post"/></svg>Opslag</button>
@@ -1226,7 +1233,10 @@ function showTask(id){
   document.getElementById("detail").showModal();
 }
 
-state.feedType="all"; state.expanded=new Set(); state.revealed=new Set();
+state.feedType="all"; state.feedQ=""; state.expanded=new Set(); state.revealed=new Set();
+// Søgning i feedet: titel, tekst og afsender på opslag, titel og tekst på albums. Alle ord skal findes, i vilkårlig rækkefølge.
+const feedHay = x => normTxt([x.title, x.text, x.author, ...(x.kind==="album"?[x.description]:[])].filter(Boolean).join(" \u2003 "));
+const feedTerms = () => normTxt(state.feedQ).split(" ").filter(Boolean);
 const MCAT = {handling:"Skal gøres",arrangement:"Arrangement",samtale:"Privat samtale",hilsen:"Hilsen"};
 const shortDate = iso => { const d=new Date(iso+"T12:00"); return `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`; };
 function extracted(x){
@@ -1242,10 +1252,12 @@ function renderAula(){
     ...arr("albums").map(a=>({...a,kind:"album"}))
   ].filter(x=>personVisible(x.people) && (state.feedType==="all"||state.feedType===x.kind))
    .sort((a,b)=>(b.timestamp||"").localeCompare(a.timestamp||""));
+  const terms=feedTerms(), shown=terms.length ? items.filter(x=>terms.every(t=>feedHay(x).includes(t))) : items;
+  document.getElementById("fcount").textContent = terms.length ? `${shown.length} af ${items.length}` : "";
   document.querySelectorAll("[data-ft]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.ft===state.feedType));
   const box=document.getElementById("feed");
-  box.innerHTML = items.map(x=>{
-    const imgs=x.images||[], open=state.expanded.has(x.id), long=(x.text||"").length>220;
+  box.innerHTML = shown.map(x=>{
+    const imgs=x.images||[], open=state.expanded.has(x.id)||terms.length>0, long=(x.text||"").length>220;      // under søgning vises hele teksten, så træffet kan ses
     const kindBadge = x.kind==="album" ? `<span class="kind album">${icon("photo")}Album</span>`
       : x.kind==="post" ? `<span class="kind post">${icon("post")}Opslag</span>`
       : `<span class="kind msg">${icon(x.private?"lock":"msg")}${x.private?"Privat":"Besked"}${x.unread?" · ulæst":""}</span>`;
@@ -1260,23 +1272,28 @@ function renderAula(){
       <div class="cbody">${x.important?`<span class="flag" style="margin:0 0 6px;display:inline-block">Vigtigt</span> `:""}${cat}<h3>${esc(x.title)}</h3>
         ${hide ? `<div class="private">${icon("lock")} Privat samtale med skolen <button data-reveal="${esc(x.id)}">Vis besked</button></div>`
           : x.text ? `${long&&!open ? `<p class="txt clamp">${esc(flatText(x.text))}</p>` : `<div class="txt rich">${richHTML(x.text)}</div>`}
-        ${long?`<button class="more" data-more="${esc(x.id)}">${open?"Vis mindre":"Læs mere"}</button>`:""}` : `<p class="meta">Ingen tekst – åbn tråden i Aula</p>`}
+        ${long&&!terms.length?`<button class="more" data-more="${esc(x.id)}">${open?"Vis mindre":"Læs mere"}</button>`:""}` : `<p class="meta">Ingen tekst – åbn tråden i Aula</p>`}
         ${hide?"":extracted(x)}${x.kind==="post"?calOptsHTML(x.cal)+changeOptsHTML(x.id):""}</div>
       ${x.attachments?`<div class="cfoot">${x.attachments} vedhæftning(er) – se dem i Aula</div>`:""}
     </article>`;
-  }).join("") || `<p class="empty">Intet at vise. Prøv at vælge flere personer eller "Alt".</p>`;
+  }).join("") || (terms.length
+    ? `<p class="empty">Intet opslag eller billede matcher «${esc(state.feedQ.trim())}». Søgningen dækker de ${items.length} nyeste, appen har hentet fra Aula – ældre findes i Aula.</p>`
+    : `<p class="empty">Intet at vise. Prøv at vælge flere personer eller "Alt".</p>`);
+  if(terms.length) box.querySelectorAll(".cbody h3, .cbody .txt, .chead .who b").forEach(el=>highlightIn(el, terms));
   box.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>{const id=b.dataset.more; state.expanded.has(id)?state.expanded.delete(id):state.expanded.add(id); renderAula();});
   box.querySelectorAll("[data-reveal]").forEach(b=>b.onclick=async()=>{
     const x=arr("messages").find(m=>m.id===b.dataset.reveal); if(x?.redacted && !(await unlockPrivate())) return;
     state.revealed.add(b.dataset.reveal); renderAula();
   });
-  const byId = Object.fromEntries(items.map(x=>[x.id,x]));
+  const byId = Object.fromEntries(shown.map(x=>[x.id,x]));
   box.querySelectorAll("[data-car]").forEach(el=>{
     const x=byId[el.dataset.car]; initCarousel(el, i=>openLightbox(x.images, i, x.title));
   });
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{const x=byId[b.dataset.open]; openLightbox(x.images,0,x.title);});
 }
 document.querySelectorAll("[data-ft]").forEach(b=>b.onclick=()=>{state.feedType=b.dataset.ft; renderAula();});
+document.getElementById("fsearch").addEventListener("input", e=>{ state.feedQ=e.target.value; renderAula(); });
+document.getElementById("fsearch").addEventListener("keydown", e=>{ if(e.key==="Escape" && e.target.value){ e.preventDefault(); e.target.value=""; state.feedQ=""; renderAula(); } });
 // Et ugeplanpunkt tæller som opgave, hvis det er mærket som lektie/opgave/husk – ellers er det en kommentar
 const isTaskPlan = w => w.category ? ["lektie","husk"].includes(w.category) : /lektie|opgave|aflever|husk|hjemme/i.test(`${w.label||""} ${w.title||""}`);
 const planIcon = w => isTaskPlan(w) ? "task" : (w.category==="info" ? "info" : "note");
@@ -1285,7 +1302,7 @@ const CAT = {lektie:"Lektie",husk:"Husk",info:"Praktisk info",undervisning:"Unde
 function showPlan(id){
   const w=arr("weekplan").find(x=>x.id===id), p=person(w.person);
   const day = w.date ? (d=>`${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`)(new Date(w.date+"T12:00")) : (w.dayLabel||"");
-  openDetail(w.subject||w.title, `<p class="meta">${esc(p.name)} · ${esc(day)}${w.category?` · ${CAT[w.category]||""}`:(w.label?` · ${esc(w.label)}`:"")} · Kilde: ${srcLabel(w.source)}</p><div class="long rich">${richHTML(w.text)}</div>${calOptsHTML(w.cal)}`);
+  openDetail(w.subject||w.title, `<p class="meta">${esc(p.name)} · ${esc(day)}${w.category?` · ${CAT[w.category]||""}`:(w.label?` · ${esc(w.label)}`:"")} · Kilde: ${srcLabel(w.source)}</p><div class="long rich">${richHTML(w.text)}</div>${calOptsHTML(w.cal)+changeOptsHTML(w.id)}`);
 }
 // ---------- Billedkarrusel og fuldskærmsvisning
 const CHEV = d => `<svg viewBox="0 0 24 24"><path d="${d==="prev"?"m15 5-7 7 7 7":"m9 5 7 7-7 7"}"/></svg>`;
