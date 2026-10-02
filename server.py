@@ -682,6 +682,32 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         runner.trigger(interactive=False)
         return {"ok": True}
 
+    # ----- hjemmets placering til vejret (sættes én gang med knappen i indstillinger)
+    @app.get("/api/home-location")
+    async def home_get():
+        import weather
+        h = weather.load_home(out_dir)
+        if not h:
+            return {"set": False}
+        return {"set": True, "lat": h["lat"], "lon": h["lon"], "set_at": h.get("set"),
+                "map": f"https://www.openstreetmap.org/?mlat={h['lat']}&mlon={h['lon']}#map=13/{h['lat']}/{h['lon']}"}
+
+    @app.post("/api/home-location")
+    async def home_set(request: Request):
+        import weather
+        try:
+            body = await request.json()
+            lat, lon = float(body["lat"]), float(body["lon"])
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        try:
+            weather.save_home(out_dir, lat, lon, datetime.now(TZ))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        log.info("Hjemmets placering er sat (afrundet)")      # aldrig koordinaterne i loggen
+        runner.trigger(interactive=False)                     # hent vejret med det samme
+        return await home_get()
+
     @app.post("/api/messages/read")
     async def messages_read(request: Request):
         try:

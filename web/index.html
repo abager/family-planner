@@ -373,6 +373,9 @@ body.kiosk .wrap{max-width:none;padding:clamp(10px,2vmin,30px);padding-bottom:cl
 .k-day{font:800 1.6em/1.1 var(--display)}
 .k-date{color:var(--muted);font-size:1.15em}
 .k-date .k-day{color:var(--ink)}
+.k-weather{color:var(--ink);font-weight:600;margin-top:2px}
+.k-weather small{display:block;color:var(--muted);font-weight:400}
+.homeinfo{color:var(--muted);margin:8px 0 0}
 .k-status{margin-left:auto;font-size:.8em;color:var(--muted);text-align:right}
 .k-status .bad{color:#C23A15;font-weight:700}
 .k-exit{all:unset;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;border:1px solid var(--line);border-radius:999px;padding:.35em 1em;font:700 .8em var(--body);background:var(--surface)}
@@ -639,7 +642,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   <section id="kioskView" class="hidden" aria-label="Kioskvisning">
     <div class="k-top">
       <div class="k-clock" id="kClock"></div>
-      <div class="k-date"><div class="k-day" id="kDay"></div><div id="kDate"></div></div>
+      <div class="k-date"><div class="k-day" id="kDay"></div><div id="kDate"></div><div class="k-weather" id="kWeather"></div></div>
       <div class="k-status" id="kStatus"></div>
       <button type="button" class="k-exit" id="kExit">Afslut kioskvisning</button>
     </div>
@@ -712,6 +715,13 @@ button,a,.chip,.pill{touch-action:manipulation}
   <button class="arr prev" id="lbPrev" aria-label="Forrige billede"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
   <button class="arr next" id="lbNext" aria-label="Næste billede"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
   <div class="cdots" id="lbDots"></div>
+</dialog>
+<dialog id="homeDlg" aria-labelledby="homeHead"><h3 id="homeHead">Vejr: hjemmets placering</h3>
+  <p>Vejret i overblikket er for jeres hjem. Placeringen afrundes til ca. 1 km og bruges kun til at hente vejret fra DMI.</p>
+  <p class="homeinfo" id="homeInfo" role="status"></p>
+  <p class="homeinfo" id="homeNote"></p>
+  <button type="button" id="homeUse">Brug min placering som hjem</button>
+  <form method="dialog"><button>Luk</button></form>
 </dialog>
 <dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
 
@@ -980,6 +990,44 @@ function shownBriefings(){
   if(w?.period && w.period[1]>=todayKey) out.push(w);
   return out;
 }
+// Vejret (DMI) for en dag, hvis prognosen dækker den. Kun det grove resumé – placeringen er aldrig i family.json.
+function weatherFor(day){ return (state.data?.weather?.dage||[]).find(d=>d.dato===ymd(day)) || null; }
+
+// "Vejr: hjem": sæt hjemmets placering én gang med browserens placering. Virker kun på en sikker side
+// (http://localhost på pc'en, eller https). Serveren afrunder til ca. 1 km.
+async function openHomeDlg(){
+  const dlg=document.getElementById("homeDlg"), info=document.getElementById("homeInfo"), btn=document.getElementById("homeUse");
+  const show=h=>{ info.innerHTML = h.set
+      ? `Hjem er sat til ca. ${String(h.lat).replace(".",",")} N, ${String(h.lon).replace(".",",")} Ø. <a href="${esc(h.map)}" target="_blank" rel="noopener noreferrer">Se på kort</a>`
+      : "Hjem er ikke sat endnu – så er der intet vejr i overblikket."; };
+  info.textContent="Henter …";
+  try{ show(await (await fetch("api/home-location")).json()); }catch{ info.textContent="Kunne ikke hente indstillingen."; }
+  const ok=window.isSecureContext && "geolocation" in navigator;
+  btn.disabled=!ok;
+  document.getElementById("homeNote").textContent = ok
+    ? "Tryk, mens du er hjemme. Browseren spørger om lov til at bruge placeringen."
+    : "Det virker kun på pc'en, der kører appen: åbn http://localhost:8080 dér og tryk på knappen.";
+  btn.onclick=()=>{
+    btn.disabled=true; info.textContent="Finder placering …";
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      try{
+        const r=await fetch("api/home-location",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},
+          body:JSON.stringify({lat:pos.coords.latitude,lon:pos.coords.longitude})});
+        const j=await r.json();
+        if(!r.ok){ info.textContent = j.error==="bad request" ? "Placeringen kunne ikke bruges." : (j.error||"Placeringen kunne ikke gemmes."); }
+        else { show(j); info.insertAdjacentHTML("beforeend"," Vejret hentes nu."); }
+      }catch{ info.textContent="Placeringen kunne ikke gemmes."; }
+      btn.disabled=false;
+    }, err=>{
+      info.textContent = err.code===1
+        ? "Ingen tilladelse. Slå placering til i Windows: Indstillinger → Privatliv og sikkerhed → Placering, og giv browseren lov."
+        : "Placeringen kunne ikke findes. Prøv igen.";
+      btn.disabled=false;
+    }, {enableHighAccuracy:false, timeout:15000, maximumAge:600000});
+  };
+  dlg.showModal();
+}
+
 function renderAiBanner(){
   const el=document.getElementById("aiBanner"), bs=shownBriefings();
   const stale=bs.find(b=>b.ai_stale), fb=bs.find(b=>b.ai_fallback);
@@ -1004,6 +1052,7 @@ function renderChrome(){
     else if(sv.aula==="error") bits.push(`<a class="srvwarn" href="auth" title="${esc(sv.last_error||"")}">Aula-hentning fejlede</a>`);
     if(sv.mark_error) bits.push(`<span class="srvwarn" title="${esc(sv.mark_error)}">Læst-markering ikke gemt i Aula</span>`);
     bits.push(state.refreshing||sv.running ? `<span>Henter …</span>` : `<button class="srvbtn" id="refreshNow">Opdatér nu</button>`);
+    bits.push(`<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
     bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
     line += `<div class="srv">${bits.join("")}</div>`;
   }
@@ -1015,6 +1064,7 @@ function renderChrome(){
   document.getElementById("status").innerHTML = line;
   document.getElementById("kioskBtn")?.addEventListener("click", enterKiosk);
   document.getElementById("refreshNow")?.addEventListener("click", refreshNow);
+  document.getElementById("homeBtn")?.addEventListener("click", openHomeDlg);
   document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{ await fetch("logout",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); toLogin(); });
   const box=document.getElementById("people"); box.innerHTML="";
   state.data.people.forEach(p=>{
@@ -1762,7 +1812,9 @@ function renderKiosk(){
   // Husk og frister: overblikket for dagen, hvis det handler om samme dag – ellers dagens opgaver
   const b=state.briefing?.day, fresh=b?.period && b.period[0]<=ymd(day) && ymd(day)<=b.period[1];
   let items=[];
-  if(fresh) items=(b.afsnit||[]).flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
+  const w=weatherFor(day), kw=document.getElementById("kWeather");
+  kw.innerHTML = w ? `<span aria-hidden="true">${esc(w.ikon||"")}</span> ${esc(w.tekst)}${w.raad?.length?`<small>${esc(w.raad.join(", "))}</small>`:""}` : "";
+  if(fresh) items=(b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
   else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));
   document.getElementById("kRemember").innerHTML = items.slice(0,10).map(i=>`<li>${i.who.map(pav).join("")}<span>${esc(i.text)}${i.sec&&fresh?`<small>${esc(i.sec)}</small>`:""}</span></li>`).join("") || `<li class="k-none">Intet særligt ${dayWord()}</li>`;
   document.getElementById("kAptTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";

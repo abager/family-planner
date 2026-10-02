@@ -244,3 +244,30 @@ def test_ai_status_is_shown_after_login_but_never_the_key(cfg, monkeypatch):
 
 def test_ai_status_is_empty_in_offline_mode(env):
     assert env.c.get("/api/status").json()["ai"] is None
+
+
+# ---------------------------------------------------------------- hjemmets placering
+def test_home_location_is_saved_rounded_and_shown_without_extra_decimals(env, monkeypatch):
+    triggered = []
+    monkeypatch.setattr(server.Runner, "trigger", lambda self, interactive=False: triggered.append(1))
+    assert env.c.get("/api/home-location").json() == {"set": False}
+    r = env.post("/api/home-location", {"lat": 55.676098, "lon": 12.568337})
+    assert r.status_code == 200
+    j = r.json()
+    assert (j["set"], j["lat"], j["lon"]) == (True, 55.68, 12.57) and "openstreetmap.org" in j["map"]
+    assert "55.676" not in (env.out / "home_location.json").read_text("utf-8")
+    assert triggered                                                   # vejret hentes med det samme
+
+
+@pytest.mark.parametrize("body", [{"lat": 48.85, "lon": 2.35}, {"lat": "x", "lon": 1}, {"lon": 12.5}, {}])
+def test_a_bad_or_foreign_home_location_is_refused(env, body):
+    r = env.post("/api/home-location", body)
+    assert r.status_code == 400 and not (env.out / "home_location.json").exists()
+
+
+def test_home_location_needs_login_and_the_file_is_never_served(cfg, env):
+    env.post("/api/home-location", {"lat": 55.68, "lon": 12.57})
+    anon = TestClient(env.app, base_url="http://testserver", follow_redirects=False)
+    assert anon.get("/api/home-location").status_code in (302, 303, 401, 403)
+    assert anon.post("/api/home-location", json={"lat": 55.7, "lon": 12.6}, headers=H).status_code in (302, 303, 401, 403)
+    assert env.c.get("/home_location.json").status_code == 404

@@ -10,6 +10,7 @@ class FakeServer:
         self.family: dict | None = None                 # None = ingen family.json (appen viser demodata)
         self.briefing: dict | None = None
         self.briefing_week: dict | None = None
+        self.home: dict = {"set": False}
         self.server = False                             # False = ingen /api/status (statisk brug)
         self.mark_read = True
         self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
@@ -61,6 +62,13 @@ class FakeServer:
             if not self.server:
                 return route.fulfill(status=404, body="")
             return self._json(route, {"mark_read_enabled": self.mark_read, "running": False, "runs": 1, "aula": "ok", "pending_reads": 0, "mark_error": None, "aula_enabled": True})
+        if path == "/api/home-location":
+            if m == "POST":
+                if not (54.4 <= body["lat"] <= 57.9):
+                    return self._json(route, {"error": "Placeringen ligger ikke i Danmark"}, 400)
+                lat, lon = round(body["lat"], 2), round(body["lon"], 2)
+                self.home = {"set": True, "lat": lat, "lon": lon, "map": f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}"}
+            return self._json(route, self.home)
         if path == "/api/messages/read":
             return self._json(route, {"enabled": True, "queued": len(body["ids"])})
         if path == "/api/calendar" and m == "GET":
