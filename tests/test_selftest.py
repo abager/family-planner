@@ -174,3 +174,19 @@ def test_report_is_readable_and_the_exit_code_follows_the_failures(healthy):
 def test_the_command_line_entry_point_runs_without_the_server(healthy, capsys, monkeypatch):
     code = T.main(healthy, server.Settings(healthy), notify=False)
     assert code == 0 and "Familieplan – selvtest" in capsys.readouterr().out
+
+
+def test_reading_via_the_api_is_checked_with_the_test_event(healthy, google):
+    healthy["calendar_write"]["read_via_api"] = True
+    res = run(healthy, notify=False)
+    assert by(res, "Læsning via Google API").status == T.OK and any(l[0] == "list" for l in google.log)
+
+
+def test_obsolete_reminder_setting_is_flagged(healthy):
+    healthy["calendar_write"]["reminder_minutes"] = [1440]
+    assert by(run(healthy, notify=False), "Påmindelser").status == T.WARN
+
+
+def test_writing_to_a_calendar_the_app_does_not_show_is_flagged(healthy):
+    healthy["calendar_write"]["calendar_id"] = "other@group.calendar.google.com"
+    assert by(run(healthy, notify=False), "Kalender til nye aftaler").status == T.WARN

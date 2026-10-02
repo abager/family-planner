@@ -43,6 +43,7 @@ class MockGoogle:
         self.events: dict[str, dict] = {}
         self.log: list[tuple] = []
         self.fail: dict[str, int] = {}
+        self.page_size = 250
         outer = self
 
         class H(http.server.BaseHTTPRequestHandler):
@@ -93,13 +94,26 @@ class MockGoogle:
                     outer.log.append(("insert", r[0], body))
                     if body.get("id") in outer.events:
                         return self._send(409, {"error": {"message": "The requested identifier already exists."}})
-                    outer.events[body["id"]] = {**body, "status": "confirmed", "htmlLink": f"https://www.google.com/calendar/event?eid={body['id']}"}
+                    outer.events[body["id"]] = {**body, "status": "confirmed", "iCalUID": f"{body['id']}@google.com",
+                                                "htmlLink": f"https://www.google.com/calendar/event?eid={body['id']}"}
                     self._send(200, outer.events[body["id"]])
 
             def do_GET(self):
                 r = self._route()
-                if r:
-                    self._send(200, outer.events[r[1]]) if r[1] in outer.events else self._send(404, {"error": {"message": "Not Found"}})
+                if not r:
+                    return
+                if r[1] is None:                                     # events.list: kun det, der overlapper tidsrummet, page_size pr. side
+                    q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                    outer.log.append(("list", r[0], {k: v[0] for k, v in q.items()}))
+                    lo, hi = q["timeMin"][0], q["timeMax"][0]
+                    when = lambda e, k: e[k].get("dateTime") or e[k]["date"]
+                    items = sorted((e for e in outer.events.values() if e["status"] != "cancelled" and when(e, "end") > lo[:len(when(e, "end"))]
+                                    and when(e, "start") < hi[:len(when(e, "start"))]), key=lambda e: when(e, "start"))
+                    page = int(q.get("pageToken", ["0"])[0])
+                    chunk = items[page * outer.page_size:(page + 1) * outer.page_size]
+                    more = (page + 1) * outer.page_size < len(items)
+                    return self._send(200, {"items": chunk, **({"nextPageToken": str(page + 1)} if more else {})})
+                self._send(200, outer.events[r[1]]) if r[1] in outer.events else self._send(404, {"error": {"message": "Not Found"}})
 
             def do_PATCH(self):
                 raw = self._body()
@@ -131,6 +145,10 @@ class MockGoogle:
     @property
     def api(self) -> str:
         return f"{self.base}/calendar/v3"
+
+    def add(self, eid: str, summary: str, start: dict, end: dict, **extra) -> None:
+        """Læg en aftale direkte i den simulerede kalender, som om nogen havde oprettet den i Google."""
+        self.events[eid] = {"id": eid, "iCalUID": f"{eid}@google.com", "summary": summary, "start": start, "end": end, "status": "confirmed", **extra}
 
     def live(self) -> dict[str, dict]:
         return {k: v for k, v in self.events.items() if v["status"] != "cancelled"}

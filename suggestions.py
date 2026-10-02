@@ -281,6 +281,22 @@ class GoogleCalendar:
             raise CalendarError(self._explain(r), 403 if r.status_code == 403 else 502)
         return {"id": event_id, "html_link": r.json().get("htmlLink")}
 
+    async def list_events(self, start: dt.datetime, end: dt.datetime) -> list[dict]:
+        """Alle aftaler i tidsrummet, gentagelser foldet ud (singleEvents). Bladrer gennem alle sider."""
+        params = {"timeMin": start.isoformat(), "timeMax": end.isoformat(), "singleEvents": "true", "orderBy": "startTime",
+                  "maxResults": "2500", "timeZone": TZ_NAME}
+        items: list[dict] = []
+        for _ in range(20):                                     # værn mod en uendelig sideløkke
+            r = await self._call("GET", self._url(), params=params)
+            if r.status_code >= 300:
+                raise CalendarError(self._explain(r), 403 if r.status_code == 403 else 502)
+            j = r.json()
+            items += j.get("items", [])
+            if not j.get("nextPageToken"):
+                return items
+            params["pageToken"] = j["nextPageToken"]
+        raise CalendarError("For mange sider fra Google Kalender", 502)
+
     async def delete(self, event_id: str) -> None:
         r = await self._call("DELETE", self._url("/" + event_id))
         if r.status_code not in (200, 204, 404, 410):

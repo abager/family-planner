@@ -105,6 +105,9 @@ async def check_ical(cfg: dict) -> list[Result]:
     for g in cfg.get("google", []):
         name, url = g.get("name", "Google"), g.get("ical_url", "")
         title = f"Google-kalender «{name}»"
+        if not url and g.get("calendar_id") and F._reads_via_api(cfg, g):
+            out.append(Result(OK, title, "læses via Google API (ingen iCal-adresse)", "Uden iCal-adresse er der ingen reserve, hvis API'et fejler."))
+            continue
         if not url or "/.../" in url:
             out.append(Result(FAIL, title, "adressen er ikke udfyldt", "Indsæt kalenderens hemmelige adresse i iCal-format (Google Kalender → Indstillinger → Integrer kalender)."))
             continue
@@ -167,8 +170,15 @@ async def check_google_write(cfg: dict) -> list[Result]:
     created = None
     try:
         created = await g.create("st_" + secrets.token_hex(6), payload)
+        seen = None
+        if cw.get("read_via_api", True):                    # kan servicekontoen også læse aftalen, den lige har oprettet?
+            items = await g.list_events(dt.datetime.combine(day, dt.time(0), F.TZ), dt.datetime.combine(day + dt.timedelta(days=1), dt.time(0), F.TZ))
+            seen = any(i.get("id") == created["id"] for i in items)
         await g.delete(created["id"])
         out = [Result(OK, "Skrivning til Google Kalender", f"kan oprette og slette aftaler i «{g.calendar_name}» ({g.calendar_id})")]
+        if seen is not None:
+            out.append(Result(OK, "Læsning via Google API", "familiekalenderen læses via API – ændringer ses med det samme") if seen else
+                       Result(WARN, "Læsning via Google API", "prøveaftalen kunne ikke findes igen", "Appen falder tilbage til iCal-adressen. Tjek at Calendar API er slået til."))
         if g.reminders_ignored:
             out.append(Result(WARN, "Påmindelser", "reminder_minutes virker ikke og ignoreres",
                               "Google giver kun påmindelser til den, der opretter aftalen (servicekontoen). Fjern reminder_minutes, og sæt i stedet "

@@ -83,12 +83,77 @@ class People:
 
 
 # ---------------------------------------------------------------- Google (iCal)
+def _api_time(v: dict) -> tuple[dt.datetime, bool]:
+    if v.get("dateTime"):
+        d = dt.datetime.fromisoformat(v["dateTime"])
+        if d.tzinfo is None and v.get("timeZone"):
+            d = d.replace(tzinfo=ZoneInfo(v["timeZone"]))
+        return to_local(d)
+    return to_local(dt.date.fromisoformat(v["date"]))
+
+
+def api_event(item: dict, name: str, cal_cfg: dict, people: People) -> dict | None:
+    """Én aftale fra Google Calendar API i appens format. Samme id-form som fra iCal (g:<iCalUID>:<start>), så alt andet virker uændret."""
+    if item.get("status") == "cancelled" or "start" not in item:
+        return None
+    s, all_day = _api_time(item["start"])
+    e = _api_time(item["end"])[0] if item.get("end") else s + (dt.timedelta(days=1) if all_day else dt.timedelta(0))
+    priv = (item.get("extendedProperties") or {}).get("private") or {}
+    title = item.get("summary") or "(uden titel)"
+    ev = {
+        "id": f"g:{item.get('iCalUID') or item['id']}:{s.isoformat()}",
+        "title": title,
+        "start": iso(s),
+        "end": iso(e - dt.timedelta(minutes=1) if all_day else e),
+        "allDay": all_day,
+        "people": people.in_text(title) or cal_cfg.get("default_people", ["family"]),
+        "source": "google",
+        "calendar": name,
+        "location": item.get("location") or None,
+        "notes": (item.get("description") or "").strip()[:500] or None,
+    }
+    if priv.get("familieplan"):
+        ev["appCreated"] = True                       # oprettet af appen: kan flyttes og aflyses herfra
+    if (not all_day and e <= s) or priv.get("endInferred") == "1":
+        ev["endInferred"] = True
+        if e <= s:
+            ev["end"] = iso(s + dt.timedelta(hours=1))   # kun så aftalen har en plads på dagen; vises som "kl. 14.00"
+    return ev
+
+
+async def fetch_google_api(cfg: dict, cal_cfg: dict, people: People, start: dt.datetime, end: dt.datetime) -> list[dict]:
+    g = sugg_store.GoogleCalendar(cfg)
+    items = await g.list_events(start, end)
+    name = cal_cfg.get("name", "Google")
+    return [ev for it in items if (ev := api_event(it, name, cal_cfg, people))]
+
+
+def _reads_via_api(cfg: dict, cal_cfg: dict) -> bool:
+    cw = cfg.get("calendar_write", {})
+    return bool(cw.get("enabled")) and cw.get("read_via_api", True) and sugg_store.is_write_calendar(cfg, cal_cfg) and sugg_store.GoogleCalendar(cfg).enabled
+
+
 async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, failed: list[str] | None = None) -> list[dict]:
-    """failed: får navnene på de kalendere, der ikke kunne hentes, så kaldet kan beholde deres seneste aftaler."""
+    """failed: får navnene på de kalendere, der ikke kunne hentes, så kaldet kan beholde deres seneste aftaler.
+
+    Skrivekalenderen læses via Googles API, når servicekontoen er sat op (ændringer ses med det samme). Fejler det,
+    bruges iCal-adressen, hvis den findes."""
     events: list[dict] = []
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
         for cal_cfg in cfg.get("google", []):
             name = cal_cfg.get("name", "Google")
+            if _reads_via_api(cfg, cal_cfg):
+                try:
+                    got = await fetch_google_api(cfg, cal_cfg, people, start, end)
+                    events += got
+                    log.info("Google «%s» via API: %d aftaler", name, len(got))
+                    continue
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Kunne ikke læse «%s» via Google API: %s%s", name, e, " – prøver iCal" if cal_cfg.get("ical_url") else "")
+                    if not cal_cfg.get("ical_url"):
+                        if failed is not None:
+                            failed.append(name)
+                        continue
             try:
                 resp = await http.get(cal_cfg["ical_url"])
                 resp.raise_for_status()
