@@ -114,6 +114,14 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 **Budget:** Svar gemmes i `web/ai_cache.json`, så uændrede data aldrig koster en ny forespørgsel, og forbruget tælles i `web/ai_usage.json`. Dagen tælles i Stillehavstid som hos Google, så budgettet nulstilles ved midnat i Californien (normalt kl. 9 dansk tid). Efter en fejl holder appen pause, før den prøver igen (længere for hver fejl i træk). Begge filer indeholder familiens data og må aldrig i git.
 
+### Vejr (DMI)
+
+Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"), og kioskskærmen viser en vejrlinje under datoen. Vejret kommer fra DMI's åbne data (vejrmodellen HARMONIE) – ingen nøgle, ingen konto. HARMONIE rækker kun et par døgn frem, så ugeoverblikket har kun vejr for de dage, DMI dækker.
+
+**Sæt hjemmet én gang:** Åbn appen i browseren **på pc'en, der kører den** (http://localhost:8080), tryk på **Vejr: hjem** og **Brug min placering som hjem**. Browseren spørger om lov. Siger den nej, så slå placering til i Windows: *Indstillinger → Privatliv og sikkerhed → Placering*. Knappen virker kun på selve pc'en (eller over https), fordi browsere kun udleverer placeringen til sikre sider. En stationær pc finder sin placering via wifi eller internetadressen, så den kan være et par kilometer ved siden af – det betyder intet for vejret. Tryk på "Se på kort" for at tjekke den. Flytter I, så tryk igen.
+
+**Privatliv:** Placeringen afrundes til ca. 1 km og gemmes kun i `web/home_location.json` (aldrig i git, aldrig i `family.json`). Kun den afrundede placering sendes til DMI, højst én gang i timen. Er DMI nede, bruges en prognose op til 6 timer gammel; ellers er overblikket bare uden vejr. Tjek med selvtesten: linjerne *Vejr: hjem* og *Vejr (DMI)*.
+
 ## Udseende
 
 - Titlen er "Familieplan". Ikonet i browserfanen (en proppet kalender i børnenes farver) ligger som `web/favicon.svg` med PNG-udgaver (`favicon-32.png`, `apple-touch-icon.png` til hjemmeskærmen på iPad/iPhone). Læg dine egne filer med samme navne i `web/` for at skifte det.

@@ -5,6 +5,17 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (weather)
+- Weather from DMI (HARMONIE, no key) in the day and week overviews (section "Vejr": short forecast and practical
+  advice, also without AI) and a weather line on the kiosk. The week only has weather for the days DMI covers.
+- "Vejr: hjem" in the app: set the home location once from the browser on the server PC. Rounded to ~1 km and
+  stored in `web/home_location.json`; only that is sent to DMI, at most hourly.
+- Selftest lines for the home location and DMI. `[weather] enabled` in config.toml.
+
+### Changed (Windows)
+- The app reads `.env` itself when run directly (variables set with `setx` or by Docker still win). Selftest hints
+  say where a secret can go. README: Windows steps (virtual environment, `Activate.ps1`, `setx` instead of `$env:`).
+
 ### Added (AI, phase 1)
 - `ai.py`: one interface for language models. Google Gemini (free tier, `gemini-3.5-flash-lite`) is the default;
   Claude works through the same path. Plain HTTPS with httpx, JSON output, cache by content hash

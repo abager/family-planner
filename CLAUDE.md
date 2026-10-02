@@ -75,6 +75,7 @@ familie_regler.md (free text)   ─┘                                     └�
 | `messages.py` | Message analysis: which child, actions with deadlines, events, private threads |
 | `activities.py` | Finds activities worth a calendar entry; cancellations and moves |
 | `schedule.py` | Timetable cleanup: subject names, teacher abbreviations, hidden support lessons |
+| `weather.py` | DMI weather (Forecast EDR, `harmonie_dini_sf`, no key): home location (rounded), hourly-cached fetch, coarse day summaries, rule-based advice |
 | `ai.py` | The only way to call a language model: provider adapters (Gemini, Claude) over plain httpx, JSON output, content-hash cache, daily budget + RPM throttle, backoff, `AIUnavailable` |
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
@@ -86,7 +87,7 @@ familie_regler.md (free text)   ─┘                                     └�
 Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
 `private_messages.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
-`web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
+`web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, `web/home_location.json`, `web/weather_cache.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
 `weekplan.json`.
 
 ## Commands
@@ -128,6 +129,10 @@ history.
 Version: **v0.7.0** (first version in git; previously developed as zip files).
 
 Known gaps and open work:
+
+- **Weather has only been tested against a simulated DMI.** Endpoint, parameter names and units come from DMI's
+  docs (checked 2026-10-02); whether `total-precipitation` is accumulated is inferred from the docs and handled
+  both ways. First real check: the selftest lines *Vejr: hjem* and *Vejr (DMI)*.
 
 - **AI (Phase 1) has only been tested against a simulated Gemini/Claude** (httpx `MockTransport`). The real
   endpoint, the model name `gemini-3.5-flash-lite`, Google's 429 detail format (`QuotaFailure` with a `PerDay`
@@ -176,6 +181,20 @@ Planned restructuring (do in small steps, tests green after each):
   The banner never shows the technical reason; `/api/status` → `ai` does (login only, never the key).
 - Selftest uses `ignore_pause=True` so a fixed key can be verified immediately; it is not cached.
 - Tests: only `httpx.MockTransport` with a fake clock/sleep. Never a real provider, never real family data.
+
+## Weather conventions (`weather.py`)
+
+- Source: DMI Forecast EDR `.../forecastedr/collections/harmonie_dini_sf/position?coords=POINT(lon lat)&crs=crs84&f=GeoJSON`.
+  No auth since 2 Dec 2025; fair use → fetch at most hourly, wait 30 min after an error, reuse ≤ 6 h old data.
+  Units: temperature K, `total-precipitation` kg/m² (= mm) assumed accumulated from model start (falls back to
+  per-step if the series ever decreases), wind m/s, cloudcover 0–1.
+- Home location: set once from the browser (`/api/home-location`, login required), rounded to 2 decimals, must be
+  inside Denmark, stored only in `home_location.json`. Never in `family.json`, logs, or `config.toml`.
+- `family.json` → `weather.dage`: coarse per-day summaries (whole degrees, rain class, part of day, wind class,
+  frost, advice). Only days whose daytime (07–19) is covered. Coarse on purpose so the briefing fingerprint (and
+  the AI quota) doesn't move with tiny forecast changes. The briefing gets them as `vejr` with `V` refs and a
+  "Vejr" section; the kiosk shows `#kWeather` and leaves "Vejr" out of its remember list.
+- Weather is an extra: any failure → no weather, never an error or banner. Tests use simulated DMI only.
 
 ## Calendar and time conventions
 
