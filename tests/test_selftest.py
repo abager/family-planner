@@ -190,3 +190,63 @@ def test_obsolete_reminder_setting_is_flagged(healthy):
 def test_writing_to_a_calendar_the_app_does_not_show_is_flagged(healthy):
     healthy["calendar_write"]["calendar_id"] = "other@group.calendar.google.com"
     assert by(run(healthy, notify=False), "Kalender til nye aftaler").status == T.WARN
+
+
+# ---------------------------------------------------------------- sprogmodel (simuleret Gemini)
+def _ai_client(cfg, status, body, env=None, backoff=False):
+    import json as _json
+
+    import httpx
+
+    import ai
+    sent = []
+
+    def handler(req):
+        sent.append(req)
+        return httpx.Response(status, content=_json.dumps(body))
+    out = Path(cfg["output"]).parent
+    if backoff:
+        (out / "ai_usage.json").write_text(_json.dumps({"backoff_until": "2999-01-01T00:00:00+00:00"}))
+    c = ai.Client(ai.settings_from(cfg), out, transport=httpx.MockTransport(handler),
+                  env={"GEMINI_API_KEY": "AIzaTEST"} if env is None else env)
+    return c, sent
+
+
+OK_BODY = {"candidates": [{"content": {"parts": [{"text": '{"svar": "ok"}'}]}, "finishReason": "STOP"}]}
+
+
+def test_selftest_makes_one_real_ai_request_and_reports_ok(cfg):
+    cfg["assistant"] = {"mode": "ai"}
+    c, sent = _ai_client(cfg, 200, OK_BODY)
+    r = T.check_assistant(cfg, c)
+    assert r.status == T.OK and "gemini" in r.title and "1/100" in r.detail and len(sent) == 1
+    assert "Hugo" not in sent[0].content.decode() and "Carla" not in sent[0].content.decode()     # ingen familiedata
+
+
+def test_selftest_tries_even_during_a_pause_so_a_fixed_key_can_be_checked(cfg):
+    cfg["assistant"] = {"mode": "ai"}
+    c, sent = _ai_client(cfg, 200, OK_BODY, backoff=True)
+    assert T.check_assistant(cfg, c).status == T.OK and len(sent) == 1
+
+
+@pytest.mark.parametrize("status,body,expect,hint", [
+    (403, {"error": {"message": "API key not valid"}}, T.FAIL, "Generative Language API"),
+    (402, {"error": {"message": "payment"}}, T.FAIL, "fakturering forblive slået FRA"),
+    (429, {"error": {"message": "quota"}}, T.WARN, "Stillehavstid"),
+])
+def test_selftest_explains_ai_failures(cfg, status, body, expect, hint):
+    cfg["assistant"] = {"mode": "ai"}
+    c, _ = _ai_client(cfg, status, body)
+    r = T.check_assistant(cfg, c)
+    assert r.status == expect and hint in r.hint
+
+
+def test_selftest_without_key_says_where_to_put_it(cfg):
+    cfg["assistant"] = {"mode": "ai"}
+    c, sent = _ai_client(cfg, 200, OK_BODY, env={})
+    r = T.check_assistant(cfg, c)
+    assert r.status == T.FAIL and "GEMINI_API_KEY=" in r.hint and "anførselstegn" in r.hint and not sent
+
+
+def test_selftest_offline_mode_sends_nothing(cfg):
+    assert T.check_assistant(cfg).status == T.OK

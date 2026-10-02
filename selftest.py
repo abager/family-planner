@@ -227,12 +227,40 @@ def check_data(cfg: dict) -> list[Result]:
     return out
 
 
-def check_assistant(cfg: dict) -> Result:
-    mode = cfg.get("assistant", {}).get("mode", "offline")
-    if mode == "claude":
-        env = cfg["assistant"].get("api_key_env", "ANTHROPIC_API_KEY")
-        return Result(OK if os.environ.get(env) else FAIL, "Familieassistent (Claude)", "API-nøgle fundet" if os.environ.get(env) else f"{env} er ikke sat", "" if os.environ.get(env) else f"Sæt {env}, eller skift til mode = \"offline\".")
-    return Result(OK, "Familieassistent", {"offline": "uden sprogmodel – intet forlader maskinen", "off": "slået fra"}.get(mode, mode))
+AI_HINTS = {
+    "mangler_noegle": "Sæt {env}=din-nøgle i .env – uden mellemrum og uden anførselstegn – og genstart.",
+    "afvist": "Tjek at nøglen er rigtig, at den er begrænset til Generative Language API, og at modellen ({model}) findes.",
+    "betaling": "Udbyderen beder om betaling. På Googles gratis niveau skal fakturering forblive slået FRA i projektet.",
+    "kvote": "Kvoten er brugt. Den nulstilles ved midnat Stillehavstid (kl. 9 dansk tid). Overblikket bruger imens reserven.",
+    "dagsbudget": "Appens eget dagsbudget ([ai] daily_cap) er brugt. Det nulstilles ved midnat Stillehavstid.",
+    "minutgraense": "For mange forespørgsler lige nu. Prøv igen om et minut.",
+    "serverfejl": "Udbyderen har problemer lige nu. Prøv igen senere.",
+    "netvaerk": "Serveren kan ikke nå udbyderen. Tjek internetforbindelsen og evt. firewall.",
+    "ugyldigt_svar": "Modellen svarede ikke med gyldigt JSON. Prøv igen; sker det tit, så prøv en anden model i [ai] model.",
+    "ukendt_udbyder": "Sæt [ai] provider til \"gemini\" eller \"claude\".",
+}
+
+
+def check_assistant(cfg: dict, client=None) -> Result:
+    """Med mode = "ai" (eller "claude") sendes ÉN lille forespørgsel uden familiedata, så nøgle og model prøves for alvor."""
+    import ai
+    import briefing
+    mode = briefing.assistant_mode(cfg.get("assistant", {}))
+    if mode not in ("ai", "claude"):
+        return Result(OK, "Familieassistent", {"offline": "uden sprogmodel – intet forlader maskinen", "off": "slået fra"}.get(mode, mode))
+    client = client or briefing.ai_client(cfg)
+    s = client.s
+    title = f"Familieassistent ({s.provider}, {s.model})"
+    try:
+        out = client.generate_json('Svar kun med JSON-objektet {"svar": "ok"}.', "Test fra Familieplans selvtest.",
+                                   cache_key=f"selvtest {dt.datetime.now().isoformat()}", ignore_pause=True)
+    except ai.AIUnavailable as e:
+        warn = e.reason in ("kvote", "dagsbudget", "minutgraense", "serverfejl", "netvaerk")
+        hint = AI_HINTS.get(e.reason, "").format(env=s.api_key_env, model=s.model)
+        return Result(WARN if warn else FAIL, title, f"{ai.REASONS.get(e.reason, e.reason)}" + (f" ({e.detail})" if e.detail else ""),
+                      hint + " Indtil da laves overblikket af appens egne regler.")
+    st = client.status()
+    return Result(OK, title, f"svarer ({'ok' if out.get('svar') == 'ok' else 'svar modtaget'}) – {st['requests_today']}/{st['daily_cap']} forespørgsler brugt i dag")
 
 
 # ---------------------------------------------------------------- samlet kørsel

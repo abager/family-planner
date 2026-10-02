@@ -256,8 +256,9 @@ class Client:
 
     # ----- offentligt
     def generate_json(self, system: str, prompt: str, *, validate: Callable[[dict], None] | None = None,
-                      cache_key: str | None = None) -> dict:
-        """Svaret som dict. Rejser AIUnavailable, hvis der ikke kan svares (kalderen bruger så sin reserve)."""
+                      cache_key: str | None = None, ignore_pause: bool = False) -> dict:
+        """Svaret som dict. Rejser AIUnavailable, hvis der ikke kan svares (kalderen bruger så sin reserve).
+        ignore_pause: kun til selvtesten – prøv selvom en tidligere fejl har sat en pause (budgettet gælder stadig)."""
         provider = PROVIDERS.get(self.s.provider)
         if provider is None:
             raise AIUnavailable("ukendt_udbyder", self.s.provider)
@@ -268,12 +269,12 @@ class Client:
             raise AIUnavailable("mangler_noegle", f"{self.s.api_key_env} indeholder ugyldige tegn (mellemrum, æøå …)")
 
         ckey = content_key(self.s.provider, self.s.model, system, cache_key or prompt)
-        hit = self._cache_get(ckey)
+        hit = None if ignore_pause else self._cache_get(ckey)
         if hit is not None:
             log.info("AI: svar fra cache")
             return hit
 
-        self._admit()                             # budget, pause og minutgrænse – rejser AIUnavailable
+        self._admit(ignore_pause)                 # budget, pause og minutgrænse – rejser AIUnavailable
         url, headers, body = provider.request(self.s, key, system, prompt)
         self._count_request()
         try:
@@ -299,7 +300,8 @@ class Client:
             self._fail("ugyldigt_svar", str(e)[:200])
 
         self._ok()
-        self._cache_put(ckey, result)
+        if not ignore_pause:                      # selvtestens svar skal ikke fylde i cachen
+            self._cache_put(ckey, result)
         return result
 
     def status(self) -> dict:
@@ -317,11 +319,11 @@ class Client:
             u = {**u, "day": today, "requests": 0}
         return u
 
-    def _admit(self) -> None:
+    def _admit(self, ignore_pause: bool = False) -> None:
         now = self.clock()
         u = self._usage()
         until = u.get("backoff_until")
-        if until and dt.datetime.fromisoformat(until) > now:
+        if until and not ignore_pause and dt.datetime.fromisoformat(until) > now:
             raise AIUnavailable("pause", f"til {until}")
         if u.get("requests", 0) >= self.s.daily_cap:
             raise AIUnavailable("dagsbudget", f"{u.get('requests')}/{self.s.daily_cap}")

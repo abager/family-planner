@@ -625,10 +625,19 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         resp.delete_cookie(COOKIE)
         return resp
 
+    def _ai_status():
+        try:
+            import briefing
+            return briefing.ai_status(cfg)
+        except Exception as e:  # noqa: BLE001 – status må aldrig vælte på grund af AI
+            log.warning("Kunne ikke læse AI-status: %s", e)
+            return None
+
     @app.get("/api/status")
     async def status():
         return {**state.public(), "interval_minutes": settings.interval // 60, "aula_enabled": settings.use_aula,
-                "mark_read_enabled": settings.mark_read and settings.use_aula}
+                "mark_read_enabled": settings.mark_read and settings.use_aula,
+                "ai": _ai_status()}            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
 
     # ----- private tråde: indholdet udleveres kun mod den ekstra kode
     @app.get("/api/private/status")

@@ -227,3 +227,20 @@ def test_created_events_without_end_time_are_marked_in_the_app(env, google):
     (ev,) = family_events(env)
     assert ev["appCreated"] and ev["endInferred"]
     assert next(iter(google.live().values()))["extendedProperties"]["private"]["endInferred"] == "1"
+
+
+# ---------------------------------------------------------------- sprogmodellens tilstand
+def test_ai_status_is_shown_after_login_but_never_the_key(cfg, monkeypatch):
+    monkeypatch.setenv("FAMILIEPLAN_PRIVATE_CODE", CODE)
+    monkeypatch.setenv("GEMINI_API_KEY", "AIzaHEMMELIG")
+    cfg["assistant"] = {"mode": "ai"}
+    (Path(cfg["output"]).parent / "family.json").write_text(json.dumps({"events": [], "messages": []}))
+    env = Env(cfg, server.Settings(cfg))
+    st = env.c.get("/api/status").json()["ai"]
+    assert st["provider"] == "gemini" and st["daily_cap"] == 100
+    assert "AIzaHEMMELIG" not in env.c.get("/api/status").text
+    assert "ai" not in env.c.get("/api/health").json()
+
+
+def test_ai_status_is_empty_in_offline_mode(env):
+    assert env.c.get("/api/status").json()["ai"] is None
