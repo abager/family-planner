@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import os
+import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -28,7 +29,8 @@ TZ = ZoneInfo("Europe/Copenhagen")
 UTC = dt.timezone.utc
 
 URL = "https://opendataapi.dmi.dk/v1/forecastedr/collections/harmonie_dini_sf/position"
-PARAMS = ["temperature-2m", "total-precipitation", "wind-speed-10m", "gust-wind-speed-10m", "cloudcover"]
+PARAMS = ["temperature-2m", "total-precipitation", "wind-speed-10m", "gust-wind-speed-10m", "fraction-of-cloud-cover"]
+CLOUD_PARAM = "fraction-of-cloud-cover"           # 0–1; navnene skal stå præcis som i DMI's EDR-parameterliste
 HOME_FILE = "home_location.json"
 CACHE_FILE = "weather_cache.json"
 FETCH_EVERY = dt.timedelta(minutes=60)
@@ -111,7 +113,7 @@ def parse(geojson: dict) -> list[dict]:
         rows.append({"t": dt.datetime.fromisoformat(p["step"].replace("Z", "+00:00")),
                      "temp": p["temperature-2m"] - 273.15, "acc": p.get("total-precipitation"),
                      "wind": p.get("wind-speed-10m") or 0.0, "gust": p.get("gust-wind-speed-10m") or 0.0,
-                     "cloud": p.get("cloudcover")})
+                     "cloud": p.get(CLOUD_PARAM)})
     rows.sort(key=lambda r: r["t"])
     if not rows:
         raise WeatherUnavailable("ingen timer i svaret")
@@ -124,6 +126,17 @@ def parse(geojson: dict) -> list[dict]:
     return rows
 
 
+def _detail(r: httpx.Response) -> str:
+    """DMI's egen forklaring på en afvisning, kort – og uden decimaltal, så koordinater aldrig ender i loggen."""
+    try:
+        j = r.json()
+        msg = j.get("description") or j.get("detail") or j.get("message") or j.get("title") or ""
+    except ValueError:
+        msg = r.text or ""
+    msg = re.sub(r"-?\d+\.\d+", "…", " ".join(str(msg).split()))[:160]
+    return f" ({msg})" if msg else ""
+
+
 def fetch(lat: float, lon: float, transport: httpx.BaseTransport | None = None, timeout: float = 20) -> list[dict]:
     params = {"coords": f"POINT({lon} {lat})", "crs": "crs84", "parameter-name": ",".join(PARAMS), "f": "GeoJSON"}
     try:
@@ -132,7 +145,7 @@ def fetch(lat: float, lon: float, transport: httpx.BaseTransport | None = None, 
     except httpx.HTTPError as e:
         raise WeatherUnavailable(f"kunne ikke nå DMI: {type(e).__name__}") from e
     if r.status_code != 200:
-        raise WeatherUnavailable(f"DMI svarede {r.status_code}")
+        raise WeatherUnavailable(f"DMI svarede {r.status_code}{_detail(r)}")
     try:
         return parse(r.json())
     except (ValueError, KeyError, TypeError) as e:

@@ -195,7 +195,7 @@ Planned restructuring (do in small steps, tests green after each):
 - Source: DMI Forecast EDR `.../forecastedr/collections/harmonie_dini_sf/position?coords=POINT(lon lat)&crs=crs84&f=GeoJSON`.
   No auth since 2 Dec 2025; fair use → fetch at most hourly, wait 30 min after an error, reuse ≤ 6 h old data.
   Units: temperature K, `total-precipitation` kg/m² (= mm) assumed accumulated from model start (falls back to
-  per-step if the series ever decreases), wind m/s, cloudcover 0–1.
+  per-step if the series ever decreases), wind m/s, `fraction-of-cloud-cover` 0–1 (parameter names must match DMI's EDR list exactly – one unknown name → HTTP 400 for the whole request).
 - Home location: set once from the browser (`/api/home-location`, login required), rounded to 2 decimals, must be
   inside Denmark, stored only in `home_location.json`. Never in `family.json`, logs, or `config.toml`.
 - `family.json` → `weather.dage`: coarse per-day summaries (whole degrees, rain class, part of day, wind class,

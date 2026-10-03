@@ -26,7 +26,7 @@ def dmi(start=dt.datetime(2026, 10, 1, 3, 0, tzinfo=UTC), hours=60, temp=lambda 
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [12.57, 55.68]},
                       "properties": {"step": t.strftime("%Y-%m-%dT%H:%M:%S.000Z"), "temperature-2m": temp(lh) + 273.15,
                                      "total-precipitation": total if accumulated else r, "wind-speed-10m": wind(lh),
-                                     "gust-wind-speed-10m": gust(lh), "cloudcover": cloud(lh)}})
+                                     "gust-wind-speed-10m": gust(lh), "fraction-of-cloud-cover": cloud(lh)}})
     return {"type": "FeatureCollection", "features": feats}
 
 
@@ -297,3 +297,31 @@ def test_status_is_only_yes_or_no(cfg, tmp_path):
     assert W.status(cfg, tmp_path) == {"enabled": True, "home": True}
     cfg["weather"] = {"enabled": False}
     assert W.status(cfg, tmp_path)["enabled"] is False
+
+
+
+# ---------------------------------------------------------------- forespørgslen til DMI
+def test_the_request_only_uses_parameter_names_dmi_knows():
+    # DMI afviser HELE forespørgslen med 400, hvis bare ét navn er ukendt (sket med "cloudcover")
+    known = {"temperature-2m", "total-precipitation", "wind-speed-10m", "gust-wind-speed-10m", "fraction-of-cloud-cover"}
+    seen = {}
+
+    def handler(req):
+        seen["names"] = set(req.url.params["parameter-name"].split(","))
+        return httpx.Response(200, json=dmi())
+    W.fetch(*HOME, transport=httpx.MockTransport(handler))
+    assert seen["names"] == known
+
+
+def test_cloud_cover_is_read_from_dmis_name():
+    rows = W.parse(dmi(hours=30, cloud=lambda h: 0.1))
+    assert all(r["cloud"] == 0.1 for r in rows)
+
+
+def test_a_rejection_logs_dmis_reason_without_coordinates():
+    body = {"description": "Unknown parameter-name cloudcover for POINT(12.568337 55.676098)"}
+    with pytest.raises(W.WeatherUnavailable) as e:
+        W.fetch(*HOME, transport=httpx.MockTransport(lambda req: httpx.Response(400, json=body)))
+    msg = str(e.value)
+    assert "DMI svarede 400" in msg and "Unknown parameter-name cloudcover" in msg
+    assert "55.6" not in msg and "12.5" not in msg

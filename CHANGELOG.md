@@ -15,6 +15,11 @@ All notable changes to this project. Versions are git tags. The format is loosel
 - `/api/status` reports `weather: {enabled, home}`; the "Vejr: hjem" button turns red ("Vejr: hjem er ikke sat")
   when weather is on but the home location is missing.
 
+### Fixed
+- DMI rejected every weather request with HTTP 400: the cloud-cover parameter is called `fraction-of-cloud-cover`
+  in DMI's EDR API, not `cloudcover`. A rejection now logs DMI's own reason (with decimals redacted, so never
+  coordinates), and a test pins the parameter names.
+
 ### Changed
 - Weather emoji carry U+FE0F so Windows and Android draw them in colour instead of as black text glyphs.
 
