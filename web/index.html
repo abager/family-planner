@@ -366,7 +366,7 @@ dialog button{margin-top:14px;border:0;background:var(--ink);color:var(--paper);
 /* Kioskvisning: stor tekst, få elementer, ingen knapper – til en tablet på væggen */
 #kioskView{--kfs:clamp(18px,2.75vmin,40px);font-size:var(--kfs)}
 body.kiosk{overflow-x:hidden}
-body.kiosk header,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #aulaView{display:none!important}
+body.kiosk header,body.kiosk #wxHeadPanel,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #aulaView{display:none!important}
 body.kiosk .wrap{max-width:none;padding:clamp(10px,2vmin,30px);padding-bottom:clamp(10px,2vmin,30px)}
 .k-top{display:flex;align-items:center;gap:2.4vmin;margin-bottom:2vmin;flex-wrap:wrap}
 .k-clock{font:800 3.6em/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -380,6 +380,27 @@ body.kiosk .wrap{max-width:none;padding:clamp(10px,2vmin,30px);padding-bottom:cl
 .k-story{list-style:none;padding:0 !important;display:block !important}
 .k-story p{margin:0 0 .55em;line-height:1.4;font-size:.92em}
 .k-weather small{display:block;color:var(--muted);font-weight:400}
+/* Vejret: ét ikon, der folder sig ud til time for time (dagens overskrift og kioskskærmen) */
+.wxchip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:3px 12px 3px 8px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font-weight:700;font-size:.95rem}
+.wxchip:focus-visible,.k-wxbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.wxchip[aria-expanded="true"]{background:var(--today);border-color:var(--accent)}
+.wxchip small{color:var(--muted);font-weight:400}
+.wxi{font-size:1.3em;line-height:1}
+.wxpanel{margin:-8px 0 18px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.wxpanel[hidden]{display:none}
+body.mode-mail #wxHeadPanel{display:none}
+.wxtxt{margin:0 0 8px;color:var(--muted)}
+.wxtxt b{color:var(--ink)}
+.wxh{list-style:none;margin:0;padding:0 0 4px;display:flex;gap:4px;overflow-x:auto;overscroll-behavior-x:contain}
+.wxh li{position:relative;flex:0 0 auto;min-width:3.1em;display:grid;justify-items:center;gap:2px;padding:6px 4px;border-radius:10px}
+.wxh li:nth-child(odd){background:var(--paper)}
+.wxh .t{font-size:.8em;color:var(--muted);font-variant-numeric:tabular-nums}
+.wxh .i{font-size:1.5em;line-height:1.15}
+.wxh .c{font-weight:700;font-variant-numeric:tabular-nums}
+.wxh .r{font-size:.72em;color:var(--accent);min-height:1.2em;white-space:nowrap}
+.k-wxbtn{all:unset;cursor:pointer;display:block;border-radius:8px}
+.k-wxbtn .wxmore{color:var(--accent);font-size:.75em;font-weight:700;margin-left:.4em}
+.k-hours{margin:0 0 2vmin;font-size:.9em}
 .homeinfo{color:var(--muted);margin:8px 0 0}
 .k-status{margin-left:auto;font-size:.8em;color:var(--muted);text-align:right}
 .k-status .bad{color:#C23A15;font-weight:700}
@@ -584,9 +605,11 @@ button,a,.chip,.pill{touch-action:manipulation}
     <div>
       <h1 id="greeting">Familieplan</h1>
       <p class="sub" id="dateline"></p>
+      <div id="wxHead"></div>
     </div>
     <div class="status" id="status"></div>
   </header>
+  <div class="wxpanel" id="wxHeadPanel" hidden></div>
 
   <nav class="controls" aria-label="Visninger og filtre">
     <div class="seg" role="group" aria-label="Visning">
@@ -651,6 +674,7 @@ button,a,.chip,.pill{touch-action:manipulation}
       <div class="k-status" id="kStatus"></div>
       <button type="button" class="k-exit" id="kExit">Afslut kioskvisning</button>
     </div>
+    <div class="wxpanel k-hours" id="kHours" hidden></div>
     <div class="k-body">
       <div class="k-kids" id="kKids"></div>
       <div class="k-side">
@@ -997,6 +1021,32 @@ function shownBriefings(){
 }
 // Vejret (DMI) for en dag, hvis prognosen dækker den. Kun det grove resumé – placeringen er aldrig i family.json.
 function weatherFor(day){ return (state.data?.weather?.dage||[]).find(d=>d.dato===ymd(day)) || null; }
+// Ét ikon med temperatur, der folder sig ud til time for time. Åben/lukket huskes, mens appen kører.
+state.wxOpen={head:false,kiosk:false};
+const wxTemp=w=>w.min===w.max?`${w.max}°`:`${w.min}–${w.max}°`;
+const wxMm=n=>String(n).replace(".",",");
+function wxHoursHtml(w, day, withText=true){
+  const now=new Date(), isToday=ymd(day)===ymd(now);
+  const hs=(w.timer||[]).filter(h=>!isToday||h.kl>=now.getHours());
+  const txt=!withText?"":`<p class="wxtxt"><b>${esc(w.tekst)}</b>${w.raad?.length?` – ${esc(w.raad.join(", "))}`:""}</p>`;
+  if(!hs.length) return txt+`<p class="wxtxt">Prognosen har ikke flere timer ${isToday?"i dag":"for dagen"}.</p>`;
+  return txt+`<ol class="wxh" aria-label="Vejret time for time">${hs.map(h=>`<li><span class="sronly">kl. ${pad(h.kl)}: ${h.temp} grader${h.regn>=0.1?`, ${wxMm(h.regn)} millimeter regn`:""}</span>`
+    +`<span class="t" aria-hidden="true">${pad(h.kl)}</span><span class="i" aria-hidden="true">${esc(h.ikon)}</span>`
+    +`<span class="c" aria-hidden="true">${h.temp}°</span><span class="r" aria-hidden="true">${h.regn>=0.1?`${wxMm(h.regn)} mm`:""}</span></li>`).join("")}</ol>`;
+}
+// Dagens overskrift: i dag – eller i morgen, når dagtimerne er forbi (efter kl. 19 dækker prognosen ikke i dag)
+function renderWeatherHead(){
+  const box=document.getElementById("wxHead"), panel=document.getElementById("wxHeadPanel");
+  const today=new Date(); let day=today, w=weatherFor(today), label="";
+  if(!w){ day=addDays(today,1); w=weatherFor(day); label="i morgen"; }
+  if(!w){ box.innerHTML=""; panel.hidden=true; panel.innerHTML=""; return; }
+  const open=state.wxOpen.head;
+  box.innerHTML=`<button type="button" class="wxchip" id="wxHeadBtn" aria-expanded="${open}" aria-controls="wxHeadPanel">`
+    +`<span class="wxi" aria-hidden="true">${esc(w.ikon||"")}</span><span>${wxTemp(w)}</span>${label?`<small>${label}</small>`:""}`
+    +`<span class="sronly">, ${esc(w.tekst)}. Vejret time for time</span></button>`;
+  panel.innerHTML=wxHoursHtml(w, day); panel.hidden=!open;
+  document.getElementById("wxHeadBtn").onclick=()=>{ state.wxOpen.head=!state.wxOpen.head; renderWeatherHead(); };
+}
 
 // "Vejr: hjem": sæt hjemmets placering én gang med browserens placering. Virker kun på en sikker side
 // (http://localhost på pc'en, eller https). Serveren afrunder til ca. 1 km.
@@ -1045,6 +1095,7 @@ function renderChrome(){
   renderAiBanner();
   const now=new Date();
   document.getElementById("dateline").textContent = `${DAYS[now.getDay()]} d. ${now.getDate()}. ${MONTHS[now.getMonth()]} · uge ${isoWeek(now)}`;
+  renderWeatherHead();
   const g = new Date(state.data.generated);
   const sv=state.server, needLogin = sv && ["login_required","waiting_for_login"].includes(sv.aula);
   const stale = now-g > 36e5;
@@ -1057,7 +1108,9 @@ function renderChrome(){
     else if(sv.aula==="error") bits.push(`<a class="srvwarn" href="auth" title="${esc(sv.last_error||"")}">Aula-hentning fejlede</a>`);
     if(sv.mark_error) bits.push(`<span class="srvwarn" title="${esc(sv.mark_error)}">Læst-markering ikke gemt i Aula</span>`);
     bits.push(state.refreshing||sv.running ? `<span>Henter …</span>` : `<button class="srvbtn" id="refreshNow">Opdatér nu</button>`);
-    bits.push(`<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
+    const noHome = sv.weather?.enabled && sv.weather.home===false;     // vejret er slået til, men hjemmet mangler
+    bits.push(noHome ? `<button class="srvbtn srvwarn" id="homeBtn" title="Uden hjemmets placering er der intet vejr i overblikket">Vejr: hjem er ikke sat</button>`
+                     : `<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
     bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
     line += `<div class="srv">${bits.join("")}</div>`;
   }
@@ -1820,7 +1873,16 @@ function renderKiosk(){
   const b=state.briefing?.day, fresh=b?.period && b.period[0]<=ymd(day) && ymd(day)<=b.period[1];
   let items=[];
   const w=weatherFor(day), kw=document.getElementById("kWeather");
-  kw.innerHTML = w ? `<span aria-hidden="true">${esc(w.ikon||"")}</span> ${esc(w.tekst)}${w.raad?.length?`<small>${esc(w.raad.join(", "))}</small>`:""}` : "";
+  const kh=document.getElementById("kHours");
+  if(w){
+    const open=state.wxOpen.kiosk, more=(w.timer||[]).length>0;
+    const inner=`<span aria-hidden="true">${esc(w.ikon||"")}</span> ${esc(w.tekst)}${more?`<span class="wxmore" aria-hidden="true">${open?"skjul timer":"time for time"}</span>`:""}${w.raad?.length?`<small>${esc(w.raad.join(", "))}</small>`:""}`;
+    kw.innerHTML = more ? `<button type="button" class="k-wxbtn" id="kWxBtn" aria-expanded="${open}" aria-controls="kHours">${inner}</button>` : inner;
+    kh.innerHTML = more ? wxHoursHtml(w, day, false) : "";      // teksten og rådene står lige over
+    kh.hidden = !(more && open);
+    const wb=document.getElementById("kWxBtn");
+    if(wb) wb.onclick=()=>{ state.wxOpen.kiosk=!state.wxOpen.kiosk; renderKiosk(); };
+  } else { kw.innerHTML=""; kh.innerHTML=""; kh.hidden=true; }
   if(fresh) items=(b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
   else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));
   const storyOn = fresh && Array.isArray(b.fortaelling);

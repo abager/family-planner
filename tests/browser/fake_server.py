@@ -12,6 +12,7 @@ class FakeServer:
         self.briefing_week: dict | None = None
         self.home: dict = {"set": False}
         self.server = False                             # False = ingen /api/status (statisk brug)
+        self.weather_status = {"enabled": True, "home": True}   # /api/status: vejret slået til, hjemmet sat
         self.mark_read = True
         self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
                     "default_people": ["family"], "created": {}, "dismissed": [], "applied": [], "by_source": {}}
@@ -61,7 +62,8 @@ class FakeServer:
         if path == "/api/status":
             if not self.server:
                 return route.fulfill(status=404, body="")
-            return self._json(route, {"mark_read_enabled": self.mark_read, "running": False, "runs": 1, "aula": "ok", "pending_reads": 0, "mark_error": None, "aula_enabled": True})
+            return self._json(route, {"mark_read_enabled": self.mark_read, "running": False, "runs": 1, "aula": "ok", "pending_reads": 0, "mark_error": None, "aula_enabled": True,
+                                     "weather": self.weather_status})
         if path == "/api/home-location":
             if m == "POST":
                 if not (54.4 <= body["lat"] <= 57.9):
