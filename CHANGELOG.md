@@ -5,6 +5,19 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (weather hour by hour)
+- The date heading shows today's weather as one emoji with min–max temperature (tomorrow after 19:00); tap it to
+  fold out the rest of the day hour by hour (icon, temperature, rain). The kiosk weather line folds out the same way.
+- `family.json` → `weather.dage[].timer`: hours 06–22 for display only (never sent to the AI). Night hours get a
+  moon instead of a sun.
+- The server log writes one weather line per run – how many days were fetched, or why there is no weather
+  (home not set, DMI unavailable, turned off). Never coordinates.
+- `/api/status` reports `weather: {enabled, home}`; the "Vejr: hjem" button turns red ("Vejr: hjem er ikke sat")
+  when weather is on but the home location is missing.
+
+### Changed
+- Weather emoji carry U+FE0F so Windows and Android draw them in colour instead of as black text glyphs.
+
 ### Added (AI calendar items, phase 3)
 - The AI reads new Aula messages (never private), feed posts and week plans and prefills "Føj til kalender" with
   title, date, time, place and child. The button only appears on items where something was found. Cancellations,

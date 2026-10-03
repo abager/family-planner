@@ -202,7 +202,18 @@ Planned restructuring (do in small steps, tests green after each):
   frost, advice). Only days whose daytime (07–19) is covered. Coarse on purpose so the briefing fingerprint (and
   the AI quota) doesn't move with tiny forecast changes. The briefing gets them as `vejr` with `V` refs and a
   "Vejr" section; the kiosk shows `#kWeather` and leaves "Vejr" out of its remember list.
-- Weather is an extra: any failure → no weather, never an error or banner. Tests use simulated DMI only.
+- Each day also carries `timer`: hours 06–22 (`kl`, `ikon`, `temp`, `regn` mm, `vind` m/s). For display only –
+  `briefing.build_digest` picks its weather fields one by one and must never include `timer` (it would change the
+  fingerprint every hour). Hour icons use a simple NOAA sun-elevation check (`sun_up`) so night hours get 🌙/☁
+  instead of ☀. Emoji carry U+FE0F so Windows/Android draw them in colour.
+- UI: the date heading (`#wxHead`) shows one chip (icon + min–max; tomorrow after the daytime is over) that folds
+  out `#wxHeadPanel` hour by hour; the kiosk's `#kWeather` is a button that folds out `#kHours` (touch screen).
+  Open/closed lives in `state.wxOpen` and survives re-renders. The strip scrolls sideways, never the page.
+- Logging: `for_family` writes exactly one INFO line per run (off / home not set / no usable forecast / "N dage
+  fra DMI (prognose hentet kl. HH:MM)"). Never coordinates in logs.
+- `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the "Vejr: hjem"
+  button turns into a warning ("Vejr: hjem er ikke sat").
+- Weather is an extra: any failure → no weather, never an error banner. Tests use simulated DMI only.
 
 ## Calendar and time conventions
 

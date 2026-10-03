@@ -124,11 +124,13 @@ Alt, hvad AI'en foreslår, kontrolleres mod punktets egen tekst: datoen skal st�
 
 ### Vejr (DMI)
 
-Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"), og kioskskærmen viser en vejrlinje under datoen. Vejret kommer fra DMI's åbne data (vejrmodellen HARMONIE) – ingen nøgle, ingen konto. HARMONIE rækker kun et par døgn frem, så ugeoverblikket har kun vejr for de dage, DMI dækker.
+Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"). Under datoen øverst i appen står dagens vejr som ét ikon med temperatur – tryk på det for at se resten af dagen time for time (ikon, temperatur og regn). Efter kl. 19 viser det i morgen. Kioskskærmen viser vejrlinjen under datoen; tryk på den for at folde timerne ud. Vejret kommer fra DMI's åbne data (vejrmodellen HARMONIE) – ingen nøgle, ingen konto. HARMONIE rækker kun et par døgn frem, så ugeoverblikket har kun vejr for de dage, DMI dækker.
 
 **Sæt hjemmet én gang:** Åbn appen i browseren **på pc'en, der kører den** (http://localhost:8080), tryk på **Vejr: hjem** og **Brug min placering som hjem**. Browseren spørger om lov. Siger den nej, så slå placering til i Windows: *Indstillinger → Privatliv og sikkerhed → Placering*. Knappen virker kun på selve pc'en (eller over https), fordi browsere kun udleverer placeringen til sikre sider. En stationær pc finder sin placering via wifi eller internetadressen, så den kan være et par kilometer ved siden af – det betyder intet for vejret. Tryk på "Se på kort" for at tjekke den. Flytter I, så tryk igen.
 
 **Privatliv:** Placeringen afrundes til ca. 1 km og gemmes kun i `web/home_location.json` (aldrig i git, aldrig i `family.json`). Kun den afrundede placering sendes til DMI, højst én gang i timen. Er DMI nede, bruges en prognose op til 6 timer gammel; ellers er overblikket bare uden vejr. Tjek med selvtesten: linjerne *Vejr: hjem* og *Vejr (DMI)*.
+
+**Er vejret med?** Serverens log skriver én linje pr. hentning, fx `Vejr: 2 dage fra DMI (prognose hentet kl. 08:12)` – eller hvorfor ikke: `Vejr: hjemmets placering er ikke sat …`, `Vejr: ingen brugbar prognose fra DMI …` eller `Vejr: slået fra i config.toml`. Mangler hjemmet, står knappen øverst som **Vejr: hjem er ikke sat** med rød skrift.
 
 ## Udseende
 
