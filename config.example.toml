@@ -54,11 +54,14 @@ rpm = 5                            # højst så mange i minuttet. Sæt til (høj
 [calendar_ai]
 enabled = true
 
-# Vejret i overblikket og på kiosken: DMI (vejrmodellen HARMONIE), ingen nøgle.
+# Vejret i overblikket og på kiosken: MET Norway (yr.no, Locationforecast 2.0), ingen nøgle.
 # Hjemmets placering sættes IKKE her: åbn appen på pc'en (http://localhost:8080), tryk "Vejr: hjem"
 # og "Brug min placering som hjem". Den afrundes til ca. 1 km og gemmes i web/home_location.json.
+# MET kræver kontaktoplysninger i User-Agent (ellers 403). Standard er et link til repoet; ret det, hvis
+# repoet ligger et andet sted, eller skriv en e-mail.
 [weather]
 enabled = true
+# contact = "https://github.com/abager/family-planner"
 
 # Google-kalendere: den PRIVATE iCal-adresse fra Google Kalender →
 # kalenderens "Indstillinger og deling" → "Integrer kalender" → "Hemmelig adresse i iCal-format".

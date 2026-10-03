@@ -746,7 +746,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   <div class="cdots" id="lbDots"></div>
 </dialog>
 <dialog id="homeDlg" aria-labelledby="homeHead"><h3 id="homeHead">Vejr: hjemmets placering</h3>
-  <p>Vejret i overblikket er for jeres hjem. Placeringen afrundes til ca. 1 km og bruges kun til at hente vejret fra DMI.</p>
+  <p>Vejret i overblikket er for jeres hjem. Placeringen afrundes til ca. 1 km og bruges kun til at hente vejret fra MET Norway (yr.no).</p>
   <p class="homeinfo" id="homeInfo" role="status"></p>
   <p class="homeinfo" id="homeNote"></p>
   <button type="button" id="homeUse">Brug min placering som hjem</button>
@@ -1019,7 +1019,7 @@ function shownBriefings(){
   if(w?.period && w.period[1]>=todayKey) out.push(w);
   return out;
 }
-// Vejret (DMI) for en dag, hvis prognosen dækker den. Kun det grove resumé – placeringen er aldrig i family.json.
+// Vejret (MET Norway) for en dag, hvis prognosen dækker den. Kun det grove resumé – placeringen er aldrig i family.json.
 function weatherFor(day){ return (state.data?.weather?.dage||[]).find(d=>d.dato===ymd(day)) || null; }
 // Ét ikon med temperatur, der folder sig ud til time for time. Åben/lukket huskes, mens appen kører.
 state.wxOpen={head:false,kiosk:false};
@@ -1274,7 +1274,7 @@ function renderBrief(kind, elId){
   el.innerHTML=`<div class="bhead"><h2>${esc(title)}</h2>
       ${window.speechSynthesis&&b.oplaesning?`<div class="speakbox"><button class="speak" aria-pressed="false">${SPEAK_ICON} Læs op</button>${voicePicker()}</div>`:""}</div>
     ${story ? `<div class="story">${story}</div>` : secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
-    <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet automatisk"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og DMI":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
+    <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet automatisk"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og vejrdata fra MET Norway":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
   el.querySelector(".speak")?.addEventListener("click",e=>speak(b.oplaesning,e.currentTarget));
   el.querySelector(".voice")?.addEventListener("change",e=>{ try{localStorage.setItem(VOICE_KEY,e.target.value);}catch{} speechSynthesis.cancel(); });
 }

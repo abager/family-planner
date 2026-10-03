@@ -1,15 +1,19 @@
-"""Vejret hjemme fra DMI (Forecast EDR API, vejrmodellen HARMONIE) – til overblikket og kioskskærmen.
+"""Vejret hjemme fra MET Norway (yr.no, Locationforecast 2.0) – til overblikket og kioskskærmen.
 
-- Ingen nøgle (DMI kræver ikke længere en siden 2. december 2025). Fair brug: hentes højst én gang i timen,
-  og efter en fejl ventes en halv time. Et svar op til 6 timer gammelt bruges, hvis DMI er nede.
-- Kun hjemmets placering, afrundet til ca. 1 km, sendes til DMI. Den gemmes i `home_location.json`, sættes
-  med knappen "Brug min placering som hjem" i appen og står aldrig i family.json eller config.toml.
+- Ingen nøgle, men MET kræver en User-Agent med kontaktoplysninger (her et link til repoet; kan ændres med
+  [weather] contact i config.toml). Uden den svarer MET 403.
+- Fair brug efter MET's vilkår: hentes højst én gang i timen og aldrig før svarets `Expires`; næste gang med
+  `If-Modified-Since` (304 = uændret). Efter en fejl ventes en halv time. Et svar op til 6 timer gammelt bruges,
+  hvis MET er nede.
+- Kun hjemmets placering, afrundet til ca. 1 km (2 decimaler), sendes til MET. Den gemmes i `home_location.json`,
+  sættes med knappen "Brug min placering som hjem" i appen og står aldrig i family.json eller config.toml.
 - Resultatet er GROFT med vilje (hele grader, regn i kategorier, del af dagen), så små ændringer i
   prognosen ikke laver et nyt AI-overblik hver time.
-- HARMONIE rækker kun et par døgn frem. Dage, hvor dagtimerne (kl. 7–19) ikke er dækket, udelades.
+- Prognosen har time-for-time-data ca. 2½ døgn frem; derefter kun 6-timers-intervaller, som ikke bruges.
+  Dage, hvor dagtimerne (kl. 7–19) ikke er dækket time for time, udelades.
 
-Enheder fra DMI: temperatur i Kelvin, nedbør i kg/m² (= mm, summeret fra modellens start), vind i m/s,
-skydække som andel 0–1.
+Enheder fra MET: temperatur i °C, nedbør i mm for den kommende time, vind og vindstød i m/s, skydække i %.
+Data: MET Norway, licens CC BY 4.0 – krediteres i appen.
 """
 from __future__ import annotations
 
@@ -28,9 +32,9 @@ log = logging.getLogger("familieplanner.weather")
 TZ = ZoneInfo("Europe/Copenhagen")
 UTC = dt.timezone.utc
 
-URL = "https://opendataapi.dmi.dk/v1/forecastedr/collections/harmonie_dini_sf/position"
-PARAMS = ["temperature-2m", "total-precipitation", "wind-speed-10m", "gust-wind-speed-10m", "fraction-of-cloud-cover"]
-CLOUD_PARAM = "fraction-of-cloud-cover"           # 0–1; navnene skal stå præcis som i DMI's EDR-parameterliste
+URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"   # "complete" har vindstød, "compact" har ikke
+SOURCE = "MET Norway"
+CONTACT = "https://github.com/abager/family-planner"                    # standard-kontakt i User-Agent
 HOME_FILE = "home_location.json"
 CACHE_FILE = "weather_cache.json"
 FETCH_EVERY = dt.timedelta(minutes=60)
@@ -40,8 +44,9 @@ DAY_START, DAY_END = 7, 19                     # dagtimerne, vejret gælder for 
 HOUR_START, HOUR_END = 6, 22                   # timerne, der kan foldes ud i appen (time for time)
 # Emoji med \ufe0f, så Windows og Android tegner dem i farver og ikke som sort tekst
 SUN, SUN_CLOUD, CLOUD, RAIN, SNOW, FROST, MOON = "\u2600\ufe0f", "\u26c5", "\u2601\ufe0f", "\U0001F327\ufe0f", "\U0001F328\ufe0f", "\u2744\ufe0f", "\U0001F319"
+FAIR, FOG, THUNDER = "\U0001F324\ufe0f", "\U0001F32B\ufe0f", "\u26c8\ufe0f"
 
-# Danmark med Bornholm og lidt luft. HARMONIE DINI dækker mere, men "hjem" skal ligge i Danmark.
+# Danmark med Bornholm og lidt luft. MET dækker hele verden, men "hjem" skal ligge i Danmark.
 BOUNDS = {"lat": (54.4, 57.9), "lon": (7.9, 15.3)}
 WEEKDAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
 
@@ -103,83 +108,137 @@ class WeatherUnavailable(Exception):
     pass
 
 
-def parse(geojson: dict) -> list[dict]:
-    """DMI's GeoJSON → timer med temperatur (°C), regn (mm i timen), vind, vindstød og skydække."""
+def parse(doc: dict) -> list[dict]:
+    """MET's GeoJSON → timer med temperatur (°C), regn (mm i timen), vind, vindstød, skydække (0–1) og MET's symbol.
+
+    Kun tidspunkter med en `next_1_hours`-blok bruges – længere ude har MET kun 6-timers-intervaller."""
     rows = []
-    for f in geojson.get("features") or []:
-        p = f.get("properties") or {}
-        if "step" not in p or p.get("temperature-2m") is None:
+    for ts in (doc.get("properties") or {}).get("timeseries") or []:
+        data = ts.get("data") or {}
+        inst = (data.get("instant") or {}).get("details") or {}
+        nxt = data.get("next_1_hours")
+        if "time" not in ts or inst.get("air_temperature") is None or not nxt:
             continue
-        rows.append({"t": dt.datetime.fromisoformat(p["step"].replace("Z", "+00:00")),
-                     "temp": p["temperature-2m"] - 273.15, "acc": p.get("total-precipitation"),
-                     "wind": p.get("wind-speed-10m") or 0.0, "gust": p.get("gust-wind-speed-10m") or 0.0,
-                     "cloud": p.get(CLOUD_PARAM)})
+        cloud = inst.get("cloud_area_fraction")
+        rows.append({"t": dt.datetime.fromisoformat(ts["time"].replace("Z", "+00:00")),
+                     "temp": float(inst["air_temperature"]),
+                     "rain": max(0.0, float((nxt.get("details") or {}).get("precipitation_amount") or 0.0)),
+                     "wind": float(inst.get("wind_speed") or 0.0),
+                     "gust": float(inst.get("wind_speed_of_gust") or inst.get("wind_speed") or 0.0),
+                     "cloud": None if cloud is None else float(cloud) / 100,
+                     "sym": (nxt.get("summary") or {}).get("symbol_code")})
     rows.sort(key=lambda r: r["t"])
     if not rows:
         raise WeatherUnavailable("ingen timer i svaret")
-    acc = [r["acc"] or 0.0 for r in rows]
-    # total-precipitation er summeret fra modellens start; falder tallet nogensinde, er det i stedet pr. time
-    accumulated = all(b >= a - 0.01 for a, b in zip(acc, acc[1:]))
-    for i, r in enumerate(rows):
-        r["rain"] = max(0.0, acc[i] - acc[i - 1]) if accumulated and i else (0.0 if accumulated else max(0.0, acc[i]))
-        del r["acc"]
     return rows
 
 
 def _detail(r: httpx.Response) -> str:
-    """DMI's egen forklaring på en afvisning, kort – og uden decimaltal, så koordinater aldrig ender i loggen."""
+    """MET's egen forklaring på en afvisning, kort – og uden decimaltal, så koordinater aldrig ender i loggen."""
     try:
         j = r.json()
-        msg = j.get("description") or j.get("detail") or j.get("message") or j.get("title") or ""
+        msg = (j.get("description") or j.get("detail") or j.get("message") or j.get("title") or "") if isinstance(j, dict) else ""
     except ValueError:
-        msg = r.text or ""
+        msg = re.sub(r"<[^>]+>", " ", r.text or "")
     msg = re.sub(r"-?\d+\.\d+", "…", " ".join(str(msg).split()))[:160]
     return f" ({msg})" if msg else ""
 
 
-def fetch(lat: float, lon: float, transport: httpx.BaseTransport | None = None, timeout: float = 20) -> list[dict]:
-    params = {"coords": f"POINT({lon} {lat})", "crs": "crs84", "parameter-name": ",".join(PARAMS), "f": "GeoJSON"}
+def user_agent(cfg: dict | None = None) -> str:
+    contact = ((cfg or {}).get("weather", {}).get("contact") or CONTACT).strip()
+    return f"Familieplan/1.0 {contact}"
+
+
+def _http_date(t: dt.datetime) -> str:
+    return t.astimezone(UTC).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+
+def _parse_http_date(v: str | None) -> dt.datetime | None:
+    if not v:
+        return None
     try:
-        with httpx.Client(transport=transport, timeout=timeout, headers={"user-agent": "Familieplan (privat familieapp)"}) as c:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(v).astimezone(UTC)
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+class Fetched:
+    """Et svar fra MET: timer (None ved 304 = uændret) og cache-felterne, MET beder os respektere."""
+    def __init__(self, rows, expires, last_modified):
+        self.rows, self.expires, self.last_modified = rows, expires, last_modified
+
+
+def fetch_raw(lat: float, lon: float, transport: httpx.BaseTransport | None = None, timeout: float = 20,
+              cfg: dict | None = None, if_modified_since: str | None = None) -> Fetched:
+    params = {"lat": f"{lat:.2f}", "lon": f"{lon:.2f}"}                 # højst 2 decimaler: privatliv og MET's cache
+    headers = {"user-agent": user_agent(cfg)}
+    if if_modified_since:
+        headers["if-modified-since"] = if_modified_since
+    try:
+        with httpx.Client(transport=transport, timeout=timeout, headers=headers) as c:
             r = c.get(URL, params=params)
     except httpx.HTTPError as e:
-        raise WeatherUnavailable(f"kunne ikke nå DMI: {type(e).__name__}") from e
-    if r.status_code != 200:
-        raise WeatherUnavailable(f"DMI svarede {r.status_code}{_detail(r)}")
+        raise WeatherUnavailable(f"kunne ikke nå {SOURCE}: {type(e).__name__}") from e
+    expires, lm = r.headers.get("expires"), r.headers.get("last-modified")
+    if r.status_code == 304:
+        return Fetched(None, expires, lm or if_modified_since)
+    if r.status_code == 203:                                           # MET: denne version udfases snart
+        log.warning("Vejr: %s melder, at API-versionen snart udfases – opdatér weather.py", SOURCE)
+    elif r.status_code != 200:
+        raise WeatherUnavailable(f"{SOURCE} svarede {r.status_code}{_detail(r)}")
     try:
-        return parse(r.json())
+        return Fetched(parse(r.json()), expires, lm)
     except (ValueError, KeyError, TypeError) as e:
-        raise WeatherUnavailable(f"uventet svar fra DMI: {e}") from e
+        raise WeatherUnavailable(f"uventet svar fra {SOURCE}: {e}") from e
 
 
-def hours(state_dir: Path, now: dt.datetime, transport: httpx.BaseTransport | None = None) -> list[dict] | None:
-    """Timer fra cache eller DMI. None, hvis hjemmet ikke er sat, eller der intet brugbart vejr er."""
+def fetch(lat: float, lon: float, transport: httpx.BaseTransport | None = None, timeout: float = 20,
+          cfg: dict | None = None) -> list[dict]:
+    """Frisk hentning uden cache (selvtesten)."""
+    return fetch_raw(lat, lon, transport, timeout, cfg).rows
+
+
+def _rows_from_cache(c: dict) -> list[dict]:
+    return [{**h, "t": dt.datetime.fromisoformat(h["t"])} for h in c.get("hours") or []]
+
+
+def hours(state_dir: Path, now: dt.datetime, transport: httpx.BaseTransport | None = None,
+          cfg: dict | None = None) -> list[dict] | None:
+    """Timer fra cache eller MET. None, hvis hjemmet ikke er sat, eller der intet brugbart vejr er."""
     home = load_home(state_dir)
     if not home:
         return None
     cpath = Path(state_dir) / CACHE_FILE
     c = _read(cpath)
-    same_place = c.get("lat") == home["lat"] and c.get("lon") == home["lon"]
+    same_place = c.get("lat") == home["lat"] and c.get("lon") == home["lon"] and c.get("source") == SOURCE
     fetched = dt.datetime.fromisoformat(c["fetched"]) if same_place and c.get("fetched") else None
     failed = dt.datetime.fromisoformat(c["failed"]) if same_place and c.get("failed") else None
+    expires = _parse_http_date(c.get("expires")) if same_place else None
 
     def cached():
         if fetched and now - fetched <= MAX_AGE and c.get("hours"):
-            return [{**h, "t": dt.datetime.fromisoformat(h["t"])} for h in c["hours"]]
+            return _rows_from_cache(c)
         return None
 
     if fetched and now - fetched < FETCH_EVERY:
         return cached()
+    if expires and now.astimezone(UTC) < expires and cached():
+        return cached()                                                # MET: spørg ikke før Expires
     if failed and now - failed < WAIT_AFTER_ERROR:
         return cached()
+    ims = c.get("last_modified") if same_place and c.get("hours") else None
     try:
-        rows = fetch(home["lat"], home["lon"], transport)
+        got = fetch_raw(home["lat"], home["lon"], transport, cfg=cfg, if_modified_since=ims)
     except WeatherUnavailable as e:
         log.warning("Vejret kunne ikke hentes: %s", e)
-        _write_private(cpath, {**(c if same_place else {}), "lat": home["lat"], "lon": home["lon"],
+        _write_private(cpath, {**(c if same_place else {}), "source": SOURCE, "lat": home["lat"], "lon": home["lon"],
                                "failed": now.isoformat(timespec="seconds"), "error": str(e)[:200]})
         return cached()
-    _write_private(cpath, {"lat": home["lat"], "lon": home["lon"], "fetched": now.isoformat(timespec="seconds"),
+    rows = got.rows if got.rows is not None else _rows_from_cache(c)   # 304: prognosen er uændret
+    _write_private(cpath, {"source": SOURCE, "lat": home["lat"], "lon": home["lon"],
+                           "fetched": now.isoformat(timespec="seconds"), "expires": got.expires,
+                           "last_modified": got.last_modified,
                            "hours": [{**h, "t": h["t"].isoformat()} for h in rows]})
     return rows
 
@@ -212,7 +271,7 @@ def advice(day: dict) -> list[str]:
 
 
 def summarize(rows: list[dict], now: dt.datetime) -> list[dict]:
-    """Én post pr. dag, hvor DMI dækker dagtimerne. I dag tæller kun de timer, der er tilbage."""
+    """Én post pr. dag, hvor MET dækker dagtimerne time for time. I dag tæller kun de timer, der er tilbage."""
     local = [{**r, "lt": r["t"].astimezone(TZ)} for r in rows]
     today = now.astimezone(TZ).date()
     days = []
@@ -263,7 +322,26 @@ def sun_up(t: dt.datetime, lat: float, lon: float) -> bool:
     return elev > -0.833
 
 
+def symbol_icon(code: str | None) -> str | None:
+    """MET's symbolkode (fx "lightrainshowers_day") → emoji. None, hvis koden er ukendt."""
+    if not code:
+        return None
+    base, _, phase = code.partition("_")
+    night = phase in ("night", "polartwilight")
+    if "thunder" in base:
+        return THUNDER
+    if "snow" in base or "sleet" in base:
+        return SNOW
+    if "rain" in base:
+        return RAIN
+    return {"clearsky": MOON if night else SUN, "fair": MOON if night else FAIR,
+            "partlycloudy": CLOUD if night else SUN_CLOUD, "cloudy": CLOUD, "fog": FOG}.get(base)
+
+
 def hour_icon(h: dict, light: bool) -> str:
+    sym = symbol_icon(h.get("sym"))
+    if sym:
+        return sym
     if h["rain"] >= 0.2:
         return SNOW if h["temp"] <= 0.5 else RAIN
     cl = h["cloud"] if h.get("cloud") is not None else 0.5
@@ -320,16 +398,16 @@ def for_family(cfg: dict, now: dt.datetime, transport: httpx.BaseTransport | Non
                  '(normalt http://localhost:8080), og tryk på "Vejr: hjem"')
         return None
     try:
-        rows = hours(state_dir, now, transport)
+        rows = hours(state_dir, now, transport, cfg)
     except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
         log.warning("Vejret sprunget over: %s", e)
         return None
     if not rows:
-        log.info("Vejr: ingen brugbar prognose fra DMI – overblikket er uden vejr")
+        log.info("Vejr: ingen brugbar prognose fra %s – overblikket er uden vejr", SOURCE)
         return None
     days = summarize(rows, now)
     if not days:
-        log.info("Vejr: DMI's prognose dækker ikke dagtimerne – overblikket er uden vejr")
+        log.info("Vejr: %s' prognose dækker ikke dagtimerne – overblikket er uden vejr", SOURCE)
         return None
     for d in days:
         d["ikon"] = icon(d)
@@ -337,8 +415,8 @@ def for_family(cfg: dict, now: dt.datetime, transport: httpx.BaseTransport | Non
     c = _read(state_dir / CACHE_FILE)
     fetched = c.get("fetched")
     at = dt.datetime.fromisoformat(fetched).astimezone(TZ).strftime("%H:%M") if fetched else "?"
-    log.info("Vejr: %d dag%s fra DMI (prognose hentet kl. %s)", len(days), "e" if len(days) != 1 else "", at)
-    return {"kilde": "DMI", "hentet": fetched, "dage": days}
+    log.info("Vejr: %d dag%s fra %s (prognose hentet kl. %s)", len(days), "e" if len(days) != 1 else "", SOURCE, at)
+    return {"kilde": SOURCE, "hentet": fetched, "dage": days}
 
 
 def enabled(cfg: dict) -> bool:

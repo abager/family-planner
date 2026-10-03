@@ -152,12 +152,12 @@ def build_digest(data: dict, start: dt.date, end: dt.date, now: dt.datetime) -> 
                           "titel": _scrub(p.get("title"), 120), "hvem": name(p.get("people", [])),
                           "vigtigt": bool(p.get("important")), "tekst": _scrub(p.get("text"), 300)})
 
-    # Vejret (groft, fra weather.py via family.json) for de dage i perioden, DMI dækker
+    # Vejret (groft, fra weather.py via family.json) for de dage i perioden, MET Norway dækker
     vejr = []
     for d in ((data.get("weather") or {}).get("dage") or []):
         dd = _date(d.get("dato"))
         if dd and start <= dd <= end:
-            vejr.append({"id": ref("V", d["dato"], "Vejr (DMI)"), **{k: d[k] for k in
+            vejr.append({"id": ref("V", d["dato"], "Vejr (MET Norway)"), **{k: d[k] for k in
                          ("dato", "ugedag", "min", "max", "regn", "regn_hvornaar", "himmel", "vind", "frost", "raad") if k in d}})
 
     family = [{"navn": p["name"], "rolle": "voksen" if p.get("role") == "adult" else "barn", "note": p.get("note")}
@@ -220,7 +220,7 @@ def system_prompt(speech: bool) -> str:
 
 
 def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[dict]:
-    """Alt fra Aula, Google Kalender og DMI til fortællingen – undtagen det normale skoleskema (det står i appen)."""
+    """Alt fra Aula, Google Kalender og MET Norway (yr.no) til fortællingen – undtagen det normale skoleskema (det står i appen)."""
     payload = {k: v for k, v in digest.items() if not k.startswith("_")}
     # Kun afvigelser fra skemaet: vikar og noter fra læreren. Fag, lektionstider og mødetider sendes ikke.
     payload["skema"] = [{k: e[k] for k in ("dato", "hvem", "vikar", "noter") if k in e}

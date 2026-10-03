@@ -243,7 +243,7 @@ def day_briefing(digest: dict, today: dt.date, real_today: dt.date | None = None
 
 
 def _weather(out, digest: dict, days: list[dt.date] | None) -> None:
-    """Ét punkt pr. dag med DMI-vejr: kort prognose og råd. days=None: alle dage i perioden (ugen)."""
+    """Ét punkt pr. dag med vejr fra MET Norway: kort prognose og råd. days=None: alle dage i perioden (ugen)."""
     for v in digest.get("vejr", []):
         d = _date(v.get("dato"))
         if days is not None and d not in days:
@@ -255,7 +255,7 @@ def _weather(out, digest: dict, days: list[dt.date] | None) -> None:
             text = _cap(text)
         if v.get("raad"):
             text += " – " + ", ".join(v["raad"])
-        out.add("Vejr", text, [], [v["id"]], kilder=["Vejr (DMI)"])
+        out.add("Vejr", text, [], [v["id"]], kilder=["Vejr (MET Norway)"])
 
 
 # ---------------------------------------------------------------- ugens overblik

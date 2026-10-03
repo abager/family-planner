@@ -18,7 +18,7 @@ def kiosk(make_page, site, weather=None, briefing=None):
 
 
 def test_the_kiosk_shows_todays_weather_with_advice(make_page, site):
-    page, _ = kiosk(make_page, site, weather={"kilde": "DMI", "dage": [DAY]})
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY]})
     t = page.inner_text("#kWeather")
     assert "8–11°, regn om eftermiddagen" in t and "regntøj og gummistøvler" in t and "🌧" in t
     assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1")
@@ -27,7 +27,7 @@ def test_the_kiosk_shows_todays_weather_with_advice(make_page, site):
 def test_no_weather_line_without_weather_or_for_another_day(make_page, site):
     page, _ = kiosk(make_page, site, weather=None)
     assert page.inner_text("#kWeather").strip() == ""
-    page, _ = kiosk(make_page, site, weather={"kilde": "DMI", "dage": [{**DAY, "dato": "2026-10-05"}]})
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [{**DAY, "dato": "2026-10-05"}]})
     assert page.inner_text("#kWeather").strip() == ""
 
 
@@ -36,7 +36,7 @@ def test_the_weather_section_is_not_repeated_in_the_kiosk_remember_list(make_pag
          "period": ["2026-10-01", "2026-10-01"],
          "afsnit": [{"titel": "Vejr", "punkter": [{"tekst": "8–11°, regn – regntøj", "hvem": [], "kilder": ["Vejr (DMI)"]}]},
                     {"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}]}
-    page, _ = kiosk(make_page, site, weather={"kilde": "DMI", "dage": [DAY]}, briefing=b)
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY]}, briefing=b)
     remember = page.inner_text("#kRemember")
     assert "Gymnastiktøj" in remember and "regntøj" not in remember
 
@@ -99,7 +99,7 @@ def app(make_page, site, weather, now=NOW, status=None, width=1280):
 
 
 def test_the_date_heading_shows_one_icon_and_folds_out_the_rest_of_the_day(make_page, site):
-    page, _ = app(make_page, site, {"kilde": "DMI", "dage": [DAY_H]})
+    page, _ = app(make_page, site, {"kilde": "MET Norway", "dage": [DAY_H]})
     chip = page.locator("#wxHeadBtn")
     assert "🌧" in chip.inner_text() and "8–11°" in chip.inner_text()
     assert chip.get_attribute("aria-expanded") == "false" and page.is_hidden("#wxHeadPanel")
@@ -114,14 +114,14 @@ def test_the_date_heading_shows_one_icon_and_folds_out_the_rest_of_the_day(make_
 
 
 def test_the_strip_scrolls_sideways_instead_of_widening_the_page_on_a_phone(make_page, site):
-    page, _ = app(make_page, site, {"kilde": "DMI", "dage": [DAY_H]}, now=dt.datetime(2026, 10, 1, 6, 0), width=390)
+    page, _ = app(make_page, site, {"kilde": "MET Norway", "dage": [DAY_H]}, now=dt.datetime(2026, 10, 1, 6, 0), width=390)
     page.click("#wxHeadBtn")
     assert page.evaluate("document.documentElement.scrollWidth<=innerWidth+1")
     assert page.evaluate("(e=>e.scrollWidth>e.clientWidth)(document.querySelector('#wxHeadPanel .wxh'))")
 
 
 def test_after_the_school_day_the_heading_shows_tomorrow(make_page, site):
-    page, _ = app(make_page, site, {"kilde": "DMI", "dage": [TOMORROW]}, now=dt.datetime(2026, 10, 1, 20, 0))
+    page, _ = app(make_page, site, {"kilde": "MET Norway", "dage": [TOMORROW]}, now=dt.datetime(2026, 10, 1, 20, 0))
     t = page.inner_text("#wxHeadBtn")
     assert "☀" in t and "6–13°" in t and "i morgen" in t
 
@@ -132,7 +132,7 @@ def test_no_weather_means_no_icon_in_the_heading(make_page, site):
 
 
 def test_the_kiosk_folds_out_the_hours_on_touch(make_page, site):
-    page, _ = kiosk(make_page, site, weather={"kilde": "DMI", "dage": [DAY_H]})
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY_H]})
     assert page.is_hidden("#kHours") and "time for time" in page.inner_text("#kWeather")
     page.click("#kWxBtn")
     assert page.is_visible("#kHours") and page.locator("#kHours .wxh li").count() == 14
@@ -142,7 +142,7 @@ def test_the_kiosk_folds_out_the_hours_on_touch(make_page, site):
 
 
 def test_the_kiosk_without_hours_is_plain_text_as_before(make_page, site):
-    page, _ = kiosk(make_page, site, weather={"kilde": "DMI", "dage": [DAY]})
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY]})
     assert page.locator("#kWxBtn").count() == 0 and "8–11°" in page.inner_text("#kWeather")
 
 
@@ -159,7 +159,7 @@ def test_the_home_button_warns_when_weather_is_on_but_home_is_missing(make_page,
 def test_the_kiosk_hours_close_by_themselves_after_30_seconds(make_page, site):
     page, fake, _ = make_page(now=NOW, goto=False)                      # uret kører, så ventetiden kan spoles frem
     page.goto(site.url + "/index.html")
-    fake.use_demo(page, weather={"kilde": "DMI", "dage": [DAY_H]})
+    fake.use_demo(page, weather={"kilde": "MET Norway", "dage": [DAY_H]})
     page.goto(site.url + "/index.html?kiosk=1")
     page.clock.run_for(1000)
     page.click("#kWxBtn")
@@ -172,7 +172,7 @@ def test_the_kiosk_hours_close_by_themselves_after_30_seconds(make_page, site):
 def test_closing_by_hand_and_opening_again_restarts_the_30_seconds(make_page, site):
     page, fake, _ = make_page(now=NOW, goto=False)
     page.goto(site.url + "/index.html")
-    fake.use_demo(page, weather={"kilde": "DMI", "dage": [DAY_H]})
+    fake.use_demo(page, weather={"kilde": "MET Norway", "dage": [DAY_H]})
     page.goto(site.url + "/index.html?kiosk=1")
     page.clock.run_for(1000)
     page.click("#kWxBtn")

@@ -1,4 +1,4 @@
-"""weather.py mod et simuleret DMI (httpx.MockTransport). Ingen rigtig netværkstrafik."""
+"""weather.py mod et simuleret MET Norway (httpx.MockTransport). Ingen rigtig netværkstrafik."""
 from __future__ import annotations
 
 import datetime as dt
@@ -14,20 +14,25 @@ NOW = dt.datetime(2026, 10, 1, 6, 0, tzinfo=W.TZ)                    # torsdag k
 HOME = (55.6761, 12.5683)
 
 
-def dmi(start=dt.datetime(2026, 10, 1, 3, 0, tzinfo=UTC), hours=60, temp=lambda h: 10, rain=lambda h: 0.0,
-        wind=lambda h: 4, gust=lambda h: 7, cloud=lambda h: 0.5, accumulated=True):
-    """GeoJSON som DMI's /position. `rain(h)` er mm i time h (lokal tid); `accumulated` summerer som DMI gør."""
-    feats, total = [], 0.0
+def met(start=dt.datetime(2026, 10, 1, 3, 0, tzinfo=UTC), hours=60, temp=lambda h: 10, rain=lambda h: 0.0,
+        wind=lambda h: 4, gust=lambda h: 7, cloud=lambda h: 0.5, sym=None, six_hourly_after=None):
+    """GeoJSON som MET's Locationforecast 2.0 /complete. `rain(h)` er mm i timen efter h (lokal tid);
+    `cloud(h)` er 0–1 (MET sender procent). `six_hourly_after`: derefter kun 6-timers-blokke (som MET)."""
+    series = []
     for i in range(hours):
         t = start + dt.timedelta(hours=i)
         lh = t.astimezone(W.TZ)
-        r = rain(lh) if i else 0.0
-        total += r
-        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [12.57, 55.68]},
-                      "properties": {"step": t.strftime("%Y-%m-%dT%H:%M:%S.000Z"), "temperature-2m": temp(lh) + 273.15,
-                                     "total-precipitation": total if accumulated else r, "wind-speed-10m": wind(lh),
-                                     "gust-wind-speed-10m": gust(lh), "fraction-of-cloud-cover": cloud(lh)}})
-    return {"type": "FeatureCollection", "features": feats}
+        data = {"instant": {"details": {"air_temperature": temp(lh), "wind_speed": wind(lh),
+                                        "wind_speed_of_gust": gust(lh), "cloud_area_fraction": cloud(lh) * 100}}}
+        if six_hourly_after is None or i < six_hourly_after:
+            nxt = {"details": {"precipitation_amount": rain(lh)}}
+            if sym:
+                nxt["summary"] = {"symbol_code": sym(lh)}
+            data["next_1_hours"] = nxt
+        data["next_6_hours"] = {"details": {"precipitation_amount": 0.0}}
+        series.append({"time": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "data": data})
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [12.57, 55.68, 10]},
+            "properties": {"meta": {"updated_at": "2026-10-01T03:00:00Z"}, "timeseries": series}}
 
 
 class Fake:
@@ -36,7 +41,10 @@ class Fake:
 
     def __call__(self, req):
         self.requests.append(req)
-        status, body = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        if isinstance(reply, httpx.Response):                              # færdigt svar med headere (Expires mv.)
+            return httpx.Response(reply.status_code, headers=reply.headers, content=reply.content)
+        status, body = reply
         if isinstance(body, Exception):
             raise body
         return httpx.Response(status, content=json.dumps(body) if not isinstance(body, str) else body)
@@ -71,23 +79,22 @@ def test_bornholm_and_skagen_are_in_denmark():
 
 
 def test_no_home_means_no_weather_and_no_request(tmp_path):
-    fake = Fake((200, dmi()))
+    fake = Fake((200, met()))
     assert W.hours(tmp_path, NOW, T(fake)) is None and not fake.requests
 
 
 # ---------------------------------------------------------------- hentning og fair brug
-def test_only_the_rounded_home_is_sent_to_dmi(tmp_path):
-    fake = Fake((200, dmi()))
+def test_only_the_rounded_home_is_sent_to_met(tmp_path):
+    fake = Fake((200, met()))
     W.hours(home(tmp_path), NOW, T(fake))
-    q = fake.requests[0].url.params
-    assert fake.requests[0].url.host == "opendataapi.dmi.dk"
-    assert q["coords"] == "POINT(12.57 55.68)" and q["crs"] == "crs84" and q["f"] == "GeoJSON"
-    assert set(q["parameter-name"].split(",")) == set(W.PARAMS)
-    assert "authorization" not in fake.requests[0].headers and "api-key" not in str(fake.requests[0].url)
+    req = fake.requests[0]
+    assert req.url.host == "api.met.no" and req.url.path == "/weatherapi/locationforecast/2.0/complete"
+    assert dict(req.url.params) == {"lat": "55.68", "lon": "12.57"}           # højst 2 decimaler
+    assert "authorization" not in req.headers and "key" not in str(req.url)
 
 
-def test_dmi_is_asked_at_most_once_an_hour(tmp_path):
-    fake = Fake((200, dmi()))
+def test_met_is_asked_at_most_once_an_hour(tmp_path):
+    fake = Fake((200, met()))
     d = home(tmp_path)
     for minutes in (0, 15, 30, 45):
         assert W.hours(d, NOW + dt.timedelta(minutes=minutes), T(fake))
@@ -96,8 +103,8 @@ def test_dmi_is_asked_at_most_once_an_hour(tmp_path):
     assert len(fake.requests) == 2
 
 
-def test_dmi_down_reuses_a_recent_forecast_and_waits_before_asking_again(tmp_path):
-    fake = Fake((200, dmi()), (503, "nede"))
+def test_met_down_reuses_a_recent_forecast_and_waits_before_asking_again(tmp_path):
+    fake = Fake((200, met()), (503, "nede"))
     d = home(tmp_path)
     W.hours(d, NOW, T(fake))
     later = NOW + dt.timedelta(hours=2)
@@ -106,8 +113,8 @@ def test_dmi_down_reuses_a_recent_forecast_and_waits_before_asking_again(tmp_pat
     assert len(fake.requests) == 2
 
 
-def test_dmi_down_for_long_gives_no_weather_rather_than_old_weather(tmp_path):
-    fake = Fake((200, dmi()), (0, httpx.ConnectError("x")))
+def test_met_down_for_long_gives_no_weather_rather_than_old_weather(tmp_path):
+    fake = Fake((200, met()), (0, httpx.ConnectError("x")))
     d = home(tmp_path)
     W.hours(d, NOW, T(fake))
     assert W.hours(d, NOW + dt.timedelta(hours=7), T(fake)) is None
@@ -115,34 +122,35 @@ def test_dmi_down_for_long_gives_no_weather_rather_than_old_weather(tmp_path):
 
 @pytest.mark.parametrize("reply", [(500, "fejl"), (200, "ikke json"), (200, {"features": []}), (0, httpx.ReadTimeout("t"))],
                          ids=["500", "ikke-json", "tomt", "timeout"])
-def test_any_dmi_problem_gives_no_weather_and_never_raises(tmp_path, reply):
+def test_any_met_problem_gives_no_weather_and_never_raises(tmp_path, reply):
     assert W.hours(home(tmp_path), NOW, T(Fake(reply))) is None
 
 
 def test_a_new_home_fetches_again(tmp_path):
-    fake = Fake((200, dmi()))
+    fake = Fake((200, met()))
     d = home(tmp_path)
     W.hours(d, NOW, T(fake))
     W.save_home(d, 56.15, 10.21, NOW)                                   # flyttet til Aarhus
     W.hours(d, NOW + dt.timedelta(minutes=5), T(fake))
-    assert len(fake.requests) == 2 and fake.requests[1].url.params["coords"] == "POINT(10.21 56.15)"
+    assert len(fake.requests) == 2 and dict(fake.requests[1].url.params) == {"lat": "56.15", "lon": "10.21"}
 
 
-# ---------------------------------------------------------------- tolkning af DMI's tal
-def test_kelvin_becomes_celsius_and_accumulated_rain_becomes_mm_per_hour():
-    rows = W.parse(dmi(hours=5, temp=lambda h: 12, rain=lambda h: 1.5))
-    assert round(rows[0]["temp"], 1) == 12.0
-    assert [round(r["rain"], 1) for r in rows] == [0.0, 1.5, 1.5, 1.5, 1.5]
+# ---------------------------------------------------------------- tolkning af MET Norways tal
+def test_met_units_become_rows_with_rain_per_hour_and_cloud_as_a_fraction():
+    rows = W.parse(met(hours=5, temp=lambda h: 12.4, rain=lambda h: 1.5, cloud=lambda h: 0.25, gust=lambda h: 11))
+    r = rows[0]
+    assert r["temp"] == 12.4 and r["rain"] == 1.5 and r["cloud"] == 0.25 and r["gust"] == 11
+    assert [x["t"].hour for x in rows] == [3, 4, 5, 6, 7]
 
 
-def test_rain_given_per_hour_is_also_understood():
-    rows = W.parse(dmi(hours=4, rain=lambda h: 2.0 if h.hour == 6 else 0.0, accumulated=False))
-    assert sum(r["rain"] for r in rows) == 2.0
+def test_only_hourly_blocks_are_used_not_mets_six_hour_tail():
+    rows = W.parse(met(hours=12, six_hourly_after=8))
+    assert len(rows) == 8
 
 
 # ---------------------------------------------------------------- dagsresumé
 def day(rows_kw, now=NOW, which=0):
-    return W.summarize(W.parse(dmi(**rows_kw)), now)[which]
+    return W.summarize(W.parse(met(**rows_kw)), now)[which]
 
 
 def test_a_dry_mild_day():
@@ -169,8 +177,8 @@ def test_strong_wind_and_hot_sun():
     assert hot["himmel"] == "sol" and "solcreme og kasket" in hot["raad"] and "ekstra drikkevand" in hot["raad"]
 
 
-def test_only_days_dmi_covers_are_included():
-    days = W.summarize(W.parse(dmi(hours=60)), NOW)                     # fra torsdag kl. 5 til lørdag kl. 17
+def test_only_days_met_covers_hourly_are_included():
+    days = W.summarize(W.parse(met(hours=60)), NOW)                     # fra torsdag kl. 5 til lørdag kl. 17
     assert [d["dato"] for d in days] == ["2026-10-01", "2026-10-02"]    # lørdag mangler aftenen → udeladt
 
 
@@ -178,7 +186,7 @@ def test_today_only_counts_the_hours_left():
     morning_rain = {"rain": lambda h: 3.0 if h.hour == 8 else 0.0}
     assert day(morning_rain)["regn"] == "regn"
     assert day(morning_rain, now=dt.datetime(2026, 10, 1, 11, 0, tzinfo=W.TZ))["regn"] == "ingen"
-    late = W.summarize(W.parse(dmi()), dt.datetime(2026, 10, 1, 20, 30, tzinfo=W.TZ))
+    late = W.summarize(W.parse(met()), dt.datetime(2026, 10, 1, 20, 30, tzinfo=W.TZ))
     assert late[0]["dato"] == "2026-10-02"                              # efter kl. 19 er i dag forbi
 
 
@@ -193,24 +201,24 @@ def test_family_json_gets_the_summary_but_never_the_location(cfg):
     from pathlib import Path
     out = Path(cfg["output"]).parent
     W.save_home(out, *HOME, NOW)
-    w = W.for_family(cfg, NOW, T(Fake((200, dmi()))))
-    assert w["kilde"] == "DMI" and len(w["dage"]) == 2 and w["dage"][0]["ikon"]
+    w = W.for_family(cfg, NOW, T(Fake((200, met()))))
+    assert w["kilde"] == "MET Norway" and len(w["dage"]) == 2 and w["dage"][0]["ikon"]
     txt = json.dumps(w)
     assert "55.6" not in txt and "12.5" not in txt and "lat" not in txt
 
 
 def test_family_json_has_no_weather_without_a_home_or_when_turned_off(cfg):
-    assert W.for_family(cfg, NOW, T(Fake((200, dmi())))) is None
+    assert W.for_family(cfg, NOW, T(Fake((200, met())))) is None
     cfg["weather"] = {"enabled": False}
     from pathlib import Path
     W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
-    assert W.for_family(cfg, NOW, T(Fake((200, dmi())))) is None
+    assert W.for_family(cfg, NOW, T(Fake((200, met())))) is None
 
 
 def test_weather_state_files_are_owner_only(tmp_path):
     import os
     import stat
-    W.hours(home(tmp_path), NOW, T(Fake((200, dmi()))))
+    W.hours(home(tmp_path), NOW, T(Fake((200, met()))))
     if os.name == "posix":
         for f in (W.HOME_FILE, W.CACHE_FILE):
             assert stat.S_IMODE(os.stat(tmp_path / f).st_mode) == 0o600
@@ -220,7 +228,7 @@ def test_weather_state_files_are_owner_only(tmp_path):
 def test_each_covered_day_gets_its_hours_from_6_to_22(cfg):
     from pathlib import Path
     W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
-    w = W.for_family(cfg, NOW, T(Fake((200, dmi(hours=72)))))
+    w = W.for_family(cfg, NOW, T(Fake((200, met(hours=72)))))
     first = w["dage"][0]["timer"]
     assert [h["kl"] for h in first] == list(range(6, 23))
     assert set(first[0]) == {"kl", "ikon", "temp", "regn", "vind"}
@@ -228,7 +236,7 @@ def test_each_covered_day_gets_its_hours_from_6_to_22(cfg):
 
 
 def test_hours_show_rain_sun_cloud_and_snow():
-    rows = W.parse(dmi(hours=30, temp=lambda h: -1 if h.hour == 9 else 10,
+    rows = W.parse(met(hours=30, temp=lambda h: -1 if h.hour == 9 else 10,
                        rain=lambda h: 1.0 if h.hour in (9, 14) else 0.0,
                        cloud=lambda h: 0.1 if h.hour == 12 else 0.5 if h.hour == 13 else 0.9))
     hs = {h["kl"]: h for h in W.hourly(rows, "2026-10-01", *HOME)}
@@ -237,7 +245,7 @@ def test_hours_show_rain_sun_cloud_and_snow():
 
 
 def test_clear_night_hours_get_a_moon_not_a_sun():
-    rows = W.parse(dmi(hours=30, cloud=lambda h: 0.1))
+    rows = W.parse(met(hours=30, cloud=lambda h: 0.1))
     hs = {h["kl"]: h["ikon"] for h in W.hourly(rows, "2026-10-01", *HOME)}
     assert hs[6] == W.MOON and hs[21] == W.MOON                       # oktober i København: mørkt kl. 6 og 21
     assert hs[12] == W.SUN
@@ -253,7 +261,7 @@ def test_the_hours_never_reach_the_ai(cfg):
     import briefing as B
     from pathlib import Path
     W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
-    w = W.for_family(cfg, NOW, T(Fake((200, dmi()))))
+    w = W.for_family(cfg, NOW, T(Fake((200, met()))))
     assert w["dage"][0]["timer"]
     data = {"weather": w, "events": [], "tasks": [], "weekplan": [], "posts": [], "messages": [], "people": []}
     payload = B.build_digest(data, NOW.date(), NOW.date(), NOW)
@@ -263,7 +271,7 @@ def test_the_hours_never_reach_the_ai(cfg):
 # ---------------------------------------------------------------- logning: én linje pr. kørsel, aldrig koordinater
 def test_the_log_says_when_home_is_not_set(cfg, caplog):
     caplog.set_level("INFO", logger="familieplanner.weather")
-    W.for_family(cfg, NOW, T(Fake((200, dmi()))))
+    W.for_family(cfg, NOW, T(Fake((200, met()))))
     assert "hjemmets placering er ikke sat" in caplog.text and "Vejr: hjem" in caplog.text
 
 
@@ -271,17 +279,17 @@ def test_the_log_says_how_many_days_and_when_fetched(cfg, caplog):
     from pathlib import Path
     W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
     caplog.set_level("INFO", logger="familieplanner.weather")
-    W.for_family(cfg, NOW, T(Fake((200, dmi()))))
-    assert "Vejr: 2 dage fra DMI (prognose hentet kl. 06:00)" in caplog.text
+    W.for_family(cfg, NOW, T(Fake((200, met()))))
+    assert "Vejr: 2 dage fra MET Norway (prognose hentet kl. 06:00)" in caplog.text
     assert "55.6" not in caplog.text and "12.5" not in caplog.text
 
 
-def test_the_log_says_when_dmi_gives_nothing(cfg, caplog):
+def test_the_log_says_when_met_gives_nothing(cfg, caplog):
     from pathlib import Path
     W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
     caplog.set_level("INFO", logger="familieplanner.weather")
     assert W.for_family(cfg, NOW, T(Fake((503, "nede")))) is None
-    assert "DMI svarede 503" in caplog.text and "overblikket er uden vejr" in caplog.text
+    assert "MET Norway svarede 503" in caplog.text and "overblikket er uden vejr" in caplog.text
 
 
 def test_the_log_says_when_weather_is_turned_off(cfg, caplog):
@@ -300,28 +308,67 @@ def test_status_is_only_yes_or_no(cfg, tmp_path):
 
 
 
-# ---------------------------------------------------------------- forespørgslen til DMI
-def test_the_request_only_uses_parameter_names_dmi_knows():
-    # DMI afviser HELE forespørgslen med 400, hvis bare ét navn er ukendt (sket med "cloudcover")
-    known = {"temperature-2m", "total-precipitation", "wind-speed-10m", "gust-wind-speed-10m", "fraction-of-cloud-cover"}
-    seen = {}
-
-    def handler(req):
-        seen["names"] = set(req.url.params["parameter-name"].split(","))
-        return httpx.Response(200, json=dmi())
-    W.fetch(*HOME, transport=httpx.MockTransport(handler))
-    assert seen["names"] == known
+# ---------------------------------------------------------------- forespørgslen til MET Norway og deres vilkår
+def test_the_user_agent_identifies_the_app_with_the_repo_link(tmp_path):
+    fake = Fake((200, met()))
+    W.hours(home(tmp_path), NOW, T(fake))
+    assert fake.requests[0].headers["user-agent"] == "Familieplan/1.0 https://github.com/abager/family-planner"
 
 
-def test_cloud_cover_is_read_from_dmis_name():
-    rows = W.parse(dmi(hours=30, cloud=lambda h: 0.1))
-    assert all(r["cloud"] == 0.1 for r in rows)
+def test_the_contact_can_be_changed_in_config(tmp_path):
+    fake = Fake((200, met()))
+    W.hours(home(tmp_path), NOW, T(fake), cfg={"weather": {"contact": "andreas@example.com"}})
+    assert fake.requests[0].headers["user-agent"] == "Familieplan/1.0 andreas@example.com"
 
 
-def test_a_rejection_logs_dmis_reason_without_coordinates():
-    body = {"description": "Unknown parameter-name cloudcover for POINT(12.568337 55.676098)"}
+def test_met_symbols_become_icons_with_night_versions():
+    assert W.symbol_icon("clearsky_day") == W.SUN and W.symbol_icon("clearsky_night") == W.MOON
+    assert W.symbol_icon("fair_day") == W.FAIR and W.symbol_icon("partlycloudy_day") == W.SUN_CLOUD
+    assert W.symbol_icon("cloudy") == W.CLOUD and W.symbol_icon("fog") == W.FOG
+    assert W.symbol_icon("lightrainshowers_day") == W.RAIN and W.symbol_icon("heavyrain") == W.RAIN
+    assert W.symbol_icon("lightsleet") == W.SNOW and W.symbol_icon("snowshowers_polartwilight") == W.SNOW
+    assert W.symbol_icon("rainandthunder") == W.THUNDER and W.symbol_icon("noget_nyt") is None
+
+
+def test_the_hours_use_mets_symbol_when_it_is_there():
+    rows = W.parse(met(hours=30, sym=lambda h: "rainshowers_day" if h.hour == 12 else "clearsky_night"))
+    hs = {h["kl"]: h["ikon"] for h in W.hourly(rows, "2026-10-01", *HOME)}
+    assert hs[12] == W.RAIN and hs[21] == W.MOON
+
+
+def test_not_modified_keeps_the_cached_forecast_and_asks_politely(tmp_path):
+    first = Fake(httpx.Response(200, json=met(), headers={"last-modified": "Thu, 01 Oct 2026 03:10:00 GMT",
+                                                          "expires": "Thu, 01 Oct 2026 04:30:00 GMT"}))
+    d = home(tmp_path)
+    rows = W.hours(d, NOW, T(first))
+    again = Fake(httpx.Response(304))
+    later = W.hours(d, NOW + dt.timedelta(hours=2), T(again))
+    assert again.requests[0].headers["if-modified-since"] == "Thu, 01 Oct 2026 03:10:00 GMT"
+    assert [r["t"] for r in later] == [r["t"] for r in rows]
+
+
+def test_nothing_is_asked_before_mets_expires(tmp_path):
+    first = Fake(httpx.Response(200, json=met(), headers={"expires": "Thu, 01 Oct 2026 08:00:00 GMT"}))
+    d = home(tmp_path)
+    W.hours(d, NOW, T(first))
+    again = Fake(httpx.Response(200, json=met()))
+    W.hours(d, NOW + dt.timedelta(minutes=90), T(again))                 # 05.30 UTC < Expires 08.00 UTC
+    assert again.requests == []
+
+
+def test_an_old_dmi_cache_is_not_reused(tmp_path):
+    d = home(tmp_path)
+    (d / W.CACHE_FILE).write_text(json.dumps({"lat": 55.68, "lon": 12.57, "fetched": NOW.isoformat(),
+                                              "hours": [{"t": NOW.isoformat(), "temp": 1}]}), "utf-8")
+    fake = Fake((200, met()))
+    W.hours(d, NOW + dt.timedelta(minutes=5), T(fake))
+    assert len(fake.requests) == 1                                       # ingen "source": hentes på ny
+
+
+def test_a_rejection_logs_mets_reason_without_coordinates():
+    body = "<html><body>403 Forbidden: missing User-Agent for lat=55.676098 lon=12.568337</body></html>"
     with pytest.raises(W.WeatherUnavailable) as e:
-        W.fetch(*HOME, transport=httpx.MockTransport(lambda req: httpx.Response(400, json=body)))
+        W.fetch(*HOME, transport=httpx.MockTransport(lambda req: httpx.Response(403, text=body)))
     msg = str(e.value)
-    assert "DMI svarede 400" in msg and "Unknown parameter-name cloudcover" in msg
+    assert "MET Norway svarede 403" in msg and "missing User-Agent" in msg
     assert "55.6" not in msg and "12.5" not in msg

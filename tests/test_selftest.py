@@ -252,26 +252,26 @@ def test_selftest_offline_mode_sends_nothing(cfg):
     assert T.check_assistant(cfg).status == T.OK
 
 
-# ---------------------------------------------------------------- vejr (simuleret DMI)
+# ---------------------------------------------------------------- vejr (simuleret MET Norway)
 def test_selftest_weather_without_home_explains_the_button(cfg):
     r = T.check_weather(cfg)
     assert r[0].status == T.WARN and "Vejr: hjem" in r[0].hint and "localhost" in r[0].hint
 
 
-def test_selftest_weather_asks_dmi_and_reports_days(cfg):
+def test_selftest_weather_asks_met_and_reports_days(cfg):
     import datetime as dt
 
     import httpx
 
     import weather
-    from tests.test_weather import dmi
+    from tests.test_weather import met
     weather.save_home(Path(cfg["output"]).parent, 55.68, 12.57, dt.datetime.now(weather.TZ))
     start = dt.datetime.now(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
-    r = T.check_weather(cfg, httpx.MockTransport(lambda req: httpx.Response(200, json=dmi(start=start, hours=60))))
+    r = T.check_weather(cfg, httpx.MockTransport(lambda req: httpx.Response(200, json=met(start=start, hours=60))))
     assert [x.status for x in r] == [T.OK, T.OK] and "svarer" in r[1].detail and "dag" in r[1].detail
 
 
-def test_selftest_weather_dmi_down_is_a_warning_not_an_error(cfg):
+def test_selftest_weather_met_down_is_a_warning_not_an_error(cfg):
     import datetime as dt
 
     import httpx

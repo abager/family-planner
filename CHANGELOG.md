@@ -5,6 +5,13 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (weather source)
+- Weather now comes from MET Norway (yr.no, Locationforecast 2.0) instead of DMI, which kept answering
+  400/429. No key; the User-Agent carries a contact (default: the repo link, `[weather] contact` overrides).
+  Follows MET's terms: 2 decimals, never before `Expires`, `If-Modified-Since`/304. Hour icons use MET's own
+  weather symbols (incl. night, fog and thunder). `family.json` keeps the same shape (`kilde`: "MET Norway");
+  the briefing footer credits MET Norway. An old DMI cache is not reused.
+
 ### Added (weather hour by hour)
 - The date heading shows today's weather as one emoji with min–max temperature (tomorrow after 19:00); tap it to
   fold out the rest of the day hour by hour (icon, temperature, rain). The kiosk weather line folds out the same way and closes itself after 30 seconds.

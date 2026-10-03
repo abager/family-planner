@@ -246,12 +246,12 @@ AI_HINTS = {
 
 
 def check_weather(cfg: dict, transport=None) -> list[Result]:
-    """Hjemmets placering sat? Svarer DMI? Henter frisk (uden om cachen) – én lille forespørgsel."""
+    """Hjemmets placering sat? Svarer MET Norway (yr.no)? Henter frisk (uden om cachen) – én lille forespørgsel."""
     import datetime as _dt
 
     import weather
     if not cfg.get("weather", {}).get("enabled", True):
-        return [Result(SKIP, "Vejr (DMI)", "slået fra i config.toml ([weather] enabled = false)")]
+        return [Result(SKIP, "Vejr (MET Norway)", "slået fra i config.toml ([weather] enabled = false)")]
     out = Path(cfg.get("output", "web/family.json")).parent
     home = weather.load_home(out)
     if not home:
@@ -260,13 +260,13 @@ def check_weather(cfg: dict, transport=None) -> list[Result]:
                        "og derefter \"Brug min placering som hjem\".")]
     res = [Result(OK, "Vejr: hjem", "sat (afrundet til ca. 1 km)")]
     try:
-        rows = weather.fetch(home["lat"], home["lon"], transport)
+        rows = weather.fetch(home["lat"], home["lon"], transport, cfg=cfg)
     except weather.WeatherUnavailable as e:
-        return res + [Result(WARN, "Vejr (DMI)", str(e), "Overblikket er uden vejr, indtil DMI svarer igen. "
-                             "Tjek internetforbindelsen; DMI's status: dmi.dk.")]
+        return res + [Result(WARN, "Vejr (MET Norway)", str(e), "Overblikket er uden vejr, indtil MET Norway svarer igen. "
+                             "Tjek internetforbindelsen; status: api.met.no. Ved 403: tjek [weather] contact.")]
     days = weather.summarize(rows, _dt.datetime.now(weather.TZ))
     first = f" – {days[0]['ugedag']}: {weather.short_text(days[0])}" if days else ""
-    return res + [Result(OK, "Vejr (DMI)", f"svarer – {len(days)} dag{'e' if len(days) != 1 else ''} med vejr{first}")]
+    return res + [Result(OK, "Vejr (MET Norway)", f"svarer – {len(days)} dag{'e' if len(days) != 1 else ''} med vejr{first}")]
 
 
 def check_assistant(cfg: dict, client=None) -> Result:

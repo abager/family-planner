@@ -301,7 +301,7 @@ def wx(dato="2026-10-01", ugedag="torsdag", regn="regn", raad=("regntøj og gumm
 
 def with_weather(*days):
     d = family_data()
-    d["weather"] = {"kilde": "DMI", "hentet": "2026-10-01T06:00:00+02:00", "dage": list(days)}
+    d["weather"] = {"kilde": "MET Norway", "hentet": "2026-10-01T06:00:00+02:00", "dage": list(days)}
     return d
 
 
@@ -317,7 +317,7 @@ def test_the_ai_gets_coarse_weather_for_the_day_with_a_source_id(acfg):
     assert "Væv vejret ind" in json.loads(fake.requests[0].content)["systemInstruction"]["parts"][0]["text"]
 
 
-def test_the_week_gets_only_the_days_dmi_covers(acfg):
+def test_the_week_gets_only_the_days_the_forecast_covers(acfg):
     fake = Fake(ok(GOOD))
     brief(acfg, fake, mode="week", data=with_weather(wx(), wx("2026-10-02", "fredag")))
     payload = json.loads(json.loads(fake.requests[0].content)["contents"][0]["parts"][0]["text"].split("Data:\n", 1)[1])
@@ -329,7 +329,7 @@ def test_without_ai_the_rules_write_the_weather_with_advice(cfg):
     sec = b["afsnit"][0]
     assert sec["titel"] == "Vejr"
     assert sec["punkter"][0]["tekst"] == "8–11°, regn om eftermiddagen – regntøj og gummistøvler"
-    assert sec["punkter"][0]["kilder"] == ["Vejr (DMI)"]
+    assert sec["punkter"][0]["kilder"] == ["Vejr (MET Norway)"]
 
 
 def test_the_week_fallback_has_one_weather_line_per_covered_day(cfg):

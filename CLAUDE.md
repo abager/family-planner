@@ -82,7 +82,7 @@ familie_regler.md (free text)   ─┘                                     └�
 | `messages.py` | Message analysis: which child, actions with deadlines, events, private threads |
 | `activities.py` | Finds activities worth a calendar entry; cancellations and moves |
 | `schedule.py` | Timetable cleanup: subject names, teacher abbreviations, hidden support lessons |
-| `weather.py` | DMI weather (Forecast EDR, `harmonie_dini_sf`, no key): home location (rounded), hourly-cached fetch, coarse day summaries, rule-based advice |
+| `weather.py` | MET Norway weather (yr.no, Locationforecast 2.0 `/complete`, no key, User-Agent with contact): home location (rounded), hourly-cached fetch, coarse day summaries, rule-based advice |
 | `calendar_ai.py` | AI calendar items from messages/posts/week plans → same `(suggestions, options)` shape as `activities.find_all`; per-item cache, batches of 8, ≤3 requests/fetch, 30-request reserve for the briefing |
 | `ai.py` | The only way to call a language model: provider adapters (Gemini, Claude) over plain httpx, JSON output, content-hash cache, daily budget + RPM throttle, backoff, `AIUnavailable` |
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister"); AI with rule-based fallback |
@@ -138,9 +138,9 @@ Version: **v0.7.0** (first version in git; previously developed as zip files).
 
 Known gaps and open work:
 
-- **Weather has only been tested against a simulated DMI.** Endpoint, parameter names and units come from DMI's
-  docs (checked 2026-10-02); whether `total-precipitation` is accumulated is inferred from the docs and handled
-  both ways. First real check: the selftest lines *Vejr: hjem* and *Vejr (DMI)*.
+- **Weather has only been tested against a simulated MET Norway.** DMI was dropped 2026-10-03 (HTTP 400 on a wrong
+  parameter name, then 429 "Server is busy"). Response shape from MET's Locationforecast 2.0 docs. First real
+  check: the selftest lines *Vejr: hjem* and *Vejr (MET Norway)*.
 
 - **AI (Phase 1) has only been tested against a simulated Gemini/Claude** (httpx `MockTransport`). The real
   endpoint, the model name `gemini-3.5-flash-lite`, Google's 429 detail format (`QuotaFailure` with a `PerDay`
@@ -192,10 +192,15 @@ Planned restructuring (do in small steps, tests green after each):
 
 ## Weather conventions (`weather.py`)
 
-- Source: DMI Forecast EDR `.../forecastedr/collections/harmonie_dini_sf/position?coords=POINT(lon lat)&crs=crs84&f=GeoJSON`.
-  No auth since 2 Dec 2025; fair use → fetch at most hourly, wait 30 min after an error, reuse ≤ 6 h old data.
-  Units: temperature K, `total-precipitation` kg/m² (= mm) assumed accumulated from model start (falls back to
-  per-step if the series ever decreases), wind m/s, `fraction-of-cloud-cover` 0–1 (parameter names must match DMI's EDR list exactly – one unknown name → HTTP 400 for the whole request).
+- Source: MET Norway Locationforecast 2.0 `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=..&lon=..`
+  (`complete` because `compact` has no gusts). Terms: User-Agent `Familieplan/1.0 <contact>` (default the repo URL,
+  `[weather] contact` overrides; missing → 403), at most 2 decimals in coordinates, never ask before `Expires`,
+  send `If-Modified-Since` (304 → reuse cached hours). Own limits: at most hourly, wait 30 min after an error,
+  reuse ≤ 6 h old data. Cache carries `source` so an old DMI cache is never reused. Credit "MET Norway" (CC BY 4.0).
+  Units: `air_temperature` °C, `next_1_hours.precipitation_amount` mm for the hour starting at `time`, wind and
+  `wind_speed_of_gust` m/s, `cloud_area_fraction` % (stored 0–1). Only steps with `next_1_hours` are used (the
+  6-hour tail is ignored). Hour icons come from `next_1_hours.summary.symbol_code` (`symbol_icon`), with the
+  sun-elevation fallback when a code is missing or unknown.
 - Home location: set once from the browser (`/api/home-location`, login required), rounded to 2 decimals, must be
   inside Denmark, stored only in `home_location.json`. Never in `family.json`, logs, or `config.toml`.
 - `family.json` → `weather.dage`: coarse per-day summaries (whole degrees, rain class, part of day, wind class,
@@ -211,10 +216,10 @@ Planned restructuring (do in small steps, tests green after each):
   Open/closed lives in `state.wxOpen` and survives re-renders. The kiosk panel closes itself after 30 s
   (`KWX_CLOSE_MS`; opening again restarts the timer) so the rest of the screen gets its space back. The strip scrolls sideways, never the page.
 - Logging: `for_family` writes exactly one INFO line per run (off / home not set / no usable forecast / "N dage
-  fra DMI (prognose hentet kl. HH:MM)"). Never coordinates in logs.
+  fra MET Norway (prognose hentet kl. HH:MM)"). Never coordinates in logs.
 - `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the "Vejr: hjem"
   button turns into a warning ("Vejr: hjem er ikke sat").
-- Weather is an extra: any failure → no weather, never an error banner. Tests use simulated DMI only.
+- Weather is an extra: any failure → no weather, never an error banner. Tests use a simulated MET Norway only.
 
 ## Calendar and time conventions
 
