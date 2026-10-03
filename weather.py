@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import math
 import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -34,6 +35,9 @@ FETCH_EVERY = dt.timedelta(minutes=60)
 WAIT_AFTER_ERROR = dt.timedelta(minutes=30)
 MAX_AGE = dt.timedelta(hours=6)
 DAY_START, DAY_END = 7, 19                     # dagtimerne, vejret gælder for (skole, fritid, hjem igen)
+HOUR_START, HOUR_END = 6, 22                   # timerne, der kan foldes ud i appen (time for time)
+# Emoji med \ufe0f, så Windows og Android tegner dem i farver og ikke som sort tekst
+SUN, SUN_CLOUD, CLOUD, RAIN, SNOW, FROST, MOON = "\u2600\ufe0f", "\u26c5", "\u2601\ufe0f", "\U0001F327\ufe0f", "\U0001F328\ufe0f", "\u2744\ufe0f", "\U0001F319"
 
 # Danmark med Bornholm og lidt luft. HARMONIE DINI dækker mere, men "hjem" skal ligge i Danmark.
 BOUNDS = {"lat": (54.4, 57.9), "lon": (7.9, 15.3)}
@@ -230,6 +234,43 @@ def summarize(rows: list[dict], now: dt.datetime) -> list[dict]:
     return days
 
 
+# ---------------------------------------------------------------- time for time
+def sun_up(t: dt.datetime, lat: float, lon: float) -> bool:
+    """Er solen over horisonten? NOAA's tilnærmelse – rigeligt præcis til at vælge sol eller måne."""
+    u = t.astimezone(UTC)
+    g = 2 * math.pi / 365 * (u.timetuple().tm_yday - 1 + (u.hour - 12) / 24)
+    eqtime = 229.18 * (0.000075 + 0.001868 * math.cos(g) - 0.032077 * math.sin(g)
+                       - 0.014615 * math.cos(2 * g) - 0.040849 * math.sin(2 * g))
+    decl = (0.006918 - 0.399912 * math.cos(g) + 0.070257 * math.sin(g) - 0.006758 * math.cos(2 * g)
+            + 0.000907 * math.sin(2 * g) - 0.002697 * math.cos(3 * g) + 0.00148 * math.sin(3 * g))
+    minutes = u.hour * 60 + u.minute + eqtime + 4 * lon
+    ha = math.radians(minutes / 4 - 180)
+    la = math.radians(lat)
+    elev = math.degrees(math.asin(math.sin(la) * math.sin(decl) + math.cos(la) * math.cos(decl) * math.cos(ha)))
+    return elev > -0.833
+
+
+def hour_icon(h: dict, light: bool) -> str:
+    if h["rain"] >= 0.2:
+        return SNOW if h["temp"] <= 0.5 else RAIN
+    cl = h["cloud"] if h.get("cloud") is not None else 0.5
+    if not light:
+        return MOON if cl < 0.3 else CLOUD
+    return SUN if cl < 0.3 else SUN_CLOUD if cl <= 0.7 else CLOUD
+
+
+def hourly(rows: list[dict], date: str, lat: float, lon: float) -> list[dict]:
+    """Timerne kl. 6–22 for en dag, til visningen i appen. Indgår IKKE i AI-overblikket (det bruger kun resuméet)."""
+    out = []
+    for r in rows:
+        lt = r["t"].astimezone(TZ)
+        if lt.date().isoformat() != date or not HOUR_START <= lt.hour <= HOUR_END:
+            continue
+        out.append({"kl": lt.hour, "ikon": hour_icon(r, sun_up(r["t"], lat, lon)), "temp": round(r["temp"]),
+                    "regn": round(r["rain"], 1), "vind": round(r["wind"])})
+    return out
+
+
 def short_text(d: dict) -> str:
     parts = [f"{d['min']}–{d['max']}°" if d["min"] != d["max"] else f"{d['max']}°"]
     if d["regn"] != "ingen":
@@ -246,26 +287,51 @@ def short_text(d: dict) -> str:
 
 def icon(d: dict) -> str:
     if d["regn"] != "ingen":
-        return "🌧"
+        return RAIN
     if d["frost"] or d["max"] <= 2:
-        return "❄"
-    return {"sol": "☀", "skyet": "⛅", "overskyet": "☁"}[d["himmel"]]
+        return FROST
+    return {"sol": SUN, "skyet": SUN_CLOUD, "overskyet": CLOUD}[d["himmel"]]
 
 
 def for_family(cfg: dict, now: dt.datetime, transport: httpx.BaseTransport | None = None) -> dict | None:
-    """Til family.json: kun det grove dagsresumé – aldrig placeringen. None uden hjem eller vejr."""
-    if not cfg.get("weather", {}).get("enabled", True):
+    """Til family.json: groft dagsresumé og timerne – aldrig placeringen. None uden hjem eller vejr.
+
+    Skriver altid én linje i loggen, så man kan se, om vejret er med – og hvorfor ikke (aldrig koordinaterne)."""
+    if not enabled(cfg):
+        log.info("Vejr: slået fra i config.toml ([weather] enabled = false)")
         return None
     state_dir = Path(cfg.get("output", "web/family.json")).parent
+    home = load_home(state_dir)
+    if not home:
+        log.info('Vejr: hjemmets placering er ikke sat – åbn appen på pc\'en, der kører den '
+                 '(normalt http://localhost:8080), og tryk på "Vejr: hjem"')
+        return None
     try:
         rows = hours(state_dir, now, transport)
     except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
         log.warning("Vejret sprunget over: %s", e)
         return None
     if not rows:
+        log.info("Vejr: ingen brugbar prognose fra DMI – overblikket er uden vejr")
         return None
     days = summarize(rows, now)
+    if not days:
+        log.info("Vejr: DMI's prognose dækker ikke dagtimerne – overblikket er uden vejr")
+        return None
     for d in days:
         d["ikon"] = icon(d)
+        d["timer"] = hourly(rows, d["dato"], home["lat"], home["lon"])
     c = _read(state_dir / CACHE_FILE)
-    return {"kilde": "DMI", "hentet": c.get("fetched"), "dage": days} if days else None
+    fetched = c.get("fetched")
+    at = dt.datetime.fromisoformat(fetched).astimezone(TZ).strftime("%H:%M") if fetched else "?"
+    log.info("Vejr: %d dag%s fra DMI (prognose hentet kl. %s)", len(days), "e" if len(days) != 1 else "", at)
+    return {"kilde": "DMI", "hentet": fetched, "dage": days}
+
+
+def enabled(cfg: dict) -> bool:
+    return bool(cfg.get("weather", {}).get("enabled", True))
+
+
+def status(cfg: dict, state_dir: Path) -> dict:
+    """Til /api/status: er vejret slået til, og er hjemmet sat? Kun ja/nej – aldrig placeringen."""
+    return {"enabled": enabled(cfg), "home": load_home(state_dir) is not None}

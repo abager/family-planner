@@ -214,3 +214,86 @@ def test_weather_state_files_are_owner_only(tmp_path):
     if os.name == "posix":
         for f in (W.HOME_FILE, W.CACHE_FILE):
             assert stat.S_IMODE(os.stat(tmp_path / f).st_mode) == 0o600
+
+
+# ---------------------------------------------------------------- time for time (til visningen i appen)
+def test_each_covered_day_gets_its_hours_from_6_to_22(cfg):
+    from pathlib import Path
+    W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
+    w = W.for_family(cfg, NOW, T(Fake((200, dmi(hours=72)))))
+    first = w["dage"][0]["timer"]
+    assert [h["kl"] for h in first] == list(range(6, 23))
+    assert set(first[0]) == {"kl", "ikon", "temp", "regn", "vind"}
+    assert "lat" not in json.dumps(w["dage"][0]["timer"])
+
+
+def test_hours_show_rain_sun_cloud_and_snow():
+    rows = W.parse(dmi(hours=30, temp=lambda h: -1 if h.hour == 9 else 10,
+                       rain=lambda h: 1.0 if h.hour in (9, 14) else 0.0,
+                       cloud=lambda h: 0.1 if h.hour == 12 else 0.5 if h.hour == 13 else 0.9))
+    hs = {h["kl"]: h for h in W.hourly(rows, "2026-10-01", *HOME)}
+    assert hs[9]["ikon"] == W.SNOW and hs[14]["ikon"] == W.RAIN and hs[14]["regn"] == 1.0
+    assert hs[12]["ikon"] == W.SUN and hs[13]["ikon"] == W.SUN_CLOUD and hs[15]["ikon"] == W.CLOUD
+
+
+def test_clear_night_hours_get_a_moon_not_a_sun():
+    rows = W.parse(dmi(hours=30, cloud=lambda h: 0.1))
+    hs = {h["kl"]: h["ikon"] for h in W.hourly(rows, "2026-10-01", *HOME)}
+    assert hs[6] == W.MOON and hs[21] == W.MOON                       # oktober i København: mørkt kl. 6 og 21
+    assert hs[12] == W.SUN
+
+
+@pytest.mark.parametrize("when,up", [((2026, 6, 21, 4, 30), True), ((2026, 12, 21, 8, 0), False),
+                                     ((2026, 12, 21, 12, 0), True), ((2026, 12, 21, 16, 30), False)])
+def test_sun_up_follows_the_danish_seasons(when, up):
+    assert W.sun_up(dt.datetime(*when, tzinfo=W.TZ), *HOME) is up
+
+
+def test_the_hours_never_reach_the_ai(cfg):
+    import briefing as B
+    from pathlib import Path
+    W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
+    w = W.for_family(cfg, NOW, T(Fake((200, dmi()))))
+    assert w["dage"][0]["timer"]
+    data = {"weather": w, "events": [], "tasks": [], "weekplan": [], "posts": [], "messages": [], "people": []}
+    payload = B.build_digest(data, NOW.date(), NOW.date(), NOW)
+    assert payload["vejr"] and all("timer" not in v for v in payload["vejr"])
+
+
+# ---------------------------------------------------------------- logning: én linje pr. kørsel, aldrig koordinater
+def test_the_log_says_when_home_is_not_set(cfg, caplog):
+    caplog.set_level("INFO", logger="familieplanner.weather")
+    W.for_family(cfg, NOW, T(Fake((200, dmi()))))
+    assert "hjemmets placering er ikke sat" in caplog.text and "Vejr: hjem" in caplog.text
+
+
+def test_the_log_says_how_many_days_and_when_fetched(cfg, caplog):
+    from pathlib import Path
+    W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
+    caplog.set_level("INFO", logger="familieplanner.weather")
+    W.for_family(cfg, NOW, T(Fake((200, dmi()))))
+    assert "Vejr: 2 dage fra DMI (prognose hentet kl. 06:00)" in caplog.text
+    assert "55.6" not in caplog.text and "12.5" not in caplog.text
+
+
+def test_the_log_says_when_dmi_gives_nothing(cfg, caplog):
+    from pathlib import Path
+    W.save_home(Path(cfg["output"]).parent, *HOME, NOW)
+    caplog.set_level("INFO", logger="familieplanner.weather")
+    assert W.for_family(cfg, NOW, T(Fake((503, "nede")))) is None
+    assert "DMI svarede 503" in caplog.text and "overblikket er uden vejr" in caplog.text
+
+
+def test_the_log_says_when_weather_is_turned_off(cfg, caplog):
+    cfg["weather"] = {"enabled": False}
+    caplog.set_level("INFO", logger="familieplanner.weather")
+    W.for_family(cfg, NOW)
+    assert "slået fra" in caplog.text
+
+
+def test_status_is_only_yes_or_no(cfg, tmp_path):
+    assert W.status(cfg, tmp_path) == {"enabled": True, "home": False}
+    W.save_home(tmp_path, *HOME, NOW)
+    assert W.status(cfg, tmp_path) == {"enabled": True, "home": True}
+    cfg["weather"] = {"enabled": False}
+    assert W.status(cfg, tmp_path)["enabled"] is False

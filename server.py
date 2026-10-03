@@ -634,11 +634,19 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
             log.warning("Kunne ikke læse AI-status: %s", e)
             return None
 
+    def _weather_status() -> dict:
+        try:
+            import weather
+            return weather.status(cfg, out_dir)
+        except Exception:  # noqa: BLE001 – status må aldrig fejle på grund af vejret
+            return {"enabled": False, "home": False}
+
     @app.get("/api/status")
     async def status():
         return {**state.public(), "interval_minutes": settings.interval // 60, "aula_enabled": settings.use_aula,
                 "mark_read_enabled": settings.mark_read and settings.use_aula,
-                "ai": _ai_status()}            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
+                "ai": _ai_status(),            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
+                "weather": _weather_status()}  # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
 
     # ----- private tråde: indholdet udleveres kun mod den ekstra kode
     @app.get("/api/private/status")

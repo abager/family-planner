@@ -259,6 +259,14 @@ def test_home_location_is_saved_rounded_and_shown_without_extra_decimals(env, mo
     assert triggered                                                   # vejret hentes med det samme
 
 
+def test_status_tells_the_app_whether_home_is_set_but_never_where(env, monkeypatch):
+    monkeypatch.setattr(server.Runner, "trigger", lambda self, interactive=False: None)
+    assert env.c.get("/api/status").json()["weather"] == {"enabled": True, "home": False}
+    env.post("/api/home-location", {"lat": 55.676098, "lon": 12.568337})
+    j = env.c.get("/api/status").json()
+    assert j["weather"] == {"enabled": True, "home": True} and "55.6" not in json.dumps(j)
+
+
 @pytest.mark.parametrize("body", [{"lat": 48.85, "lon": 2.35}, {"lat": "x", "lon": 1}, {"lon": 12.5}, {}])
 def test_a_bad_or_foreign_home_location_is_refused(env, body):
     r = env.post("/api/home-location", body)
