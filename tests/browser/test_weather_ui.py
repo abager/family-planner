@@ -154,3 +154,32 @@ def test_the_home_button_warns_when_weather_is_on_but_home_is_missing(make_page,
     assert page.inner_text("#homeBtn") == "Vejr: hjem"
     page, _ = app(make_page, site, None, status={"enabled": False, "home": False})
     assert "srvwarn" not in page.locator("#homeBtn").get_attribute("class")
+
+
+def test_the_kiosk_hours_close_by_themselves_after_30_seconds(make_page, site):
+    page, fake, _ = make_page(now=NOW, goto=False)                      # uret kører, så ventetiden kan spoles frem
+    page.goto(site.url + "/index.html")
+    fake.use_demo(page, weather={"kilde": "DMI", "dage": [DAY_H]})
+    page.goto(site.url + "/index.html?kiosk=1")
+    page.clock.run_for(1000)
+    page.click("#kWxBtn")
+    page.clock.run_for(29000)
+    assert page.is_visible("#kHours")
+    page.clock.run_for(2000)
+    assert page.is_hidden("#kHours") and "time for time" in page.inner_text("#kWeather")
+
+
+def test_closing_by_hand_and_opening_again_restarts_the_30_seconds(make_page, site):
+    page, fake, _ = make_page(now=NOW, goto=False)
+    page.goto(site.url + "/index.html")
+    fake.use_demo(page, weather={"kilde": "DMI", "dage": [DAY_H]})
+    page.goto(site.url + "/index.html?kiosk=1")
+    page.clock.run_for(1000)
+    page.click("#kWxBtn")
+    page.clock.run_for(20000)
+    page.click("#kWxBtn")                                               # luk
+    page.click("#kWxBtn")                                               # åbn igen: nye 30 sekunder
+    page.clock.run_for(20000)
+    assert page.is_visible("#kHours")
+    page.clock.run_for(11000)
+    assert page.is_hidden("#kHours")

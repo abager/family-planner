@@ -208,7 +208,8 @@ Planned restructuring (do in small steps, tests green after each):
   instead of ☀. Emoji carry U+FE0F so Windows/Android draw them in colour.
 - UI: the date heading (`#wxHead`) shows one chip (icon + min–max; tomorrow after the daytime is over) that folds
   out `#wxHeadPanel` hour by hour; the kiosk's `#kWeather` is a button that folds out `#kHours` (touch screen).
-  Open/closed lives in `state.wxOpen` and survives re-renders. The strip scrolls sideways, never the page.
+  Open/closed lives in `state.wxOpen` and survives re-renders. The kiosk panel closes itself after 30 s
+  (`KWX_CLOSE_MS`; opening again restarts the timer) so the rest of the screen gets its space back. The strip scrolls sideways, never the page.
 - Logging: `for_family` writes exactly one INFO line per run (off / home not set / no usable forecast / "N dage
   fra DMI (prognose hentet kl. HH:MM)"). Never coordinates in logs.
 - `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the "Vejr: hjem"

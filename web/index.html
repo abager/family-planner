@@ -1858,6 +1858,8 @@ function kidCard(k,day,now,isToday){
     ${tasks.map(t=>`<div class="k-line">${icon("task")} ${esc(t)}</div>`).join("")}
     ${plans.map(t=>`<div class="k-line">${icon("note")} ${t}</div>`).join("")}</article>`;
 }
+// Timerne på kiosken lukker sig selv efter 30 sekunder, så resten af skærmen får pladsen igen
+const KWX_CLOSE_MS=30000; let kWxTimer=null;
 function renderKiosk(){
   const now=new Date(), day=focusDay(), off=dayOffset();
   document.getElementById("kClock").textContent=`${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
@@ -1881,7 +1883,11 @@ function renderKiosk(){
     kh.innerHTML = more ? wxHoursHtml(w, day, false) : "";      // teksten og rådene står lige over
     kh.hidden = !(more && open);
     const wb=document.getElementById("kWxBtn");
-    if(wb) wb.onclick=()=>{ state.wxOpen.kiosk=!state.wxOpen.kiosk; renderKiosk(); };
+    if(wb) wb.onclick=()=>{
+      state.wxOpen.kiosk=!state.wxOpen.kiosk; clearTimeout(kWxTimer);
+      if(state.wxOpen.kiosk) kWxTimer=setTimeout(()=>{ state.wxOpen.kiosk=false; if(state.kiosk) renderKiosk(); }, KWX_CLOSE_MS);
+      renderKiosk();
+    };
   } else { kw.innerHTML=""; kh.innerHTML=""; kh.hidden=true; }
   if(fresh) items=(b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
   else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));

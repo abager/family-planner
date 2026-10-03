@@ -7,7 +7,7 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ### Added (weather hour by hour)
 - The date heading shows today's weather as one emoji with min–max temperature (tomorrow after 19:00); tap it to
-  fold out the rest of the day hour by hour (icon, temperature, rain). The kiosk weather line folds out the same way.
+  fold out the rest of the day hour by hour (icon, temperature, rain). The kiosk weather line folds out the same way and closes itself after 30 seconds.
 - `family.json` → `weather.dage[].timer`: hours 06–22 for display only (never sent to the AI). Night hours get a
   moon instead of a sun.
 - The server log writes one weather line per run – how many days were fetched, or why there is no weather
