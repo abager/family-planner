@@ -1,7 +1,7 @@
 """HelloFresh integration – ugens meny til familieoverblikket.
 
-Bruger HelloFresh's offentlige API (gw.hellofresh.com) med published credentials.
-Ingen bruger-tokens, ingen kompleksitet – bare APIet som det skal bruges.
+Bruger refresh_token (varer 60 dage, rolling window).
+Appen henter selv nye access_tokens når de udløber.
 """
 from __future__ import annotations
 
@@ -15,26 +15,29 @@ from zoneinfo import ZoneInfo
 log = logging.getLogger("familieplanner.hellofresh")
 TZ = ZoneInfo("Europe/Copenhagen")
 
+REFRESH_TOKEN_FILE = "secrets/hellofresh_refresh_token.json"
+ACCESS_TOKEN_FILE = "hellofresh_access_token_cache.json"
 CACHE_FILE = "hellofresh_cache.json"
-TOKEN_CACHE_FILE = "hellofresh_token_cache.json"
-FETCH_EVERY = dt.timedelta(days=7)  # Hent kun én gang om ugen
+FETCH_EVERY = dt.timedelta(days=7)
 MAX_CACHE_AGE = dt.timedelta(days=8)
 
-# HelloFresh offentlige credentials (fra deres API docs)
-HF_CLIENT_ID = "hellofresh-dev-test"
-HF_CLIENT_SECRET = "g4c25EzG4#%Afeh07Bb#anbH5BQQ67bJ7!G6QZOA"
-HF_API_BASE = "https://gw.hellofresh.com/api"
+HF_TOKEN_URL = "https://hellofresh-live.eu.auth0.com/oauth/token"
+HF_API_BASE = "https://www.hellofresh.com/api/v1"
 
 
 class HelloFreshUnavailable(Exception):
     pass
 
 
-def _write_json(path: Path, data: dict) -> None:
-    """Skriv JSON-fil."""
+def _write_secure(path: Path, data: dict) -> None:
+    """Skriv JSON-fil med begrænsede rettigheder (secrets)."""
     tmp = path.with_suffix(".tmp")
     tmp.parent.mkdir(parents=True, exist_ok=True)
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
     tmp.replace(path)
 
 
@@ -47,50 +50,78 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
-def _get_access_token(state_dir: Path) -> str:
-    """Få access token fra HelloFresh API (caches i 30 minutter)."""
-    cache_path = Path(state_dir) / TOKEN_CACHE_FILE
+def save_refresh_token(state_dir: Path, refresh_token: str) -> None:
+    """Gemmer refresh_token sikkert (varer 60 dage)."""
+    if not refresh_token or not isinstance(refresh_token, str):
+        raise ValueError("Refresh token må ikke være tomt")
+    _write_secure(
+        Path(state_dir) / REFRESH_TOKEN_FILE,
+        {"refresh_token": refresh_token, "saved": dt.datetime.now(TZ).isoformat()}
+    )
+    log.info("HelloFresh refresh token gemt (varer 60 dage)")
+
+
+def load_refresh_token(state_dir: Path) -> str | None:
+    """Henter refresh_token. None hvis ikke sat."""
+    data = _read_json(Path(state_dir) / REFRESH_TOKEN_FILE)
+    return data.get("refresh_token") if data else None
+
+
+def _get_access_token(state_dir: Path, refresh_token: str) -> str:
+    """Hent ny access_token fra refresh_token (og update refresh_token hvis nyt kommer)."""
+    try:
+        import requests
+    except ImportError:
+        raise HelloFreshUnavailable("requests biblioteket er ikke installeret") from None
+    
+    cache_path = Path(state_dir) / ACCESS_TOKEN_FILE
     cache = _read_json(cache_path)
     
-    # Check hvis token er frisk
+    # Check hvis access_token er frisk
     if cache.get("access_token") and cache.get("expires_at"):
         expires_at = dt.datetime.fromisoformat(cache["expires_at"])
         if dt.datetime.now(TZ) < expires_at:
-            log.debug("HelloFresh token fra cache")
+            log.debug("HelloFresh access_token fra cache")
             return cache["access_token"]
     
-    # Hent nyt token
+    # Hent nyt access_token med refresh_token
     try:
-        import requests
         r = requests.post(
-            "https://gw.hellofresh.com/auth/token",
+            HF_TOKEN_URL,
             json={
-                "client_id": HF_CLIENT_ID,
-                "client_secret": HF_CLIENT_SECRET,
-                "grant_type": "client_credentials",
-                "scope": "public"
+                "client_id": "B1n0Q24hv7e4AHc7yG1WwQyuMvpCAIya",
+                "audience": "https://hellofresh.com",
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token
             },
             timeout=10
         )
         r.raise_for_status()
         data = r.json()
         
-        token = data.get("access_token")
-        expires_in = data.get("expires_in", 1800)  # Default 30 min
+        access_token = data.get("access_token")
+        expires_in = data.get("expires_in", 1800)
+        new_refresh_token = data.get("refresh_token")
         
-        # Gem token med expiry
+        # Gem access_token med expiry
         expires_at = dt.datetime.now(TZ) + dt.timedelta(seconds=expires_in)
-        _write_json(cache_path, {
-            "access_token": token,
+        _read_json(cache_path)  # For at få version hvis vi skal cache igen senere
+        _write_secure(cache_path, {
+            "access_token": access_token,
             "expires_at": expires_at.isoformat(),
             "fetched": dt.datetime.now(TZ).isoformat()
         })
         
-        log.info("HelloFresh access token hentet (udløber om %d min)", expires_in // 60)
-        return token
+        # Hvis HelloFresh returnerer ny refresh_token (rolling window), gem den
+        if new_refresh_token and new_refresh_token != refresh_token:
+            save_refresh_token(Path(state_dir), new_refresh_token)
+            log.info("HelloFresh refresh_token opdateret (rolling 60 dage)")
+        
+        log.info("HelloFresh access_token hentet (udløber om %d min)", expires_in // 60)
+        return access_token
     
-    except Exception as e:
-        raise HelloFreshUnavailable(f"Kunne ikke hente HelloFresh token: {e}") from e
+    except requests.exceptions.RequestException as e:
+        raise HelloFreshUnavailable(f"Kunne ikke hente HelloFresh access_token: {e}") from e
 
 
 def _fetch_recipes(token: str, country: str = "DK") -> list:
@@ -103,32 +134,26 @@ def _fetch_recipes(token: str, country: str = "DK") -> list:
     try:
         headers = {"Authorization": f"Bearer {token}"}
         
-        # Hent recepter – tag de 3 første (ugens menu)
+        # Hent denne uges meny
         r = requests.get(
-            f"{HF_API_BASE}/recipes/search",
-            params={
-                "country": country.lower(),
-                "locale": "da-DK",
-                "limit": 3,
-                "order": "-date"
-            },
+            f"{HF_API_BASE}/recurring_plan?country={country}",
             headers=headers,
             timeout=10
         )
         r.raise_for_status()
         data = r.json()
         
-        recipes = data.get("hits", [])
+        recipes = data.get("recipes", [])
         if not recipes:
-            raise HelloFreshUnavailable("Ingen recepter returneret")
+            raise HelloFreshUnavailable("Ingen recepter i menuen")
         
-        log.info("HelloFresh recepter hentet (%d stk)", len(recipes))
-        return recipes
+        log.info("HelloFresh menu hentet (%d måltider)", len(recipes))
+        return recipes[:3]  # Tag kun de første 3
     
     except requests.exceptions.RequestException as e:
         raise HelloFreshUnavailable(f"HelloFresh API fejl: {e}") from e
     except Exception as e:
-        raise HelloFreshUnavailable(f"Fejl ved hentning af recepter: {e}") from e
+        raise HelloFreshUnavailable(f"Fejl ved hentning af menu: {e}") from e
 
 
 def _format_recipe(recipe: dict) -> dict:
@@ -162,14 +187,20 @@ def fetch_menu(state_dir: Path) -> dict | None:
         log.debug("HelloFresh menu fra cache (%.1f timer siden)", age_hours)
         return cache
     
+    # Hent refresh_token
+    refresh_token = load_refresh_token(state_dir)
+    if not refresh_token:
+        log.debug("HelloFresh: ingen refresh_token sat")
+        return None
+    
     # Prøv at hente nyt
     try:
-        token = _get_access_token(state_dir)
-        recipes = _fetch_recipes(token)
+        access_token = _get_access_token(state_dir, refresh_token)
+        recipes = _fetch_recipes(access_token)
         
         if recipes:
             new_data = {"recipes": recipes, "fetched": dt.datetime.now(TZ).isoformat()}
-            _write_json(cache_path, new_data)
+            _write_secure(cache_path, new_data)
             return new_data
     
     except HelloFreshUnavailable as e:
@@ -200,7 +231,7 @@ def for_family(cfg: dict, now: dt.datetime) -> dict | None:
         if not data:
             return None
         
-        recipes = data.get("recipes", [])[:3]  # Tag kun de første 3
+        recipes = data.get("recipes", [])[:3]
         meals = [_format_recipe(r) for r in recipes]
         
         return {"kilde": "HelloFresh", "måltider": meals}
@@ -217,4 +248,4 @@ def enabled(cfg: dict) -> bool:
 
 def status(cfg: dict, state_dir: Path) -> dict:
     """Til /api/status: HelloFresh status."""
-    return {"enabled": enabled(cfg), "token_set": True}  # Token sættes automatisk
+    return {"enabled": enabled(cfg), "token_set": load_refresh_token(state_dir) is not None}
