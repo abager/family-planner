@@ -784,20 +784,24 @@ button,a,.chip,.pill{touch-action:manipulation}
 
 <dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
 
-<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">Mat: HelloFresh refresh_token</h3>
-  <p>Din HelloFresh refresh_token bruges til at hente denne uges menu. Tokenet varer 60 dage og opdateres automatisk.</p>
-  <p style="font-size:0.85rem;color:var(--muted)">Find tokenet: Åbn HelloFresh i browser, åbn DevTools (F12), gå til Application → Cookies, find cookien <code>apiV2Auth</code>, og copy værdien af <code>"refresh_token"</code></p>
+<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">HelloFresh credentials</h3>
+  <p>Dine HelloFresh credentials bruges til at hente denne uges menu. Appen logger automatisk ind hver gang tokens skal opdateres.</p>
   
   <label style="display:block;margin:12px 0">
-    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Refresh Token</span>
-    <input type="password" id="helloFreshToken" autocomplete="off" placeholder="v1.MbP9rQEb..." style="width:100%;margin-top:4px">
+    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Email</span>
+    <input type="email" id="helloFreshEmail" autocomplete="email" placeholder="din@email.com" style="width:100%;margin-top:4px">
+  </label>
+  
+  <label style="display:block;margin:12px 0">
+    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Password</span>
+    <input type="password" id="helloFreshPassword" autocomplete="current-password" placeholder="••••••••" style="width:100%;margin-top:4px">
   </label>
   
   <p class="error" id="helloFreshError" role="alert" style="color:#E4572E;margin:8px 0;font-size:0.9rem"></p>
   <p class="success" id="helloFreshSuccess" role="status" style="color:#2F9E59;margin:8px 0;font-size:0.9rem"></p>
   
   <div style="display:flex;gap:8px;margin-top:16px">
-    <button type="button" id="helloFreshOk" style="flex:1">Gem token</button>
+    <button type="button" id="helloFreshOk" style="flex:1">Login</button>
     <form method="dialog"><button style="min-width:100px">Annullér</button></form>
   </div>
 </dialog>
@@ -1137,35 +1141,37 @@ function showRecipeModal(index){
   dlg.showModal();
 }
 
-// "Mat: instilling" – sæt HelloFresh refresh_token (varer 60 dage, opdateres automatisk)
+// "Mat: instilling" – login med email + password
 async function openHelloFreshDlg(){
   const dlg=document.getElementById("helloFreshDlg"), errEl=document.getElementById("helloFreshError"), 
         successEl=document.getElementById("helloFreshSuccess"),
-        tokenInput=document.getElementById("helloFreshToken");
+        emailInput=document.getElementById("helloFreshEmail"),
+        passwordInput=document.getElementById("helloFreshPassword");
   errEl.textContent=""; successEl.textContent="";
-  tokenInput.value="";
-  tokenInput.focus();
+  emailInput.value=""; passwordInput.value="";
+  emailInput.focus();
   
   document.getElementById("helloFreshOk").onclick=async ()=>{
-    const refresh_token=(tokenInput.value||"").trim();
+    const email=(emailInput.value||"").trim();
+    const password=(passwordInput.value||"").trim();
     
-    if(!refresh_token){ errEl.textContent="Refresh_token må ikke være tomt"; return; }
+    if(!email || !password){ errEl.textContent="Email og password må ikke være tomme"; return; }
     
     errEl.textContent=""; successEl.textContent="";
     document.getElementById("helloFreshOk").disabled=true;
     
     try{
-      const r=await fetch("api/hellofresh-refresh-token",{
+      const r=await fetch("api/hellofresh-login",{
         method:"POST",
         headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},
-        body:JSON.stringify({refresh_token})
+        body:JSON.stringify({email, password})
       });
       const j=await r.json();
       
       if(!r.ok){ 
-        errEl.textContent=j.error||"Fejl ved gemning af token"; 
+        errEl.textContent=j.error||"Login fejlede"; 
       } else {
-        successEl.textContent="Token gemt! Henter menu...";
+        successEl.textContent="Login gemt! Henter menu...";
         setTimeout(()=>{ dlg.close(); render(); }, 1500);
       }
     }catch(e){ 
@@ -1241,8 +1247,8 @@ function renderChrome(){
     bits.push(noHome ? `<button class="srvbtn srvwarn" id="homeBtn" title="Uden hjemmets placering er der intet vejr i overblikket">Vejr: hjem er ikke sat</button>`
                      : `<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
     const noHF = sv.hellofresh?.enabled && sv.hellofresh.token_set===false;  // HelloFresh slået til, men token mangler
-    bits.push(noHF ? `<button class="srvbtn srvwarn" id="mealBtn" title="Sæt HelloFresh refresh_token for at se denne uges menu">Mat: instilling</button>`
-                   : `<button class="srvbtn" id="mealBtn">Mat: instilling</button>`);
+    bits.push(noHF ? `<button class="srvbtn srvwarn" id="mealBtn" title="Sæt HelloFresh credentials for at se denne uges menu">HelloFresh</button>`
+                   : `<button class="srvbtn" id="mealBtn">HelloFresh</button>`);
     bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
     line += `<div class="srv">${bits.join("")}</div>`;
   }

@@ -1,7 +1,7 @@
 """HelloFresh integration – ugens meny til familieoverblikket.
 
-Bruger refresh_token (varer 60 dage, rolling window).
-Appen henter selv nye access_tokens når de udløber.
+Login med email + password mod /gw/login endpoint.
+Tokens refreshes automatisk når de udløber.
 """
 from __future__ import annotations
 
@@ -15,13 +15,13 @@ from zoneinfo import ZoneInfo
 log = logging.getLogger("familieplanner.hellofresh")
 TZ = ZoneInfo("Europe/Copenhagen")
 
-REFRESH_TOKEN_FILE = "secrets/hellofresh_refresh_token.json"
+CREDENTIALS_FILE = "secrets/hellofresh_credentials.json"
 ACCESS_TOKEN_FILE = "hellofresh_access_token_cache.json"
 CACHE_FILE = "hellofresh_cache.json"
 FETCH_EVERY = dt.timedelta(days=7)
 MAX_CACHE_AGE = dt.timedelta(days=8)
 
-HF_TOKEN_URL = "https://hellofresh-live.eu.auth0.com/oauth/token"
+HF_LOGIN_URL = "https://gw.hellofresh.com/auth/login"
 HF_API_BASE = "https://www.hellofresh.com/api/v1"
 
 
@@ -50,30 +50,54 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
-def save_refresh_token(state_dir: Path, refresh_token: str) -> None:
-    """Gemmer refresh_token sikkert (varer 60 dage)."""
-    if not refresh_token or not isinstance(refresh_token, str):
-        raise ValueError("Refresh token må ikke være tomt")
+def save_credentials(state_dir: Path, email: str, password: str) -> None:
+    """Gemmer HelloFresh credentials sikkert."""
+    if not email or not password:
+        raise ValueError("Email og password må ikke være tomme")
     _write_secure(
-        Path(state_dir) / REFRESH_TOKEN_FILE,
-        {"refresh_token": refresh_token, "saved": dt.datetime.now(TZ).isoformat()}
+        Path(state_dir) / CREDENTIALS_FILE,
+        {"email": email, "password": password, "saved": dt.datetime.now(TZ).isoformat()}
     )
-    log.info("HelloFresh refresh token gemt (varer 60 dage)")
+    log.info("HelloFresh credentials gemt")
 
 
-def load_refresh_token(state_dir: Path) -> str | None:
-    """Henter refresh_token. None hvis ikke sat."""
-    data = _read_json(Path(state_dir) / REFRESH_TOKEN_FILE)
-    return data.get("refresh_token") if data else None
+def load_credentials(state_dir: Path) -> tuple[str, str] | None:
+    """Henter credentials. None hvis ikke sat."""
+    data = _read_json(Path(state_dir) / CREDENTIALS_FILE)
+    if data and data.get("email") and data.get("password"):
+        return (data["email"], data["password"])
+    return None
 
 
-def _get_access_token(state_dir: Path, refresh_token: str) -> str:
-    """Hent ny access_token fra refresh_token (og update refresh_token hvis nyt kommer)."""
+def _login_and_get_token(email: str, password: str) -> str:
+    """Login med email + password, få access_token."""
     try:
         import requests
     except ImportError:
         raise HelloFreshUnavailable("requests biblioteket er ikke installeret") from None
     
+    try:
+        r = requests.post(
+            HF_LOGIN_URL,
+            json={"email": email, "password": password},
+            timeout=10
+        )
+        r.raise_for_status()
+        data = r.json()
+        
+        access_token = data.get("access_token")
+        if not access_token:
+            raise HelloFreshUnavailable("Ingen access_token i login response")
+        
+        log.info("HelloFresh login vellykket")
+        return access_token
+    
+    except requests.exceptions.RequestException as e:
+        raise HelloFreshUnavailable(f"HelloFresh login fejlede: {e}") from e
+
+
+def _get_access_token(state_dir: Path) -> str:
+    """Få access_token – hent nyt hvis cache er udløbet."""
     cache_path = Path(state_dir) / ACCESS_TOKEN_FILE
     cache = _read_json(cache_path)
     
@@ -84,44 +108,23 @@ def _get_access_token(state_dir: Path, refresh_token: str) -> str:
             log.debug("HelloFresh access_token fra cache")
             return cache["access_token"]
     
-    # Hent nyt access_token med refresh_token
-    try:
-        r = requests.post(
-            HF_TOKEN_URL,
-            json={
-                "client_id": "B1n0Q24hv7e4AHc7yG1WwQyuMvpCAIya",
-                "audience": "https://hellofresh.com",
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token
-            },
-            timeout=10
-        )
-        r.raise_for_status()
-        data = r.json()
-        
-        access_token = data.get("access_token")
-        expires_in = data.get("expires_in", 1800)
-        new_refresh_token = data.get("refresh_token")
-        
-        # Gem access_token med expiry
-        expires_at = dt.datetime.now(TZ) + dt.timedelta(seconds=expires_in)
-        _read_json(cache_path)  # For at få version hvis vi skal cache igen senere
-        _write_secure(cache_path, {
-            "access_token": access_token,
-            "expires_at": expires_at.isoformat(),
-            "fetched": dt.datetime.now(TZ).isoformat()
-        })
-        
-        # Hvis HelloFresh returnerer ny refresh_token (rolling window), gem den
-        if new_refresh_token and new_refresh_token != refresh_token:
-            save_refresh_token(Path(state_dir), new_refresh_token)
-            log.info("HelloFresh refresh_token opdateret (rolling 60 dage)")
-        
-        log.info("HelloFresh access_token hentet (udløber om %d min)", expires_in // 60)
-        return access_token
+    # Hent nyt token med credentials
+    creds = load_credentials(state_dir)
+    if not creds:
+        raise HelloFreshUnavailable("Ingen HelloFresh credentials sat")
     
-    except requests.exceptions.RequestException as e:
-        raise HelloFreshUnavailable(f"Kunne ikke hente HelloFresh access_token: {e}") from e
+    email, password = creds
+    access_token = _login_and_get_token(email, password)
+    
+    # Gem token (typisk 1800 sekunder = 30 min)
+    expires_at = dt.datetime.now(TZ) + dt.timedelta(seconds=1800)
+    _write_secure(cache_path, {
+        "access_token": access_token,
+        "expires_at": expires_at.isoformat(),
+        "fetched": dt.datetime.now(TZ).isoformat()
+    })
+    
+    return access_token
 
 
 def _fetch_recipes(token: str, country: str = "DK") -> list:
@@ -187,15 +190,9 @@ def fetch_menu(state_dir: Path) -> dict | None:
         log.debug("HelloFresh menu fra cache (%.1f timer siden)", age_hours)
         return cache
     
-    # Hent refresh_token
-    refresh_token = load_refresh_token(state_dir)
-    if not refresh_token:
-        log.debug("HelloFresh: ingen refresh_token sat")
-        return None
-    
     # Prøv at hente nyt
     try:
-        access_token = _get_access_token(state_dir, refresh_token)
+        access_token = _get_access_token(state_dir)
         recipes = _fetch_recipes(access_token)
         
         if recipes:
@@ -248,4 +245,4 @@ def enabled(cfg: dict) -> bool:
 
 def status(cfg: dict, state_dir: Path) -> dict:
     """Til /api/status: HelloFresh status."""
-    return {"enabled": enabled(cfg), "token_set": load_refresh_token(state_dir) is not None}
+    return {"enabled": enabled(cfg), "token_set": load_credentials(state_dir) is not None}
