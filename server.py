@@ -54,7 +54,7 @@ DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json",
               "home_location.json", "weather_cache.json",
-              "hellofresh_refresh_token.json", "hellofresh_access_token_cache.json", "hellofresh_cache.json"}
+}
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
 log = logging.getLogger("familieplan.server")
@@ -642,41 +642,14 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         except Exception:  # noqa: BLE001 – status må aldrig fejle på grund af vejret
             return {"enabled": False, "home": False}
 
-    def _hellofresh_status() -> dict:
-        try:
-            import hellofresh
-            return hellofresh.status(cfg, out_dir)
-        except Exception:  # noqa: BLE001 – status må aldrig fejle på grund af HelloFresh
-            return {"enabled": False, "token_set": False}
-
     @app.get("/api/status")
     async def status():
         return {**state.public(), "interval_minutes": settings.interval // 60, "aula_enabled": settings.use_aula,
                 "mark_read_enabled": settings.mark_read and settings.use_aula,
                 "ai": _ai_status(),            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
-                "weather": _weather_status(), # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
-                "hellofresh": _hellofresh_status()}  # HelloFresh slået til / token sat (kun ja/nej, aldrig tokenet)
+                "weather": _weather_status()} # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
 
-    @app.post("/api/hellofresh-login")
-    async def hellofresh_save_credentials(request: Request):
-        import hellofresh
-        try:
-            body = await request.json()
-            email = body.get("email", "").strip()
-            password = body.get("password", "").strip()
-        except (ValueError, KeyError, TypeError):
-            return JSONResponse({"error": "bad request"}, status_code=400)
-        
-        if not email or not password:
-            return JSONResponse({"error": "email og password må ikke være tomme"}, status_code=400)
-        
-        try:
-            hellofresh.save_credentials(out_dir, email, password)
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
-        log.info("HelloFresh login gemt")
-        runner.trigger(interactive=False)
-        return _hellofresh_status()
+
 
     # ----- private tråde: indholdet udleveres kun mod den ekstra kode
     @app.get("/api/private/status")

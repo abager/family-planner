@@ -7,5 +7,3 @@ fastapi
 uvicorn
 tzdata
 google-auth             # skriver forslag til Google Kalender (servicekonto)
-requests                # HTTP requests til HelloFresh API
-curl_cffi

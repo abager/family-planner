@@ -581,19 +581,6 @@ button,a,.chip,.pill{touch-action:manipulation}
   .mfilters button{flex:none}
 }
 
-/* HelloFresh integration */
-.mealcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;height:100%}
-.mealcard:hover{border-color:var(--accent);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
-.mealcard img{width:100%;aspect-ratio:4/3;object-fit:cover;background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
-.mealcard-content{padding:12px;flex:1;display:flex;flex-direction:column}
-.mealcard h3{font:700 1rem var(--display);margin:0 0 4px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.mealcard-meta{font-size:0.85rem;color:var(--muted);margin-top:auto}
-.mealcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.hellofresh-panel{grid-column:1 / -1}
-#helloFreshDlg{max-width:600px}
-#helloFreshDlg input{width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;color:var(--ink);background:var(--surface)}
-#helloFreshDlg button{padding:8px 16px;background:var(--accent);color:white;border:0;border-radius:8px;cursor:pointer;font:700 0.9rem var(--body)}
-#helloFreshDlg .error{color:var(--muted);font-size:0.85rem;margin-top:4px}
 .recipe-modal{max-width:90vw;max-height:90vh;overflow-y:auto;padding:20px}
 .recipe-modal h2{font:800 1.6rem var(--display);margin-bottom:16px;color:var(--ink)}
 .recipe-modal img{width:100%;max-width:300px;border-radius:12px;margin-bottom:16px}
@@ -658,7 +645,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   <section id="todayView" class="today">
     <div class="panel brief hidden" id="briefDay"></div>
     <div class="panel skemapanel hidden" id="skemaPanel"><h2 id="skemaTitle">Skema i dag</h2><div class="skema" id="skema"></div></div>
-    <div class="panel hellofresh-panel hidden" id="helloFreshPanel"><h2>Denne uges menu</h2><div class="mealcards" id="mealcards"></div></div>
+
     <div class="panel"><h2 id="dayTitle">Dagens aftaler</h2><ul class="tl" id="timeline"></ul></div>
     <div class="panel"><h2 id="infoTitle">Vigtig info i dag</h2><ul class="plans" id="planToday"></ul>
       <h2 style="margin-top:22px">Husk og lektier</h2><ul class="tasks" id="taskList"></ul></div>
@@ -784,27 +771,7 @@ button,a,.chip,.pill{touch-action:manipulation}
 
 <dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
 
-<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">HelloFresh credentials</h3>
-  <p>Dine HelloFresh credentials bruges til at hente denne uges menu. Appen logger automatisk ind hver gang tokens skal opdateres.</p>
-  
-  <label style="display:block;margin:12px 0">
-    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Email</span>
-    <input type="email" id="helloFreshEmail" autocomplete="email" placeholder="din@email.com" style="width:100%;margin-top:4px">
-  </label>
-  
-  <label style="display:block;margin:12px 0">
-    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Password</span>
-    <input type="password" id="helloFreshPassword" autocomplete="current-password" placeholder="••••••••" style="width:100%;margin-top:4px">
-  </label>
-  
-  <p class="error" id="helloFreshError" role="alert" style="color:#E4572E;margin:8px 0;font-size:0.9rem"></p>
-  <p class="success" id="helloFreshSuccess" role="status" style="color:#2F9E59;margin:8px 0;font-size:0.9rem"></p>
-  
-  <div style="display:flex;gap:8px;margin-top:16px">
-    <button type="button" id="helloFreshOk" style="flex:1">Login</button>
-    <form method="dialog"><button style="min-width:100px">Annullér</button></form>
-  </div>
-</dialog>
+
 
 <script>
 /* ---------- Data contract (what the backend should serve as family.json) ----------
@@ -1100,23 +1067,7 @@ function renderWeatherHead(){
   document.getElementById("wxHeadBtn").onclick=()=>{ state.wxOpen.head=!state.wxOpen.head; renderWeatherHead(); };
 }
 
-// HelloFresh: hent og render denne uges menu
-function renderHelloFresh(){
-  const panel=document.getElementById("helloFreshPanel"), meals=state.data?.hellofresh?.måltider || [];
-  if(!meals.length){ panel.hidden=true; return; }
-  panel.hidden=false;
-  const html=meals.map((m,i)=>`
-    <article class="mealcard" role="button" tabindex="0" aria-label="Åbn opskrift: ${esc(m.titel)}"
-      onclick="showRecipeModal(${i})" onkeypress="event.key==='Enter'&&showRecipeModal(${i})">
-      ${m.billede?`<img src="${esc(m.billede)}" alt="${esc(m.titel)}">`:'<div style="width:100%;aspect-ratio:4/3;background:linear-gradient(135deg,var(--accent) 0%,color-mix(in srgb,var(--accent) 70%,var(--surface)) 100%);display:flex;align-items:center;justify-content:center;color:white;font-size:2rem">🍽️</div>'}
-      <div class="mealcard-content">
-        <h3>${esc(m.titel)}</h3>
-        <div class="mealcard-meta">${m.tid_minutter?`${m.tid_minutter} min`:""}</div>
-      </div>
-    </article>
-  `).join("");
-  document.getElementById("mealcards").innerHTML=html;
-}
+
 
 // Vis fuld opskrift i modal
 function showRecipeModal(index){
@@ -1141,47 +1092,7 @@ function showRecipeModal(index){
   dlg.showModal();
 }
 
-// "Mat: instilling" – login med email + password
-async function openHelloFreshDlg(){
-  const dlg=document.getElementById("helloFreshDlg"), errEl=document.getElementById("helloFreshError"), 
-        successEl=document.getElementById("helloFreshSuccess"),
-        emailInput=document.getElementById("helloFreshEmail"),
-        passwordInput=document.getElementById("helloFreshPassword");
-  errEl.textContent=""; successEl.textContent="";
-  emailInput.value=""; passwordInput.value="";
-  emailInput.focus();
-  
-  document.getElementById("helloFreshOk").onclick=async ()=>{
-    const email=(emailInput.value||"").trim();
-    const password=(passwordInput.value||"").trim();
-    
-    if(!email || !password){ errEl.textContent="Email og password må ikke være tomme"; return; }
-    
-    errEl.textContent=""; successEl.textContent="";
-    document.getElementById("helloFreshOk").disabled=true;
-    
-    try{
-      const r=await fetch("api/hellofresh-login",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},
-        body:JSON.stringify({email, password})
-      });
-      const j=await r.json();
-      
-      if(!r.ok){ 
-        errEl.textContent=j.error||"Login fejlede"; 
-      } else {
-        successEl.textContent="Login gemt! Henter menu...";
-        setTimeout(()=>{ dlg.close(); render(); }, 1500);
-      }
-    }catch(e){ 
-      errEl.textContent="Kunne ikke kontakte serveren"; 
-    } finally {
-      document.getElementById("helloFreshOk").disabled=false;
-    }
-  };
-  dlg.showModal();
-}
+
 
 // "Vejr: hjem": sæt hjemmets placering én gang med browserens placering. Virker kun på en sikker side
 // (http://localhost på pc'en, eller https). Serveren afrunder til ca. 1 km.
@@ -1246,9 +1157,6 @@ function renderChrome(){
     const noHome = sv.weather?.enabled && sv.weather.home===false;     // vejret er slået til, men hjemmet mangler
     bits.push(noHome ? `<button class="srvbtn srvwarn" id="homeBtn" title="Uden hjemmets placering er der intet vejr i overblikket">Vejr: hjem er ikke sat</button>`
                      : `<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
-    const noHF = sv.hellofresh?.enabled && sv.hellofresh.token_set===false;  // HelloFresh slået til, men token mangler
-    bits.push(noHF ? `<button class="srvbtn srvwarn" id="mealBtn" title="Sæt HelloFresh credentials for at se denne uges menu">HelloFresh</button>`
-                   : `<button class="srvbtn" id="mealBtn">HelloFresh</button>`);
     bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
     line += `<div class="srv">${bits.join("")}</div>`;
   }
@@ -1261,7 +1169,7 @@ function renderChrome(){
   document.getElementById("kioskBtn")?.addEventListener("click", enterKiosk);
   document.getElementById("refreshNow")?.addEventListener("click", refreshNow);
   document.getElementById("homeBtn")?.addEventListener("click", openHomeDlg);
-  document.getElementById("mealBtn")?.addEventListener("click", openHelloFreshDlg);
+
   document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{ await fetch("logout",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); toLogin(); });
   const box=document.getElementById("people"); box.innerHTML="";
   state.data.people.forEach(p=>{
@@ -1450,7 +1358,7 @@ function renderToday(){
       <div class="meta">${esc(whoText(tPeople(t)))} · ${kinds[t.kind]||t.kind} · ${whenTxt}</div></button></li>`;
   }).join("") || `<li class="empty" style="border:0;background:none">Intet de næste 7 dage</li>`;
   document.querySelectorAll("#taskList [data-task]").forEach(b=>b.onclick=()=>showTask(b.dataset.task));
-  renderHelloFresh();
+
 }
 
 function weekLanes(){ return [{id:"family",name:"Familien",color:"var(--ink)",note:"Fælles"},...state.data.people.filter(p=>!state.hidden.has(p.id))]; }
