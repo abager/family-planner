@@ -12,17 +12,11 @@ import datetime as dt
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
-
-# Tillad nested event loops (FastAPI serveren kører allerede en loop)
-try:
-    import nest_asyncio
-    nest_asyncio.apply()
-except ImportError:
-    pass
 
 log = logging.getLogger("familieplanner.hellofresh")
 TZ = ZoneInfo("Europe/Copenhagen")
@@ -83,10 +77,9 @@ async def start_passwordless_login_async(email: str, country: str = "DK", locale
 
 
 def start_passwordless_login(email: str) -> dict:
-    """Synkron wrapper omkring async passwordless login start (brug eksisterende event loop)."""
+    """Synkron wrapper omkring async passwordless login start (kører i separate thread)."""
     try:
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(start_passwordless_login_async(email))
+        result = _run_async_in_thread(start_passwordless_login_async(email))
         return result
     except HelloFreshUnavailable:
         raise
@@ -98,6 +91,31 @@ def load_token(state_dir: Path) -> str | None:
     """Henter HelloFresh token. None hvis ikke sat."""
     data = _read(Path(state_dir) / TOKEN_FILE)
     return data.get("token") if data else None
+
+
+def _run_async_in_thread(coro):
+    """Kør async-kode i separate thread for at undgå event loop konflikter."""
+    result = [None]
+    exception = [None]
+
+    def run_in_new_loop():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result[0] = loop.run_until_complete(coro)
+            finally:
+                loop.close()
+        except Exception as e:  # noqa: BLE001
+            exception[0] = e
+
+    thread = threading.Thread(target=run_in_new_loop, daemon=True)
+    thread.start()
+    thread.join(timeout=30)  # Max 30 sekunder
+
+    if exception[0]:
+        raise exception[0]
+    return result[0]
 
 
 async def _fetch_menu_async(token: str, country: str = "DK", locale: str = "da-DK") -> dict:
@@ -136,14 +154,13 @@ async def _fetch_menu_async(token: str, country: str = "DK", locale: str = "da-D
 
 
 def fetch_menu(state_dir: Path) -> dict | None:
-    """Synkron wrapper omkring async fetch (brug eksisterende event loop)."""
+    """Synkron wrapper omkring async fetch (kører i separate thread)."""
     token = load_token(state_dir)
     if not token:
         return None
 
     try:
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(_fetch_menu_async(token))
+        result = _run_async_in_thread(_fetch_menu_async(token))
         return result
     except HelloFreshUnavailable as e:
         log.warning("HelloFresh menu kunne ikke hentes: %s", e)
