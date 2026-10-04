@@ -256,7 +256,7 @@ def check_weather(cfg: dict, transport=None) -> list[Result]:
     home = weather.load_home(out)
     if not home:
         return [Result(WARN, "Hjem for vejret", "ikke sat – appen viser intet vejr",
-                       "Åbn http://localhost:8080 i browseren på pc'en, der kører appen, åbn \"Menu ⋯\" og tryk på \"Sæt hjem for vejret\" "
+                       "Åbn http://localhost:8080 i browseren på pc'en, der kører appen, tryk på tandhjulet (Indstillinger) og \"Sæt hjem for vejret\" "
                        "og derefter \"Brug min placering som hjem\".")]
     res = [Result(OK, "Hjem for vejret", "sat (afrundet til ca. 1 km)")]
     try:

@@ -5,6 +5,16 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (status line and settings)
+- While the server fetches, the status line shows a spinning sync icon (static with reduced motion; screen readers
+  hear "Henter data") instead of "Henter …". The app then checks `/api/status` every 3 seconds until the run is done
+  and reloads the data at once, so the icon neither lingers nor is missed between the 5-minute reloads. Not on the kiosk.
+- The action menu opens from a gear icon labelled "Indstillinger" instead of "Menu ⋯".
+
+### Removed
+- "Opdatér nu" in the app menu and on the Aula login page (the server fetches by itself every 15 minutes, and a
+  MitID login starts a fetch right away). The `/api/refresh` endpoint is kept but no longer used by the UI.
+
 ### Removed (read-aloud, HelloFresh in the fetch script)
 - Read-aloud of the overview is gone: the "Læs op" button, voice picker and speech synthesis in the app, and in the
   backend the `oplaesning` field and its rules in the prompt, `[assistant] speech` and its part of the cache key. A stray

@@ -49,3 +49,20 @@ def test_the_overview_has_no_read_aloud(make_page):
     page, *_ = make_page(now=NOW, fixed=True)
     assert page.locator("#briefDay .speak, #briefDay select.voice").count() == 0
     assert page.evaluate("typeof speak") == "undefined"
+
+
+def test_settings_gear_holds_the_actions_and_has_no_refresh(make_page):
+    page, *_ = make_page(now=NOW, fixed=True)
+    gear = page.locator("#menuBtn")
+    assert gear.get_attribute("aria-label") == "Indstillinger" and gear.get_attribute("title") == "Indstillinger"
+    page.click("#menuBtn")
+    assert page.locator("#refreshNow").count() == 0 and "Opdatér nu" not in page.inner_text("#actMenu")
+
+
+def test_a_spinning_icon_replaces_the_fetching_text_while_the_server_fetches(make_page):
+    page, *_ = make_page(now=NOW, fixed=True)
+    page.evaluate("state.server={running:true,runs:1,aula:'ok'}; runWatch=true; renderChrome()")   # runWatch: ingen rigtig polling i testen
+    assert page.locator("#status .spin").count() == 1 and "Henter …" not in page.inner_text("#status")
+    assert page.locator("#status .spin .sronly").text_content() == "Henter data"
+    page.evaluate("state.server={running:false,runs:2,aula:'ok'}; renderChrome()")
+    assert page.locator("#status .spin").count() == 0

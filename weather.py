@@ -395,7 +395,7 @@ def for_family(cfg: dict, now: dt.datetime, transport: httpx.BaseTransport | Non
     home = load_home(state_dir)
     if not home:
         log.info('Vejr: hjemmets placering er ikke sat – åbn appen på pc\'en, der kører den '
-                 '(normalt http://localhost:8080), åbn "Menu ⋯" og tryk på "Sæt hjem for vejret"')
+                 '(normalt http://localhost:8080), tryk på tandhjulet (Indstillinger) og "Sæt hjem for vejret"')
         return None
     try:
         rows = hours(state_dir, now, transport, cfg)

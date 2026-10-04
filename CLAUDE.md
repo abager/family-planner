@@ -57,9 +57,8 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 | **Familieassistenten** | Writes the overview (AI); fallback text: "ud fra faste regler" | AI, Samlet automatisk, appens egne regler |
 | **Overblik** | Only the assistant's day/week summary | (not for the app in general) |
 | **Hele familien** | Everyone | Familien, Fælles |
-| **Opdatér nu** | Fetch data now | Hent data nu |
 | **Adgangskode** / **Kode til private samtaler** | Login / unlocking private threads | |
-| **Menu ⋯** | All actions (Kioskvisning, Opdatér nu, Sæt hjem for vejret, Log ud). The status line shows only status and warnings | |
+| **Indstillinger** (gear icon) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status and warnings; a spinning sync icon while the server fetches | Menu, Opdatér nu (removed: the server fetches by itself) |
 
 Formats: clock times `08.00` everywhere (kiosk clock too); dates `man 12/10` in lists, `mandag 12. oktober` in details.
 No duplicates on one screen: a week-plan item that produced tasks (task id `<plan id>:<n>`) is shown only as a task
