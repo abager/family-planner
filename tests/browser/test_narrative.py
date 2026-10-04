@@ -47,7 +47,7 @@ def test_narrative_text_is_escaped(make_page, site):
 def test_the_kiosk_shows_the_narrative_under_the_heading_dagen_and_fits_one_screen(make_page, site):
     for vp in ({"width": 1280, "height": 800}, {"width": 1920, "height": 1080}, {"width": 1024, "height": 768}):
         page = open_app(make_page, site, brief(), kiosk=True, viewport=vp)
-        assert page.inner_text("#kRememberHead") == "Dagen"
+        assert page.inner_text("#kRememberHead").startswith("Overblik ")
         assert page.eval_on_selector_all("#kRemember p", "ps => ps.map(p => p.textContent)") == STORY
         assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1"), vp
 
@@ -62,4 +62,4 @@ def test_the_kiosk_keeps_the_list_heading_without_a_narrative(make_page, site):
     b = brief(method="offline", afsnit=[{"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}])
     del b["fortaelling"]
     page = open_app(make_page, site, b, kiosk=True)
-    assert page.inner_text("#kRememberHead") == "Husk og frister" and "Gymnastiktøj" in page.inner_text("#kRemember")
+    assert page.inner_text("#kRememberHead").startswith("Overblik ") and "Gymnastiktøj" in page.inner_text("#kRemember")

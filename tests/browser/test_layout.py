@@ -1,4 +1,4 @@
-"""Layout: feedet er én kolonne uanset skærm, Vigtig info har ingen skjul/vis-knap, intet løber ud over siden."""
+"""Layout: feedet er én kolonne uanset skærm, Praktisk info har ingen skjul/vis-knap, intet løber ud over siden."""
 import datetime as dt
 
 import pytest
@@ -51,4 +51,4 @@ def test_google_outage_is_shown_in_the_header(make_page):
     fake = FakeServer()
     fake.family = family(health={"google": {"ok": False, "failed": ["Familiekalender"], "last_ok": "2026-10-01T08:15:00+02:00"}, "aula": {"state": "ok"}})
     page, *_ = make_page(fake)
-    assert "Google Kalender kunne ikke hentes" in page.inner_text("#status")
+    assert "Familiekalenderen kunne ikke hentes" in page.inner_text("#status")

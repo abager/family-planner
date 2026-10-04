@@ -50,6 +50,7 @@ def open_home(make_page, site, geo=None):
     fake.use_demo(page)
     page.reload()
     page.wait_for_timeout(500)
+    page.click("#menuBtn")
     page.click("#homeBtn")
     page.wait_for_function("!document.getElementById('homeInfo').textContent.includes('Henter')")
     return page, fake
@@ -146,14 +147,16 @@ def test_the_kiosk_without_hours_is_plain_text_as_before(make_page, site):
     assert page.locator("#kWxBtn").count() == 0 and "8–11°" in page.inner_text("#kWeather")
 
 
-def test_the_home_button_warns_when_weather_is_on_but_home_is_missing(make_page, site):
+def test_the_status_line_warns_when_weather_is_on_but_home_is_missing(make_page, site):
+    # Handlingen ligger altid i menuen; advarslen står kun i statuslinjen, når hjemmet mangler
     page, _ = app(make_page, site, None, status={"enabled": True, "home": False})
-    b = page.locator("#homeBtn")
-    assert "ikke sat" in b.inner_text() and "srvwarn" in b.get_attribute("class")
+    w = page.locator("#homeWarn")
+    assert w.inner_text() == "Hjem for vejret er ikke sat" and "srvwarn" in w.get_attribute("class")
+    assert page.locator("#homeBtn").text_content() == "Sæt hjem for vejret"
     page, _ = app(make_page, site, None, status={"enabled": True, "home": True})
-    assert page.inner_text("#homeBtn") == "Vejr: hjem"
+    assert page.locator("#homeWarn").count() == 0 and page.locator("#homeBtn").text_content() == "Sæt hjem for vejret"
     page, _ = app(make_page, site, None, status={"enabled": False, "home": False})
-    assert "srvwarn" not in page.locator("#homeBtn").get_attribute("class")
+    assert page.locator("#homeWarn").count() == 0
 
 
 def test_the_kiosk_hours_close_by_themselves_after_30_seconds(make_page, site):

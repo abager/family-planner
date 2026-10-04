@@ -17,7 +17,7 @@ VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-a
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 def test_no_new_accessibility_violations(make_page, site, scheme):
     page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, 10, 0), fixed=True, goto=False)
-    # Med et overblik lavet af reserven, så banneret "AI ikke tilgængelig" også kontrastprøves
+    # Med et overblik lavet af reserven, så banneret "Familieassistenten er ikke tilgængelig" også kontrastprøves
     fake.briefing = {"generated": "2026-10-01T08:00:00+02:00", "mode": "day", "method": "offline", "headline_label": "i dag",
                      "period": ["2026-10-01", "2026-10-01"], "ai_fallback": {"reason": "kvote", "since": "2026-10-01T08:00"},
                      "afsnit": [{"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}]}

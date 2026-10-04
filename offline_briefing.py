@@ -23,8 +23,8 @@ import re
 
 DAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
 CLOSURE_RX = re.compile(r"\b(lukkedag|lukket|skolefri|fri\b|ferie|temadag|motionsdag|skolefoto|aflyst|omlagt|sommerfest|julefrokost)", re.I)
-DAY_CAPS = {"Husk": 8, "Skal gøres": 6, "Særligt": 6, "Kommende frister": 5}
-WEEK_CAPS = {"Skal gøres": 8, "Husk og frister": 12, "Særligt": 8}
+DAY_CAPS = {"Husk": 8, "Skal gøres": 6, "Praktisk info": 6, "Kommende frister": 5}
+WEEK_CAPS = {"Skal gøres": 8, "Husk og lektier": 12, "Praktisk info": 8}
 LOOKAHEAD_DAYS = 21
 
 
@@ -185,13 +185,13 @@ def _task_text(t: dict, today: dt.date, with_deadline: bool) -> str:
 
 # ---------------------------------------------------------------- dagens overblik
 def _special(out: "_Out", digest: dict, today: dt.date | None) -> tuple[list[dict], dict]:
-    """Afsnittet "Særligt": vikarer, lektionsnoter, lukkedage og praktisk info. today = dagsoverblik, ellers ugens."""
+    """Afsnittet "Praktisk info": vikarer, lektionsnoter, lukkedage og praktisk info. today = dagsoverblik, ellers ugens."""
     week = today is None
     closures = [e for e in digest.get("aftaler", []) if _is_closure(e) and (week or _date(e["dato"]) == today)]
     for e in sorted(closures, key=lambda e: e["dato"]):
         d = _date(e["dato"])
         label = f"{_cap(DAYS[d.weekday()])}: " if week else ""
-        out.add("Særligt", f"{label}{_prefix(e['hvem'])}{e['titel']}", e["hvem"], [e["id"]], kilder=[e.get("kilde") or "Aula"])
+        out.add("Praktisk info", f"{label}{_prefix(e['hvem'])}{e['titel']}", e["hvem"], [e["id"]], kilder=[e.get("kilde") or "Aula"])
 
     vikar = _vikar_by_child(digest, today)
     for child in _family_order(digest, list(vikar)):
@@ -203,7 +203,7 @@ def _special(out: "_Out", digest: dict, today: dt.date | None) -> tuple[list[dic
             text = f"{child} har vikar " + _join([f"{DAYS[d.weekday()]} ({_join(f)})" for d, f in sorted(by_day.items())])
         else:
             text = f"{child} har vikar i " + _join([f"{fag} ({_times(tid)})" for _, fag, tid in items])
-        out.add("Særligt", text, [child], kilder=["Skema"])
+        out.add("Praktisk info", text, [child], kilder=["Skema"])
 
     for s_ in digest.get("skema", []):
         d = _date(s_.get("dato"))
@@ -211,13 +211,13 @@ def _special(out: "_Out", digest: dict, today: dt.date | None) -> tuple[list[dic
             continue
         for n in s_.get("noter", []):
             label = f"{_cap(DAYS[d.weekday()])}: " if week else ""
-            out.add("Særligt", f"{label}{_prefix(s_['hvem'])}note til {n['fag']} ({_times(n['tid'])}): {n['tekst']}", s_["hvem"], kilder=["Skema"])
+            out.add("Praktisk info", f"{label}{_prefix(s_['hvem'])}note til {n['fag']} ({_times(n['tid'])}): {n['tekst']}", s_["hvem"], kilder=["Skema"])
 
     for w in sorted(digest.get("ugeplan", []), key=lambda w: w["dato"]):
         if w["kategori"] == "info" and (week or _date(w["dato"]) == today):
             d = _date(w["dato"])
             label = f"{_cap(DAYS[d.weekday()])}: " if week else ""
-            out.add("Særligt", f"{label}{_prefix(w['hvem'])}{_info_text(w)}", w["hvem"], [w["id"]], kilder=["Ugeplan (Meebook)"])
+            out.add("Praktisk info", f"{label}{_prefix(w['hvem'])}{_info_text(w)}", w["hvem"], [w["id"]], kilder=["Ugeplan (Meebook)"])
     return closures, vikar
 
 
@@ -239,7 +239,7 @@ def day_briefing(digest: dict, today: dt.date, real_today: dt.date | None = None
         out.add("Kommende frister", f"{_prefix(t['hvem'])}{maybe}{t['titel']} – {when}", t["hvem"], [t["id"]], kilder=_src_task(t))
 
     _weather(out, digest, [today])
-    return {"afsnit": out.result(["Vejr", "Husk", "Skal gøres", "Særligt", "Kommende frister"])}
+    return {"afsnit": out.result(["Vejr", "Husk", "Skal gøres", "Praktisk info", "Kommende frister"])}
 
 
 def _weather(out, digest: dict, days: list[dt.date] | None) -> None:
@@ -278,12 +278,12 @@ def week_briefing(digest: dict, start: dt.date, end: dt.date, today: dt.date) ->
         else:
             when = f"{DAYS[due.weekday()]} {due.day}/{due.month}" if due else "ingen dato"
         maybe = "Muligvis: " if t.get("sikkerhed") == "middel" else ""
-        out.add("Husk og frister", f"{_cap(when)}: {_prefix(t['hvem'])}{maybe}{t['titel']}", t["hvem"], [t["id"]], kilder=_src_task(t))
+        out.add("Husk og lektier", f"{_cap(when)}: {_prefix(t['hvem'])}{maybe}{t['titel']}", t["hvem"], [t["id"]], kilder=_src_task(t))
 
     _special(out, digest, None)
 
     _weather(out, digest, None)
-    return {"afsnit": out.result(["Vejr", "Skal gøres", "Husk og frister", "Særligt"])}
+    return {"afsnit": out.result(["Vejr", "Skal gøres", "Husk og lektier", "Praktisk info"])}
 
 
 def offline_briefing(digest: dict, mode: str, now: dt.datetime) -> dict:

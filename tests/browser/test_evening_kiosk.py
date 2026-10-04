@@ -28,14 +28,14 @@ def brief_for(day):
 def test_before_the_evening_hour_the_view_is_today(make_page):
     page, *_ = make_page(now=at(10), fixed=True)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (0, "2026-10-01", "Skema i dag", "Dagens aftaler", "Vigtig info i dag")
+    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (0, "2026-10-01", "Skema i dag", "Dagens aftaler", "Praktisk info i dag")
     assert s["toggle"] is False                                         # ingen I dag/I morgen-vælger – skiftet sker kun automatisk
 
 
 def test_after_the_evening_hour_the_view_is_tomorrow(make_page):
     page, *_ = make_page(now=at(17, 30), fixed=True)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (1, "2026-10-02", "Skema i morgen", "Aftaler i morgen", "Vigtig info i morgen")
+    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (1, "2026-10-02", "Skema i morgen", "Aftaler i morgen", "Praktisk info i morgen")
 
 
 def test_the_switch_happens_by_itself_while_the_page_is_open_and_back_at_midnight(make_page):
@@ -92,6 +92,7 @@ def kiosk(page):
 
 def test_kiosk_button_starts_a_clean_full_screen_view(make_page):
     page, *_ = make_page(now=at(10, 20), width=1180, height=820)
+    page.click("#menuBtn")
     page.click("#kioskBtn")
     page.wait_for_timeout(300)
     k = kiosk(page)
@@ -103,12 +104,14 @@ def test_kiosk_button_starts_a_clean_full_screen_view(make_page):
 
 def test_kiosk_text_is_correctly_capitalised_in_danish(make_page):
     page, *_ = make_page(now=at(10, 20))
+    page.click("#menuBtn")
     page.click("#kioskBtn")
     assert page.inner_text("#kDay") == "I dag" and page.inner_text("#kDate")[0].islower()
 
 
 def test_the_exit_button_shows_on_tap_and_hides_again(make_page):
     page, *_ = make_page(now=at(10))
+    page.click("#menuBtn")
     page.click("#kioskBtn")
     assert kiosk(page)["exit"] == "0"
     page.click("#kClock")
@@ -127,6 +130,7 @@ def test_the_exit_button_shows_on_tap_and_hides_again(make_page):
 
 def test_escape_leaves_the_kiosk(make_page):
     page, *_ = make_page(now=at(10))
+    page.click("#menuBtn")
     page.click("#kioskBtn")
     page.keyboard.press("Escape")
     page.wait_for_timeout(200)
@@ -175,7 +179,7 @@ def test_the_kiosk_shows_a_warning_when_data_is_old_or_google_is_down(make_page)
     fake.server = True
     page, *_ = make_page(fake, now=at(10), url="/index.html?kiosk=1")
     s = page.inner_text("#kStatus")
-    assert "over en time gamle" in s and "Google Kalender ikke hentet" in s
+    assert "over en time gamle" in s and "Familiekalenderen ikke hentet" in s
 
 
 @pytest.mark.parametrize("w,h", [(1180, 820), (820, 1180), (1920, 1080)])

@@ -230,7 +230,7 @@ def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[d
     return [{"role": "user", "content": content}]
 
 
-SECTION_TITLES = {"Vejr", "Husk", "Skal gøres", "Særligt", "Kommende frister"}
+SECTION_TITLES = {"Vejr", "Husk", "Skal gøres", "Praktisk info", "Kommende frister"}
 
 
 _TIME = re.compile(r"\bkl\.?\s*(\d{1,2})(?:[.:](\d{2}))?\b|\b(\d{1,2})[.:](\d{2})\b")

@@ -1,4 +1,4 @@
-"""Banneret "AI ikke tilgængelig" øverst – i appen og på kioskskærmen – når overblikket ikke kom fra sprogmodellen."""
+"""Banneret "Familieassistenten er ikke tilgængelig" øverst – i appen og på kioskskærmen – når overblikket ikke kom fra sprogmodellen."""
 import datetime as dt
 from zoneinfo import ZoneInfo
 
@@ -46,15 +46,15 @@ def test_banner_when_the_rules_made_the_overview(open_with):
     page = open_with(day=brief(method="offline", ai_fallback={"reason": "kvote", "since": "2026-10-01T08:00"}))
     b = banner(page)
     assert b["shown"] and b["first"] and b["role"] == "status"
-    assert b["text"] == "AI ikke tilgængelig – overblikket er lavet af appens egne regler."
+    assert b["text"] == "Familieassistenten er ikke tilgængelig – overblikket er lavet ud fra faste regler."
     assert "kvote" not in b["text"]                                    # den tekniske grund vises ikke
-    assert page.evaluate("document.querySelector('#briefDay .bfoot').textContent").startswith("Samlet automatisk")
+    assert page.evaluate("document.querySelector('#briefDay .bfoot').textContent").startswith("Samlet af familieassistenten ud fra faste regler")
 
 
 def test_banner_says_the_kept_ai_overview_may_be_out_of_date(open_with):
     page = open_with(day=brief(ai_stale={"reason": "pause", "since": "2026-10-01T09:30"}))
     b = banner(page)
-    assert b["shown"] and b["text"] == "AI ikke tilgængelig – overblikket er fra kl. 08.15 og er måske ikke opdateret."
+    assert b["shown"] and b["text"] == "Familieassistenten er ikke tilgængelig – overblikket er fra kl. 08.15 og er måske ikke opdateret."
     assert page.evaluate("document.querySelector('#briefDay .bfoot').textContent").startswith("Skrevet af familieassistenten")
 
 

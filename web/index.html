@@ -69,6 +69,16 @@ h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .aibanner{background:#3A2E12;color:#FBE7B5;border-color:#8A6A1F}}
 :root[data-theme="dark"] .aibanner{background:#3A2E12;color:#FBE7B5;border-color:#8A6A1F}
 .srvbtn{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.85rem}
+.actmenu{position:relative;display:inline-block}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;min-width:220px;display:flex;flex-direction:column;gap:2px;padding:6px;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.menu[hidden]{display:none}
+.menu button{all:unset;box-sizing:border-box;cursor:pointer;padding:10px 12px;border-radius:8px;color:var(--ink);font-size:.95rem;text-align:left}
+.menu button:hover{background:var(--today)}
+.menu button:focus-visible{outline:3px solid #2F6FDE;outline-offset:-3px}
+.menu button[disabled]{cursor:default;color:var(--muted)}
+@media (pointer:coarse){.menu button{min-height:44px}}
+@media (max-width:699px){.menu{right:auto;left:0}}
 .srvbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:4px}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
 .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
@@ -200,8 +210,6 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .ftabs button{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 .9rem var(--body);padding:7px 14px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .ftabs button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;margin-bottom:18px;overflow:hidden}
-.card.msg{border-color:color-mix(in srgb,#2F6FDE 45%,var(--line))}
-.card.msg.unread{box-shadow:inset 5px 0 0 #E4572E}
 .chead{display:flex;align-items:center;gap:10px;padding:12px 14px}
 .chead .avs{display:flex}
 .chead .avs .pav{font-size:1rem;width:2.3em;height:2.3em}
@@ -212,7 +220,6 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .kind{display:inline-flex;align-items:center;gap:5px;font:700 .78rem var(--body);padding:4px 10px;border-radius:999px;white-space:nowrap}
 .kind.post{background:color-mix(in srgb,#D9971E 20%,var(--surface));color:var(--ink)}
 .kind.album{background:color-mix(in srgb,#1F9E89 20%,var(--surface));color:var(--ink)}
-.kind.msg{background:color-mix(in srgb,#2F6FDE 18%,var(--surface));color:var(--ink)}
 .photos{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;background:#000;scrollbar-width:none}
 .photos::-webkit-scrollbar{display:none}
 .photos button{all:unset;cursor:zoom-in;flex:0 0 100%;scroll-snap-align:center;aspect-ratio:1/1;max-height:min(70vh,760px);display:block}
@@ -414,7 +421,6 @@ body.k-showexit .k-exit{opacity:1;pointer-events:auto}
 .k-kid .pav{width:1.7em;height:1.7em;font-size:1em}
 .k-hours{font-size:1.2em;font-weight:800}
 .k-line{margin-top:.45em;line-height:1.3}
-.k-sub{display:inline-block;font:700 .75em var(--body);background:#FDE2D9;color:#8B2A10;border-radius:999px;padding:.05em .6em;margin-left:.3em}
 .k-none{color:var(--muted);font-style:italic}
 .k-now{font-weight:800}
 .k-card{background:var(--surface);border:1px solid var(--line);border-radius:1em;padding:.85em 1em;margin-bottom:1.8vmin}
@@ -581,20 +587,6 @@ button,a,.chip,.pill{touch-action:manipulation}
   .mfilters button{flex:none}
 }
 
-.recipe-modal{max-width:90vw;max-height:90vh;overflow-y:auto;padding:20px}
-.recipe-modal h2{font:800 1.6rem var(--display);margin-bottom:16px;color:var(--ink)}
-.recipe-modal img{width:100%;max-width:300px;border-radius:12px;margin-bottom:16px}
-.recipe-modal h3{font:700 1.1rem var(--display);margin-top:16px;margin-bottom:8px;color:var(--ink)}
-.recipe-modal ul{margin:0;padding-left:20px;color:var(--ink)}
-.recipe-modal li{margin-bottom:6px;font-size:0.95rem}
-.recipe-modal ol{margin:0;padding-left:20px;color:var(--ink)}
-.recipe-modal ol li{margin-bottom:8px;line-height:1.5;font-size:0.95rem}
-@media (max-width:700px){
-  .mealcards{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-  .mealcard-content{padding:10px}
-  .mealcard h3{font-size:0.9rem}
-  .recipe-modal{padding:16px}
-}
 </style>
 </head>
 <body>
@@ -647,7 +639,7 @@ button,a,.chip,.pill{touch-action:manipulation}
     <div class="panel skemapanel hidden" id="skemaPanel"><h2 id="skemaTitle">Skema i dag</h2><div class="skema" id="skema"></div></div>
 
     <div class="panel"><h2 id="dayTitle">Dagens aftaler</h2><ul class="tl" id="timeline"></ul></div>
-    <div class="panel"><h2 id="infoTitle">Vigtig info i dag</h2><ul class="plans" id="planToday"></ul>
+    <div class="panel"><h2 id="infoTitle">Praktisk info i dag</h2><ul class="plans" id="planToday"></ul>
       <h2 style="margin-top:22px">Husk og lektier</h2><ul class="tasks" id="taskList"></ul></div>
   </section>
 
@@ -655,7 +647,7 @@ button,a,.chip,.pill{touch-action:manipulation}
     <div class="panel brief hidden" id="briefWeek" style="margin-bottom:14px"></div>
     <div class="legend">
       <span><svg class="ic"><use href="#i-event"/></svg>Aftale</span>
-      <span><svg class="ic"><use href="#i-task"/></svg>Opgave eller lektie</span>
+      <span><svg class="ic"><use href="#i-task"/></svg>Lektie, husk eller skal gøres</span>
       <span><svg class="ic"><use href="#i-note"/></svg>Kommentar fra ugeplanen</span>
       <span><svg class="ic"><use href="#i-info"/></svg>Praktisk info (omlagt dag, vikar, skolefoto …)</span>
     </div>
@@ -694,7 +686,7 @@ button,a,.chip,.pill{touch-action:manipulation}
     <div class="k-body">
       <div class="k-kids" id="kKids"></div>
       <div class="k-side">
-        <section class="k-card"><h2 id="kRememberHead">Husk og frister</h2><ul class="k-list" id="kRemember"></ul></section>
+        <section class="k-card"><h2 id="kRememberHead">Husk og lektier</h2><ul class="k-list" id="kRemember"></ul></section>
         <section class="k-card"><h2 id="kAptTitle">Aftaler</h2><ul class="tl" id="kApts"></ul></section>
       </div>
     </div>
@@ -706,7 +698,7 @@ button,a,.chip,.pill{touch-action:manipulation}
       <div class="fsearch"><input type="search" id="fsearch" placeholder="Søg i opslag og billeder" aria-label="Søg i opslag og billeder" autocomplete="off" enterkeyhint="search">
         <span class="fcount" id="fcount" aria-live="polite"></span></div>
       <div class="ftabs" role="group" aria-label="Vis i feed">
-        <button data-ft="all" aria-pressed="true">Alt</button>
+        <button data-ft="all" aria-pressed="true">Alle</button>
         <button data-ft="post" aria-pressed="false"><svg class="ic"><use href="#i-post"/></svg>Opslag</button>
         <button data-ft="album" aria-pressed="false"><svg class="ic"><use href="#i-photo"/></svg>Billeder</button>
       </div>
@@ -721,7 +713,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   <form id="privForm" novalidate>
     <h3 id="privHead">Private samtaler</h3>
     <p class="meta" id="privText">Indtast koden for at læse private samtaler. De låses igen efter få minutter, når du forlader Beskeder, eller når skærmen slukker.</p>
-    <label for="privCode">Kode</label>
+    <label for="privCode">Kode til private samtaler</label>
     <input id="privCode" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64">
     <p class="everr" id="privErr" role="alert"></p>
     <div class="evbtns"><button type="submit" class="btn primary" id="privOk">Lås op</button><button type="button" class="btn" id="privCancel">Annullér</button></div>
@@ -729,17 +721,17 @@ button,a,.chip,.pill{touch-action:manipulation}
 </dialog>
 <dialog id="evDlg" aria-labelledby="evHead">
   <form id="evForm" novalidate>
-    <h3 id="evHead">Føj til kalender</h3>
+    <h3 id="evHead">Føj til familiekalenderen</h3>
     <p class="meta" id="evSrc"></p>
     <label>Titel<input id="evTitle" maxlength="200" autocomplete="off"></label>
     <div class="row2">
       <div class="dpfield"><label for="evDate">Dato</label>
         <div class="dpbox"><input id="evDate" class="dpin" type="text" placeholder="dd/mm/åååå" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="evDateHint">
-          <button type="button" class="dpbtn" id="evDateBtn" aria-label="Vælg dato i kalender" aria-haspopup="dialog" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-calplus"/></svg></button></div>
+          <button type="button" class="dpbtn" id="evDateBtn" aria-label="Åbn datovælger" aria-haspopup="dialog" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-calplus"/></svg></button></div>
         <div class="dphint" id="evDateHint" aria-live="polite"></div></div>
       <div class="dpfield"><label for="evEnd">Slutdato <small>(valgfri)</small></label>
         <div class="dpbox"><input id="evEnd" class="dpin" type="text" placeholder="dd/mm/åååå" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="evEndHint">
-          <button type="button" class="dpbtn" id="evEndBtn" aria-label="Vælg slutdato i kalender" aria-haspopup="dialog" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-calplus"/></svg></button></div>
+          <button type="button" class="dpbtn" id="evEndBtn" aria-label="Åbn datovælger for slutdato" aria-haspopup="dialog" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-calplus"/></svg></button></div>
         <div class="dphint" id="evEndHint" aria-live="polite"></div></div>
     </div>
     <div class="dpcal" id="dpCal" role="dialog" aria-label="Vælg dato" hidden></div>
@@ -750,7 +742,7 @@ button,a,.chip,.pill{touch-action:manipulation}
     <p class="evnote" id="evMode"></p>
     <p class="evtarget" id="evTarget" aria-live="polite"></p>
     <p class="everr" id="evErr" role="alert"></p>
-    <div class="evbtns"><button type="submit" class="btn primary" id="evOk">Opret i kalender</button><button type="button" class="btn" id="evCancel">Annullér</button></div>
+    <div class="evbtns"><button type="submit" class="btn primary" id="evOk">Tilføj</button><button type="button" class="btn" id="evCancel">Annullér</button></div>
   </form>
 </dialog>
 <dialog id="lb" aria-label="Billedvisning">
@@ -761,8 +753,8 @@ button,a,.chip,.pill{touch-action:manipulation}
   <button class="arr next" id="lbNext" aria-label="Næste billede"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
   <div class="cdots" id="lbDots"></div>
 </dialog>
-<dialog id="homeDlg" aria-labelledby="homeHead"><h3 id="homeHead">Vejr: hjemmets placering</h3>
-  <p>Vejret i overblikket er for jeres hjem. Placeringen afrundes til ca. 1 km og bruges kun til at hente vejret fra MET Norway (yr.no).</p>
+<dialog id="homeDlg" aria-labelledby="homeHead"><h3 id="homeHead">Hjem for vejret</h3>
+  <p>Vejret i appen gælder jeres hjem. Placeringen afrundes til ca. 1 km og bruges kun til at hente vejret fra MET Norway (yr.no).</p>
   <p class="homeinfo" id="homeInfo" role="status"></p>
   <p class="homeinfo" id="homeNote"></p>
   <button type="button" id="homeUse">Brug min placering som hjem</button>
@@ -982,7 +974,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 function demoBriefing(){
   const d=new Date(); return {demo:true, method:"offline", generated:d.toISOString(), mode:"day", period:[ymd(d),ymd(d)], headline_label:`i dag, ${DAYS[d.getDay()]}`,
     afsnit:[{titel:"Husk",punkter:[{tekst:"Hugo: Natur/teknologi: gummistøvler med",hvem:["Hugo"],kilder:["Ugeplan (Meebook)"]},{tekst:"Carla: Emneuge: tøj til at være ude hele dagen",hvem:["Carla"],kilder:["Ugeplan (Meebook)"]}]},
-            {titel:"Særligt",punkter:[{tekst:"Hugo har vikar i Matematik (10.00)",hvem:["Hugo"],kilder:["Skema"]}]},
+            {titel:"Praktisk info",punkter:[{tekst:"Hugo har vikar i Matematik (10.00)",hvem:["Hugo"],kilder:["Skema"]}]},
             {titel:"Kommende frister",punkter:[{tekst:"Hugo: Matematik s. 32–33 – frist torsdag",hvem:["Hugo"],kilder:["Ugeplan (Meebook)"]}]}]};
 }
 
@@ -991,7 +983,7 @@ const colorsFor = ev => ev.people.includes("family") ? state.data.people.map(p=>
 const visible = ev => ev.people.includes("family") || ev.people.some(id=>!state.hidden.has(id));
 const onDay = (ev,day) => { const s=new Date(ev.start), e=new Date(ev.end); const d0=new Date(day); d0.setHours(0,0,0,0); const d1=addDays(d0,1); return s<d1 && e>d0; };
 const byStart = (a,b) => (b.allDay-a.allDay) || (new Date(a.start)-new Date(b.start));
-const srcLabel = s => ({aula:"Aula",google:"Google Kalender",meebook:"Meebook",besked:"Aula-besked"}[s]||s);
+const srcLabel = s => ({aula:"Aula",google:"Familiekalenderen",meebook:"Meebook",besked:"Aula-besked"}[s]||s);
 const arr = k => state.data[k] || [];
 const personVisible = ids => (ids||[]).includes("family") || (ids||[]).some(id=>!state.hidden.has(id));
 const whoText = ids => (ids||[]).includes("family") ? "Hele familien" : (ids||[]).map(id=>person(id)?.name).filter(Boolean).join(", ");
@@ -1069,38 +1061,13 @@ function renderWeatherHead(){
 
 
 
-// Vis fuld opskrift i modal
-function showRecipeModal(index){
-  const meals=state.data?.hellofresh?.måltider||[];
-  if(!meals[index]) return;
-  const m=meals[index];
-  const html=`
-    <div class="recipe-modal">
-      ${m.billede?`<img src="${esc(m.billede)}" alt="${esc(m.titel)}">`:""}
-      <h2>${esc(m.titel)}</h2>
-      ${m.tid_minutter?`<p><strong>Tilberedning:</strong> ${m.tid_minutter} minutter</p>`:""}
-      ${m.servinger?`<p><strong>Servinger:</strong> ${m.servinger}</p>`:""}
-      <h3>Ingredienser</h3>
-      <ul>${(m.ingredienser||[]).map(i=>`<li>${esc(i.navn||"")}${i.mængde?` – ${esc(i.mængde)} ${esc(i.enhed||"")}`:""}</li>`).join("")}</ul>
-      <h3>Fremgangsmåde</h3>
-      <ol>${(m.trin||[]).map(t=>`<li>${esc(typeof t==="string"?t:t.description||"")}</li>`).join("")}</ol>
-    </div>
-  `;
-  const dlg=document.getElementById("detail");
-  dlg.querySelector("h3").textContent=m.titel;
-  dlg.querySelector("#dBody").innerHTML=html;
-  dlg.showModal();
-}
-
-
-
-// "Vejr: hjem": sæt hjemmets placering én gang med browserens placering. Virker kun på en sikker side
+// "Sæt hjem for vejret": sæt hjemmets placering én gang med browserens placering. Virker kun på en sikker side
 // (http://localhost på pc'en, eller https). Serveren afrunder til ca. 1 km.
 async function openHomeDlg(){
   const dlg=document.getElementById("homeDlg"), info=document.getElementById("homeInfo"), btn=document.getElementById("homeUse");
   const show=h=>{ info.innerHTML = h.set
       ? `Hjem er sat til ca. ${String(h.lat).replace(".",",")} N, ${String(h.lon).replace(".",",")} Ø. <a href="${esc(h.map)}" target="_blank" rel="noopener noreferrer">Se på kort</a>`
-      : "Hjem er ikke sat endnu – så er der intet vejr i overblikket."; };
+      : "Hjem er ikke sat endnu – så vises der intet vejr."; };
   info.textContent="Henter …";
   try{ show(await (await fetch("api/home-location")).json()); }catch{ info.textContent="Kunne ikke hente indstillingen."; }
   const ok=window.isSecureContext && "geolocation" in navigator;
@@ -1133,8 +1100,8 @@ function renderAiBanner(){
   const el=document.getElementById("aiBanner"), bs=shownBriefings();
   const stale=bs.find(b=>b.ai_stale), fb=bs.find(b=>b.ai_fallback);
   let text="";
-  if(stale) text=`<b>AI ikke tilgængelig</b> – overblikket er fra kl. ${hm(new Date(stale.generated))} og er måske ikke opdateret.`;
-  else if(fb) text=`<b>AI ikke tilgængelig</b> – overblikket er lavet af appens egne regler.`;
+  if(stale) text=`<b>Familieassistenten er ikke tilgængelig</b> – overblikket er fra kl. ${hm(new Date(stale.generated))} og er måske ikke opdateret.`;
+  else if(fb) text=`<b>Familieassistenten er ikke tilgængelig</b> – overblikket er lavet ud fra faste regler.`;
   el.innerHTML=text; el.classList.toggle("hidden",!text);
 }
 function renderChrome(){
@@ -1147,30 +1114,39 @@ function renderChrome(){
   const stale = now-g > 36e5;
   let line = state.data.demo ? "<b>Demodata</b> – ingen family.json fundet"
     : (stale ? `<b style="color:#E4572E">Data er over en time gamle</b> (${hm(g)}) – ${sv?"serveren henter ikke nyt":"tjek at hentescriptet kører"}`
-             : `Opdateret <b>${hm(g)}</b> fra Aula og Google Kalender`);
+             : `Opdateret <b>${hm(g)}</b> fra Aula og familiekalenderen`);
+  // Statuslinjen viser kun status og advarsler (en advarsel kan være et link til at løse den). Handlinger ligger i menuen.
+  const warn=[], items=[`<button type="button" id="kioskBtn">Kioskvisning</button>`];
+  const noHome = sv && sv.weather?.enabled && sv.weather.home===false;     // vejret er slået til, men hjemmet mangler
   if(sv){
-    const bits=[];
-    if(needLogin) bits.push(`<a class="srvwarn" href="auth">Aula-login er udløbet – log ind</a>`);
-    else if(sv.aula==="error") bits.push(`<a class="srvwarn" href="auth" title="${esc(sv.last_error||"")}">Aula-hentning fejlede</a>`);
-    if(sv.mark_error) bits.push(`<span class="srvwarn" title="${esc(sv.mark_error)}">Læst-markering ikke gemt i Aula</span>`);
-    bits.push(state.refreshing||sv.running ? `<span>Henter …</span>` : `<button class="srvbtn" id="refreshNow">Opdatér nu</button>`);
-    const noHome = sv.weather?.enabled && sv.weather.home===false;     // vejret er slået til, men hjemmet mangler
-    bits.push(noHome ? `<button class="srvbtn srvwarn" id="homeBtn" title="Uden hjemmets placering er der intet vejr i overblikket">Vejr: hjem er ikke sat</button>`
-                     : `<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
-    bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
-    line += `<div class="srv">${bits.join("")}</div>`;
+    if(needLogin) warn.push(`<a class="srvwarn" href="auth">Aula-login er udløbet – log ind</a>`);
+    else if(sv.aula==="error") warn.push(`<a class="srvwarn" href="auth" title="${esc(sv.last_error||"")}">Aula-hentning fejlede</a>`);
+    if(sv.mark_error) warn.push(`<span class="srvwarn" title="${esc(sv.mark_error)}">Læst-markering ikke gemt i Aula</span>`);
+    if(noHome) warn.push(`<button class="srvbtn srvwarn" id="homeWarn" title="Uden hjemmets placering vises der intet vejr">Hjem for vejret er ikke sat</button>`);
+    const busy = state.refreshing||sv.running;
+    if(busy) warn.push(`<span>Henter …</span>`);
+    items.push(`<button type="button" id="refreshNow"${busy?" disabled":""}>${busy?"Henter …":"Opdatér nu"}</button>`,
+               `<button type="button" id="homeBtn">Sæt hjem for vejret</button>`,
+               `<button type="button" id="logoutBtn">Log ud</button>`);
   }
   const gh=state.data.health?.google;
-  if(gh && gh.ok===false) line += `<div class="srv"><span class="srvwarn" title="${esc((gh.failed||[]).join(", "))}">Google Kalender kunne ikke hentes – viser seneste kendte aftaler${gh.last_ok?` (fra kl. ${hm(new Date(gh.last_ok))})`:""}</span></div>`;
-  const kb=`<button class="srvbtn" id="kioskBtn">Kioskvisning</button>`;
-  line = sv ? line.replace(/(<div class="srv">)(?!.*<div class="srv">)/s, `$1${kb}`) : line+`<div class="srv">${kb}</div>`;
-  if(sv && !line.includes('id="kioskBtn"')) line += `<div class="srv">${kb}</div>`;
+  if(gh && gh.ok===false) warn.push(`<span class="srvwarn" title="${esc((gh.failed||[]).join(", "))}">Familiekalenderen kunne ikke hentes – viser seneste kendte aftaler${gh.last_ok?` (fra kl. ${hm(new Date(gh.last_ok))})`:""}</span>`);
+  const open=!!state.menuOpen;
+  line += `<div class="srv">${warn.join("")}<div class="actmenu"><button type="button" class="srvbtn" id="menuBtn" aria-expanded="${open}" aria-controls="actMenu">Menu ⋯</button>`
+        + `<div class="menu" id="actMenu"${open?"":" hidden"}>${items.join("")}</div></div></div>`;
   document.getElementById("status").innerHTML = line;
-  document.getElementById("kioskBtn")?.addEventListener("click", enterKiosk);
-  document.getElementById("refreshNow")?.addEventListener("click", refreshNow);
-  document.getElementById("homeBtn")?.addEventListener("click", openHomeDlg);
-
-  document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{ await fetch("logout",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); toLogin(); });
+  const closeMenu=()=>{ state.menuOpen=false; document.getElementById("actMenu").hidden=true; document.getElementById("menuBtn").setAttribute("aria-expanded","false"); };
+  const act=(id,fn)=>document.getElementById(id)?.addEventListener("click",()=>{ closeMenu(); fn(); });
+  document.getElementById("menuBtn").addEventListener("click",()=>{
+    state.menuOpen=!state.menuOpen; document.getElementById("actMenu").hidden=!state.menuOpen;
+    document.getElementById("menuBtn").setAttribute("aria-expanded",String(state.menuOpen));
+    if(state.menuOpen) document.querySelector("#actMenu button:not([disabled])")?.focus();
+  });
+  act("kioskBtn", enterKiosk);
+  act("refreshNow", refreshNow);
+  act("homeBtn", openHomeDlg);
+  document.getElementById("homeWarn")?.addEventListener("click", openHomeDlg);
+  act("logoutBtn", async ()=>{ await fetch("logout",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); toLogin(); });
   const box=document.getElementById("people"); box.innerHTML="";
   state.data.people.forEach(p=>{
     const b=document.createElement("button"); b.className="chip"; b.style.setProperty("--c",p.color);
@@ -1180,6 +1156,8 @@ function renderChrome(){
     box.appendChild(b);
   });
 }
+document.addEventListener("pointerdown",e=>{ if(state.menuOpen && !e.target.closest?.(".actmenu")){ state.menuOpen=false; const m=document.getElementById("actMenu"); if(m) m.hidden=true; document.getElementById("menuBtn")?.setAttribute("aria-expanded","false"); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && state.menuOpen){ state.menuOpen=false; document.getElementById("actMenu").hidden=true; const b=document.getElementById("menuBtn"); b.setAttribute("aria-expanded","false"); b.focus(); } });
 function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const n=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-n); const y=new Date(Date.UTC(t.getUTCFullYear(),0,1)); return Math.ceil(((t-y)/864e5+1)/7); }
 
 function duration(ev){
@@ -1266,13 +1244,12 @@ const VOICE_KEY="fp-voice";
 const voiceScore = v => (/natural|neural|online|premium|enhanced|forbedret/i.test(v.name)?10:0) + (/google/i.test(v.name)?4:0) + (v.localService?0:1);
 function danishVoices(){ return (window.speechSynthesis?.getVoices()||[]).filter(v=>(v.lang||"").toLowerCase().startsWith("da")).sort((a,b)=>voiceScore(b)-voiceScore(a)); }
 function chosenVoice(){ const vs=danishVoices(); let saved=null; try{saved=localStorage.getItem(VOICE_KEY);}catch{} return vs.find(v=>v.name===saved) || vs[0] || null; }
-const MONTH_NAMES=["januar","februar","marts","april","maj","juni","juli","august","september","oktober","november","december"];
 function speechText(t){
   return (t||"")
     .replace(/\bkl\.\s*/gi,"klokken ")
     .replace(/\b(\d{1,2})[.:]00\b/g,"$1")
     .replace(/\b(\d{1,2})[.:](\d{2})\b/g,"$1 $2")
-    .replace(/\b(\d{1,2})\/(\d{1,2})\b/g,(m,d,mo)=>`den ${d}. ${MONTH_NAMES[+mo-1]||mo}`)
+    .replace(/\b(\d{1,2})\/(\d{1,2})\b/g,(m,d,mo)=>`den ${d}. ${MONTHS[+mo-1]||mo}`)
     .replace(/(\d)\s*[–-]\s*(\d)/g,"$1 til $2")
     .replace(/\s[–—-]\s/g,", ")
     .replace(/\bf\.eks\./gi,"for eksempel").replace(/\bca\./gi,"cirka").replace(/\bevt\./gi,"eventuelt").replace(/\bm\.m\./gi,"med mere")
@@ -1321,7 +1298,7 @@ function renderBrief(kind, elId){
   el.innerHTML=`<div class="bhead"><h2>${esc(title)}</h2>
       ${window.speechSynthesis&&b.oplaesning?`<div class="speakbox"><button class="speak" aria-pressed="false">${SPEAK_ICON} Læs op</button>${voicePicker()}</div>`:""}</div>
     ${story ? `<div class="story">${story}</div>` : secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
-    <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet automatisk"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og vejrdata fra MET Norway":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
+    <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet af familieassistenten ud fra faste regler"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og vejrdata fra MET Norway":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
   el.querySelector(".speak")?.addEventListener("click",e=>speak(b.oplaesning,e.currentTarget));
   el.querySelector(".voice")?.addEventListener("change",e=>{ try{localStorage.setItem(VOICE_KEY,e.target.value);}catch{} speechSynthesis.cancel(); });
 }
@@ -1331,15 +1308,16 @@ function renderToday(){
   const fday=focusDay(), off=dayOffset();
   document.getElementById("dayTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";
   document.getElementById("timeline").innerHTML = timelineItems(fday);
-  // Vigtig info: lektier, husk og praktisk info fra ugeplanen for fokusdagen. Almindelig undervisning står i skemaet.
-  document.getElementById("infoTitle").textContent = "Vigtig info "+dayWord();
+  // Praktisk info: info og kommentarer fra ugeplanen for fokusdagen. Lektier og husk står under "Husk og lektier",
+  // almindelig undervisning i skemaet.
+  document.getElementById("infoTitle").textContent = "Praktisk info "+dayWord();
   const dayPlans = arr("weekplan").filter(w=>w.date===ymd(fday) && w.category!=="anden_klasse" && !state.hidden.has(w.person));
-  const plans = dayPlans.filter(w=>!w.category || w.category!=="undervisning")
+  const plans = dayPlans.filter(w=>(!w.category || w.category!=="undervisning") && !hasTasks(w))
     .sort((a,b)=>(isTaskPlan(b)-isTaskPlan(a)) || ((b.category==="info")-(a.category==="info")));
   const planBox=document.getElementById("planToday");
   planBox.innerHTML = plans.map(w=>{ const p=person(w.person);
     return `<li style="--c:${p.color}"><button class="item" data-plan="${esc(w.id)}"><div class="head"><span class="subj">${icon(planIcon(w))}${esc(w.subject||w.title)}</span>${w.category&&w.category!=="undervisning"?`<span class="flag">${CAT[w.category]||""}</span>`:w.label?`<span class="flag">${esc(w.label)}</span>`:""}</div>
-      <div class="snip">${esc(p.name)} · ${esc(planSummary(w))}</div></button></li>`; }).join("") || `<li class="empty">Ingen vigtig info</li>`;
+      <div class="snip">${esc(p.name)} · ${esc(planSummary(w))}</div></button></li>`; }).join("") || `<li class="empty">Ingen praktisk info</li>`;
   planBox.querySelectorAll("[data-plan]").forEach(b=>b.onclick=()=>showPlan(b.dataset.plan));
   const from=ymd(fday), to=ymd(addDays(fday,6)), realToday=ymd(new Date()), realTomorrow=ymd(addDays(new Date(),1));
   const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"};
@@ -1353,7 +1331,7 @@ function renderToday(){
     .sort((a,b)=>((b.recurring==="daily")-(a.recurring==="daily")) || a.due.localeCompare(b.due));
   document.getElementById("taskList").innerHTML = list.map(t=>{
     const d=new Date(t.due+"T12:00");
-    const whenTxt = t.recurring==="daily" ? "hver dag" : t.openEnded ? "snarest" : (t.due===realToday ? "i dag" : t.due===realTomorrow ? "i morgen" : `${DAYS[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`);
+    const whenTxt = t.recurring==="daily" ? "hver dag" : t.openEnded ? "snarest" : (t.due===realToday ? "i dag" : t.due===realTomorrow ? "i morgen" : `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`);
     return `<li style="--c:${tColor(t)}"><button class="item" data-task="${esc(t.id)}" style="padding:0"><strong>${icon("task")}${esc(t.title)}</strong>${t.confidence==="middel"?`<span class="flag">Muligvis</span>`:""}
       <div class="meta">${esc(whoText(tPeople(t)))} · ${kinds[t.kind]||t.kind} · ${whenTxt}</div></button></li>`;
   }).join("") || `<li class="empty" style="border:0;background:none">Intet de næste 7 dage</li>`;
@@ -1361,7 +1339,7 @@ function renderToday(){
 
 }
 
-function weekLanes(){ return [{id:"family",name:"Familien",color:"var(--ink)",note:"Fælles"},...state.data.people.filter(p=>!state.hidden.has(p.id))]; }
+function weekLanes(){ return [{id:"family",name:"Hele familien",color:"var(--ink)",note:""},...state.data.people.filter(p=>!state.hidden.has(p.id))]; }
 function pillsFor(l,d){
   const key=ymd(d);
   const evs=state.data.events.filter(e=>onDay(e,d)&&(l.id==="family"?e.people.includes("family"):e.people.includes(l.id))).sort(byStart);
@@ -1439,33 +1417,24 @@ function renderAula(){
   const box=document.getElementById("feed");
   box.innerHTML = shown.map(x=>{
     const imgs=x.images||[], open=state.expanded.has(x.id)||terms.length>0, long=(x.text||"").length>220;      // under søgning vises hele teksten, så træffet kan ses
-    const kindBadge = x.kind==="album" ? `<span class="kind album">${icon("photo")}Album</span>`
-      : x.kind==="post" ? `<span class="kind post">${icon("post")}Opslag</span>`
-      : `<span class="kind msg">${icon(x.private?"lock":"msg")}${x.private?"Privat":"Besked"}${x.unread?" · ulæst":""}</span>`;
-    const hide = x.private && (state.data.settings?.hidePrivate ?? true) && !state.revealed.has(x.id);
-    const cat = x.kind==="msg" && MCAT[x.category] && !x.private ? `<span class="flag" style="margin:0 0 6px;display:inline-block;background:color-mix(in srgb,#2F6FDE 15%,var(--surface));color:var(--ink)">${MCAT[x.category]}</span> ` : "";
-    return `<article class="card ${x.kind}${x.unread?" unread":""}">
+    const kindBadge = x.kind==="album" ? `<span class="kind album">${icon("photo")}Album</span>` : `<span class="kind post">${icon("post")}Opslag</span>`;
+    return `<article class="card ${x.kind}">
       <div class="chead"><div class="avs">${pavsFor(x.people)}</div>
         <div class="who"><b>${esc(x.author||"Aula")}</b><span>${esc(whoText(x.people))} · ${when(x.timestamp)}</span></div>${kindBadge}</div>
-      ${imgs.length&&!hide?`${carousel(x.id, imgs)}
+      ${imgs.length?`${carousel(x.id, imgs)}
         ${x.kind==="album"?`<button class="open-album" data-open="${esc(x.id)}">${icon("photo")} Se ${imgs.length>1?`alle ${imgs.length} billeder`:"billedet"} i stor visning</button>`:""}
         ${x.imageCount>imgs.length?`<div class="pcount">${imgs.length} af ${x.imageCount} billeder hentet – resten ligger i Aulas galleri</div>`:""}`:""}
-      <div class="cbody">${x.important?`<span class="flag" style="margin:0 0 6px;display:inline-block">Vigtigt</span> `:""}${cat}<h3>${esc(x.title)}</h3>
-        ${hide ? `<div class="private">${icon("lock")} Privat samtale med skolen <button data-reveal="${esc(x.id)}">Vis besked</button></div>`
-          : x.text ? `${long&&!open ? `<p class="txt clamp">${esc(flatText(x.text))}</p>` : `<div class="txt rich">${richHTML(x.text)}</div>`}
+      <div class="cbody">${x.important?`<span class="flag" style="margin:0 0 6px;display:inline-block">Vigtigt</span> `:""}<h3>${esc(x.title)}</h3>
+        ${x.text ? `${long&&!open ? `<p class="txt clamp">${esc(flatText(x.text))}</p>` : `<div class="txt rich">${richHTML(x.text)}</div>`}
         ${long&&!terms.length?`<button class="more" data-more="${esc(x.id)}">${open?"Vis mindre":"Læs mere"}</button>`:""}` : `<p class="meta">Ingen tekst – åbn tråden i Aula</p>`}
-        ${hide?"":extracted(x)}${x.kind==="post"?calOptsHTML(x.cal)+changeOptsHTML(x.id):""}</div>
+        ${extracted(x)}${x.kind==="post"?calOptsHTML(x.cal)+changeOptsHTML(x.id):""}</div>
       ${x.attachments?`<div class="cfoot">${x.attachments} vedhæftning(er) – se dem i Aula</div>`:""}
     </article>`;
   }).join("") || (terms.length
     ? `<p class="empty">Intet opslag eller billede matcher «${esc(state.feedQ.trim())}». Søgningen dækker de ${items.length} nyeste, appen har hentet fra Aula – ældre findes i Aula.</p>`
-    : `<p class="empty">Intet at vise. Prøv at vælge flere personer eller "Alt".</p>`);
+    : `<p class="empty">Intet at vise. Prøv at vælge flere personer eller "Alle".</p>`);
   if(terms.length) box.querySelectorAll(".cbody h3, .cbody .txt, .chead .who b").forEach(el=>highlightIn(el, terms));
   box.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>{const id=b.dataset.more; state.expanded.has(id)?state.expanded.delete(id):state.expanded.add(id); renderAula();});
-  box.querySelectorAll("[data-reveal]").forEach(b=>b.onclick=async()=>{
-    const x=arr("messages").find(m=>m.id===b.dataset.reveal); if(x?.redacted && !(await unlockPrivate())) return;
-    state.revealed.add(b.dataset.reveal); renderAula();
-  });
   const byId = Object.fromEntries(shown.map(x=>[x.id,x]));
   box.querySelectorAll("[data-car]").forEach(el=>{
     const x=byId[el.dataset.car]; initCarousel(el, i=>openLightbox(x.images, i, x.title));
@@ -1477,6 +1446,7 @@ document.getElementById("fsearch").addEventListener("input", e=>{ state.feedQ=e.
 document.getElementById("fsearch").addEventListener("keydown", e=>{ if(e.key==="Escape" && e.target.value){ e.preventDefault(); e.target.value=""; state.feedQ=""; renderAula(); } });
 // Et ugeplanpunkt tæller som opgave, hvis det er mærket som lektie/opgave/husk – ellers er det en kommentar
 const isTaskPlan = w => w.category ? ["lektie","husk"].includes(w.category) : /lektie|opgave|aflever|husk|hjemme/i.test(`${w.label||""} ${w.title||""}`);
+const hasTasks = w => (state.data.tasks||[]).some(t=>String(t.id).startsWith(w.id+":"));
 const planIcon = w => isTaskPlan(w) ? "task" : (w.category==="info" ? "info" : "note");
 const planTitle = w => w.category==="info" && w.info ? `${w.subject||w.title}: ${w.info}` : (w.subject||w.title);
 const CAT = {lektie:"Lektie",husk:"Husk",info:"Praktisk info",undervisning:"Undervisning"};
@@ -1857,7 +1827,6 @@ function updateBadge(){
 // ---------- Kioskvisning
 state.kiosk=false;
 let kioskTick=null, kioskLoad=null, kioskExitTimer=null, wakeLock=null;
-const pad2=n=>String(n).padStart(2,"0");
 async function requestWake(){ try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release",()=>{wakeLock=null;}); } }catch{} }
 function enterKiosk(){
   state.kiosk=true; document.body.classList.add("kiosk");
@@ -1899,9 +1868,9 @@ function kidCard(k,day,now,isToday){
   const subs=ls.filter(l=>l.substitute).map(l=>`${esc(l.title)} ${l.start.replace(":",".")}`);
   const key=ymd(day);
   const tasks=tasksFor(k,day);
-  const plans=arr("weekplan").filter(w=>w.person===k.id && w.date===key && w.category && !["undervisning","anden_klasse"].includes(w.category)).map(w=>planSummary(w) && `${esc(w.subject||w.title)}: ${esc(planSummary(w))}`);
+  const plans=arr("weekplan").filter(w=>w.person===k.id && w.date===key && w.category && !["undervisning","anden_klasse"].includes(w.category) && !hasTasks(w)).map(w=>planSummary(w) && `${esc(w.subject||w.title)}: ${esc(planSummary(w))}`);
   return `<article class="k-kid" style="--c:${k.color}"><h3>${pav(k)}${esc(k.name)}</h3>${head}${nowLine}
-    ${subs.length?`<div class="k-line">Vikar i ${subs.join(", ")}<span class="k-sub">vikar</span></div>`:""}
+    ${subs.length?`<div class="k-line">Vikar i ${subs.join(", ")}</div>`:""}
     ${other.map(e=>`<div class="k-line">${icon("event")} ${esc(e.title)}${e.allDay?"":` · ${evRange(e)}`}</div>`).join("")}
     ${tasks.map(t=>`<div class="k-line">${icon("task")} ${esc(t)}</div>`).join("")}
     ${plans.map(t=>`<div class="k-line">${icon("note")} ${t}</div>`).join("")}</article>`;
@@ -1910,16 +1879,16 @@ function kidCard(k,day,now,isToday){
 const KWX_CLOSE_MS=30000; let kWxTimer=null;
 function renderKiosk(){
   const now=new Date(), day=focusDay(), off=dayOffset();
-  document.getElementById("kClock").textContent=`${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  document.getElementById("kClock").textContent=`${pad(now.getHours())}.${pad(now.getMinutes())}`;
   document.getElementById("kDay").textContent=off===0?"I dag":"I morgen";
   document.getElementById("kDate").textContent=`${DAYS[day.getDay()]} ${day.getDate()}. ${MONTHS[day.getMonth()]}`;
   const g=new Date(state.data.generated), old=(now-g)>36e5, sv=state.server, bad=[];
   if(old) bad.push("Data er over en time gamle");
   if(sv && ["login_required","waiting_for_login"].includes(sv.aula)) bad.push("Aula-login er udløbet");
-  if(state.data.health?.google?.ok===false) bad.push("Google Kalender ikke hentet");
+  if(state.data.health?.google?.ok===false) bad.push("Familiekalenderen ikke hentet");
   document.getElementById("kStatus").innerHTML = (bad.length?`<div class="bad">${bad.map(esc).join(" · ")}</div>`:"")+`<div>Opdateret ${hm(g)}</div>`;
   document.getElementById("kKids").innerHTML = state.data.people.filter(p=>p.role==="child").map(k=>kidCard(k,day,now,off===0)).join("");
-  // Husk og frister: overblikket for dagen, hvis det handler om samme dag – ellers dagens opgaver
+  // Overblikket for dagen, hvis det handler om samme dag – ellers dagens opgaver ("Husk og lektier")
   const b=state.briefing?.day, fresh=b?.period && b.period[0]<=ymd(day) && ymd(day)<=b.period[1];
   let items=[];
   const w=weatherFor(day), kw=document.getElementById("kWeather");
@@ -1940,7 +1909,7 @@ function renderKiosk(){
   if(fresh) items=(b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
   else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));
   const storyOn = fresh && Array.isArray(b.fortaelling);
-  document.getElementById("kRememberHead").textContent = storyOn ? "Dagen" : "Husk og frister";
+  document.getElementById("kRememberHead").textContent = fresh ? "Overblik "+dayWord() : "Husk og lektier";
   if(storyOn){
     document.getElementById("kRemember").innerHTML = `<li class="k-story">${b.fortaelling.map(p=>`<p>${esc(p)}</p>`).join("")}</li>`;
   } else document.getElementById("kRemember").innerHTML = items.slice(0,10).map(i=>`<li>${i.who.map(pav).join("")}<span>${esc(i.text)}${i.sec&&fresh?`<small>${esc(i.sec)}</small>`:""}</span></li>`).join("") || `<li class="k-none">Intet særligt ${dayWord()}</li>`;
@@ -1964,8 +1933,8 @@ state.cal={loaded:false,enabled:false,problem:null,calendar_id:null,created:{},d
 const localCal=()=>{ try{ return {dismissed:[],...JSON.parse(localStorage.getItem(CAL_LOCAL_KEY)||"{}")}; }catch{ return {dismissed:[]}; } };
 const saveLocalCal=()=>{ try{ localStorage.setItem(CAL_LOCAL_KEY,JSON.stringify({dismissed:state.cal.dismissed})); }catch{} };
 const NO_WRITE_HELP="Se README: «Sæt direkte oprettelse op».";
-const calProblem=()=>state.server ? `Oprettelse i familiekalenderen er ikke sat op${state.cal.problem?` (${state.cal.problem})`:""}. ${NO_WRITE_HELP}`
-                                  : "Aftaler kan kun oprettes, når appen kører med serveren (server.py).";
+const calProblem=()=>state.server ? `Tilføjelse til familiekalenderen er ikke sat op${state.cal.problem?` (${state.cal.problem})`:""}. ${NO_WRITE_HELP}`
+                                  : "Aftaler kan kun tilføjes, når appen kører med serveren (server.py).";
 async function loadCal(){
   if(state.server){
     try{
@@ -1999,10 +1968,10 @@ const CAT_COLOR={lejrskole:"#1F9E89",tur:"#2F6FDE",turnering:"#E4572E",test:"#8E
 function calOptsHTML(opts){
   const list=(opts||[]).filter(o=>o && !o.exists);
   if(!list.length) return "";
-  return `<div class="calopts"><h3 class="calhead">${icon("calplus")} Føj til kalender</h3>${list.map(o=>{
+  return `<div class="calopts"><h3 class="calhead">${icon("calplus")} Føj til familiekalenderen</h3>${list.map(o=>{
     const st=calStatus(o), link=calEntry(o)?.html_link;
     return `<div class="calopt"><div><b>${esc(o.calendar_title)}</b><span class="meta">${esc(fmtWhen(o))}${o.location?" · "+esc(o.location):""}</span></div>
-      ${st==="created" ? `<span class="done">${icon("check")} I kalenderen${link?` · <a href="${esc(link)}" target="_blank" rel="noopener">Åbn</a>`:""}</span>` : `<button class="btn" data-addcal="${esc(o.id)}">Føj til kalender</button>`}</div>`;
+      ${st==="created" ? `<span class="done">${icon("check")} I familiekalenderen${link?` · <a href="${esc(link)}" target="_blank" rel="noopener">Åbn</a>`:""}</span>` : `<button class="btn" data-addcal="${esc(o.id)}">Tilføj</button>`}</div>`;
   }).join("")}</div>`;
 }
 
@@ -2157,7 +2126,7 @@ DP.bind(document.getElementById("evDate"),document.getElementById("evDateBtn"),d
 DP.bind(document.getElementById("evEnd"),document.getElementById("evEndBtn"),document.getElementById("evEndHint"),()=>document.getElementById("evDate").dataset.iso||"");
 function openEvDialog(o){
   evKey=o.id; evOpt=o;
-  evEl("evHead").textContent = o.kind==="move" ? "Flyt aftalen" : "Føj til kalender";
+  evEl("evHead").textContent = o.kind==="move" ? "Flyt aftalen" : "Føj til familiekalenderen";
   evEl("evSrc").textContent = o.source ? `Fra ${o.source.label} «${o.source.title}»` : (o.sources?.[0] ? `Fra ${o.sources[0].label} «${o.sources[0].title}»` : "");
   evEl("evTitle").value=o.kind==="move" ? (o.target?.title||o.calendar_title) : (o.calendar_title||o.title||"");
   DP.close(false); DP.set(evEl("evDate"),o.start||""); DP.set(evEl("evEnd"),(o.end&&o.end!==o.start)?o.end:"");
@@ -2170,7 +2139,7 @@ function openEvDialog(o){
   evEl("evMode").hidden = state.cal.enabled;
   evEl("evTarget").hidden = !state.cal.enabled;
   evEl("evMode").classList.toggle("warn", !state.cal.enabled);
-  evEl("evOk").textContent = o.kind==="move" ? "Flyt aftalen" : "Opret i kalender";
+  evEl("evOk").textContent = o.kind==="move" ? "Flyt aftalen" : "Tilføj";
   evEl("evOk").disabled = !state.cal.enabled;
   syncAll(); document.getElementById("detail").open && document.getElementById("detail").close();
   evEl("evDlg").showModal();
@@ -2186,7 +2155,7 @@ function updateTarget(){
   const found=peopleInTitle(evEl("evTitle").value), def=state.cal.defaultPeople||["family"];
   const who = found.length ? found.map(p=>p.name).join(", ")
     : def.includes("family") ? "Hele familien (intet navn i titlen)" : def.map(id=>person(id)?.name||id).join(", ")+" (intet navn i titlen)";
-  evEl("evTarget").innerHTML=`${evOpt?.kind==="move"?"Flyttes i":"Oprettes i"} <b>${esc(state.cal.calendar_name||"familiekalenderen")}</b> · Tildeles: <b>${esc(who)}</b>`;
+  evEl("evTarget").innerHTML=`${evOpt?.kind==="move"?"Flyttes i":"Tilføjes til"} <b>familiekalenderen</b> · Tildeles: <b>${esc(who)}</b>`;
 }
 evEl("evTitle").addEventListener("input",updateTarget);
 evEl("evCancel").onclick=()=>evEl("evDlg").close();
@@ -2201,9 +2170,9 @@ evEl("evForm").addEventListener("submit",async e=>{
            start_time:evEl("evSt").value,end_time:evEl("evEn").value,location:evEl("evLoc").value.trim(),description:evEl("evDesc").value};
   const err=m=>{ evEl("evErr").textContent=m; };
   if(!p.title) return err("Giv aftalen en titel.");
-  if(d1.invalid) return err("Datoen kan ikke læses – skriv fx 12/10/2026 eller vælg i kalenderen.");
+  if(d1.invalid) return err("Datoen kan ikke læses – skriv fx 12/10/2026 eller vælg i datovælgeren.");
   if(!p.date) return err("Vælg en dato.");
-  if(d2.invalid) return err("Slutdatoen kan ikke læses – skriv fx 16/10/2026 eller vælg i kalenderen.");
+  if(d2.invalid) return err("Slutdatoen kan ikke læses – skriv fx 16/10/2026 eller vælg i datovælgeren.");
   if(p.end_date<p.date) return err("Slutdatoen ligger før startdatoen.");
   if(!p.all_day && !p.start_time) return err("Angiv mindst et starttidspunkt, eller vælg Hele dagen.");
   if(!p.all_day && p.end_time && p.end_date===p.date && p.end_time<=p.start_time) return err("Sluttidspunktet skal ligge efter starttidspunktet.");
@@ -2219,17 +2188,17 @@ evEl("evForm").addEventListener("submit",async e=>{
   }
   if(!state.cal.enabled) return err(calProblem());
   {
-    ok.disabled=true; ok.textContent="Opretter …";
+    ok.disabled=true; ok.textContent="Tilføjer …";
     try{
       const j=await calPost("api/calendar/events",p), key=evKey;
       state.cal.created[key]={html_link:j.html_link};
       evEl("evDlg").close(); afterCalChange(); setTimeout(load,1500);
-      toast(`Oprettet i ${state.cal.calendar_name||"familiekalenderen"} ✓`, 9000, j.already ? null : {label:"Fortryd", run:()=>undoCreate(key)});
+      toast("Tilføjet til familiekalenderen ✓", 9000, j.already ? null : {label:"Fortryd", run:()=>undoCreate(key)});
     }catch(x){ err(x.message); }
-    finally{ ok.disabled=false; ok.textContent="Opret i kalender"; }
+    finally{ ok.disabled=false; ok.textContent="Tilføj"; }
   }
 });
-// Fortryd lige efter oprettelse: sletter aftalen i Google igen (samme som "Fjern fra kalender")
+// Fortryd lige efter tilføjelse: sletter aftalen i Google igen (samme som "Fjern fra familiekalenderen")
 async function undoCreate(key){
   try{
     await calPost("api/calendar/remove",{key});
@@ -2267,15 +2236,15 @@ const changesFor=id=>(state.data?.suggestions||[]).filter(s=>CHANGE_VERB[s.kind]
 function changeOptsHTML(id){
   const list=changesFor(id);
   if(!list.length) return "";
-  return `<div class="calopts chg"><h3 class="calhead">${icon("event")} Ændring i kalenderen</h3>${list.map(s=>{
+  return `<div class="calopts chg"><h3 class="calhead">${icon("event")} Ændring i familiekalenderen</h3>${list.map(s=>{
     const t=s.target||{}, st=calStatus(s), canAct=!!(state.server && state.cal.enabled && t.source==="app" && t.key);
     const tdate=t.start===t.end ? fmtDay(t.start) : `${fmtDay(t.start)} – ${fmtDay(t.end)}`;
-    const act = st==="applied" ? `<span class="done">${icon("check")} ${s.kind==="move"?"Aftalen er flyttet":"Aftalen er fjernet fra kalenderen"}</span>`
+    const act = st==="applied" ? `<span class="done">${icon("check")} ${s.kind==="move"?"Aftalen er flyttet":"Aftalen er fjernet fra familiekalenderen"}</span>`
       : st==="dismissed" ? `<span class="meta">Aftalen er beholdt</span><button class="btn" data-chg="restore" data-key="${esc(s.id)}">Fortryd</button>`
       : canAct ? (s.kind==="move" ? `<button class="btn primary" data-chg="move" data-key="${esc(s.id)}">Flyt aftalen …</button><button class="btn" data-chg="dismiss" data-key="${esc(s.id)}">Behold</button>`
-                                  : `<button class="btn primary" data-chg="cancel" data-key="${esc(s.id)}">Fjern fra kalender</button><button class="btn" data-chg="dismiss" data-key="${esc(s.id)}">Behold</button>`)
-      : `<span class="meta">${t.source==="app" ? "Kalenderen kan ikke ændres herfra lige nu" : "Aftalen er ikke oprettet via appen"} – ret den selv i Google Kalender.</span><a class="btn" href="https://calendar.google.com/" target="_blank" rel="noopener">Åbn Google Kalender</a>`;
-    return `<div class="calopt"><div><b>«${esc(t.title)}» ${CHANGE_VERB[s.kind]}</b><span class="meta">I kalenderen ${esc(tdate)}${s.kind==="move"?` · ny tid: ${esc(fmtWhen(s))}`:""}</span></div>${act}</div>`;
+                                  : `<button class="btn primary" data-chg="cancel" data-key="${esc(s.id)}">Fjern fra familiekalenderen</button><button class="btn" data-chg="dismiss" data-key="${esc(s.id)}">Behold</button>`)
+      : `<span class="meta">${t.source==="app" ? "Familiekalenderen kan ikke ændres herfra lige nu" : "Aftalen er ikke tilføjet via appen"} – ret den selv i Google Kalender.</span><a class="btn" href="https://calendar.google.com/" target="_blank" rel="noopener">Åbn i Google Kalender</a>`;
+    return `<div class="calopt"><div><b>«${esc(t.title)}» ${CHANGE_VERB[s.kind]}</b><span class="meta">I familiekalenderen ${esc(tdate)}${s.kind==="move"?` · ny tid: ${esc(fmtWhen(s))}`:""}</span></div>${act}</div>`;
   }).join("")}</div>`;
 }
 async function applyChange(s,kind){
@@ -2285,7 +2254,7 @@ async function applyChange(s,kind){
       if(!confirm(`Fjern «${t.title}» fra familiekalenderen?`)) return;
       await calPost("api/calendar/cancel",{key:s.id,target_key:t.key});
     }
-    state.cal.applied.push(s.id); toast(kind==="cancel"?"Aftalen er fjernet fra kalenderen":"Aftalen er flyttet"); afterCalChange(); setTimeout(load,1500);
+    state.cal.applied.push(s.id); toast(kind==="cancel"?"Aftalen er fjernet fra familiekalenderen":"Aftalen er flyttet"); afterCalChange(); setTimeout(load,1500);
   }catch(x){ toast(x.message); }
 }
 document.addEventListener("click",e=>{

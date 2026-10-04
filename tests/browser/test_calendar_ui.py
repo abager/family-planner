@@ -1,4 +1,4 @@
-"""Kalenderen fra appen: kun manuelt via "Føj til kalender" på beskeder, opslag og ugeplan. Ingen automatiske forslag.
+"""Kalenderen fra appen: kun manuelt via "Føj til familiekalenderen" på beskeder, opslag og ugeplan. Ingen automatiske forslag.
 Aflysninger og flytninger af aftaler, appen har oprettet, vises på beskeden selv."""
 import datetime as dt
 
@@ -33,12 +33,12 @@ def test_there_is_no_suggestions_tab_badge_or_banner(make_page):
     assert page.locator("#evLearn").count() == 0                                              # ingen "lær af aktiviteten" i dialogen
 
 
-# ---------------------------------------------------------------- manuelt: "Føj til kalender"
+# ---------------------------------------------------------------- manuelt: "Føj til familiekalenderen"
 def test_the_manual_option_opens_a_prefilled_dialog_that_is_validated(make_page):
     page, fake, _ = make_page(now=NOW, fixed=True)
     to_server(page, fake)
     open_add(page)
-    assert page.inner_text("#evHead") == "Føj til kalender"
+    assert page.inner_text("#evHead") == "Føj til familiekalenderen"
     assert page.input_value("#evTitle") == "Carla: Tur til Naturcentret" and page.input_value("#evDate") == "01/10/2026"
     assert page.input_value("#evSt") == "08:30" and page.input_value("#evEn") == "13:00"
     page.fill("#evTitle", "")
@@ -136,8 +136,8 @@ def block(page):
 def test_a_cancellation_is_shown_on_the_message_with_what_it_concerns(make_page):
     page, *_ = with_changes(make_page, change("cancel"))
     t = block(page).inner_text()
-    assert "Ændring i kalenderen" in t and "«Hugo: Forældremøde» er aflyst" in t and "21. oktober" in t
-    assert [b.inner_text() for b in block(page).locator(".btn").all()] == ["Fjern fra kalender", "Behold"]
+    assert "Ændring i familiekalenderen" in t and "«Hugo: Forældremøde» er aflyst" in t and "21. oktober" in t
+    assert [b.inner_text() for b in block(page).locator(".btn").all()] == ["Fjern fra familiekalenderen", "Behold"]
 
 
 def test_removing_asks_first_and_then_calls_the_server(make_page):
@@ -200,7 +200,7 @@ def test_a_failed_move_keeps_the_dialog_open_with_the_reason(make_page):
 def test_events_not_created_by_the_app_are_information_only(make_page):
     page, *_ = with_changes(make_page, change("move", source="google"), change("cancel", source="google"))
     assert page.locator("[data-chg]").count() == 0
-    assert block(page).inner_text().count("ikke oprettet via appen") == 2 and block(page).locator('a.btn[href="https://calendar.google.com/"]').count() == 2
+    assert block(page).inner_text().count("ikke tilføjet via appen") == 2 and block(page).locator('a.btn[href="https://calendar.google.com/"]').count() == 2
 
 
 def test_without_calendar_writing_changes_are_also_information_only(make_page):

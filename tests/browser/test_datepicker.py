@@ -13,7 +13,7 @@ PARSE = [("12/10", "2026-10-12"), ("12.10.2026", "2026-10-12"), ("12-10-26", "20
 
 
 def open_dialog(page, fake=None):
-    """Åbner "Føj til kalender" fra den første besked (der er ingen forslagsfane længere)."""
+    """Åbner "Føj til familiekalenderen" fra den første besked (der er ingen forslagsfane længere)."""
     if fake:                                    # med server: kun her kan dialogen gemme
         fake.use_demo(page)
         page.reload()

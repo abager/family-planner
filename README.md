@@ -91,7 +91,7 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 Øverst i "I dag" og "Ugen" står et overblik. **Med AI** er det en varm, kronologisk fortælling til jer forældre – fra morgen til aften (ugen: dag for dag) – i nogle få korte afsnit, ca. 150 ord: hvad der skal med ud ad døren, afvigelser i skoledagen, afhentning, fritid og aftaler, og vejret, hvor det betyder noget. Det normale skoleskema nævnes ikke – det står allerede i appen. Hvem der henter/bringer nævnes kun, hvis det står i en aftale eller i `familie_regler.md`. Kioskskærmen viser fortællingen under "Dagen".
 
-**Uden AI** laver appens egne regler en liste: *Vejr*, *Husk*, *Skal gøres*, *Særligt* og *Kommende frister*, hvert punkt med barnets ikon og kilde.
+**Uden AI** laver appens egne regler en liste: *Vejr*, *Husk*, *Skal gøres*, *Praktisk info* og *Kommende frister*, hvert punkt med barnets ikon og kilde.
 
 **`mode = "ai"`: sprogmodellen skriver overblikket.** Appens egne regler finder fakta (datoer, frister, hvem); sprogmodellen formulerer og prioriterer. Standard er Google Gemini på det gratis niveau. Hvis sprogmodellen ikke kan bruges (ingen nøgle, kvoten er brugt, Google er nede, svaret er ugyldigt), sker der dette:
 
@@ -126,7 +126,7 @@ Alt, hvad AI'en foreslår, kontrolleres mod punktets egen tekst: datoen skal st�
 
 Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"). Under datoen øverst i appen står dagens vejr som ét ikon med temperatur – tryk på det for at se resten af dagen time for time (ikon, temperatur og regn). Efter kl. 19 viser det i morgen. Kioskskærmen viser vejrlinjen under datoen; tryk på den for at folde timerne ud. På kiosken lukker timerne sig selv efter 30 sekunder. Vejret kommer fra MET Norway (de samme data som yr.no) – ingen nøgle, ingen konto. Prognosen er time for time ca. 2½ døgn frem, så ugeoverblikket har kun vejr for de dage, der er dækket. Data fra MET Norway, licens CC BY 4.0 – krediteret i overblikkets fodlinje.
 
-**Sæt hjemmet én gang:** Åbn appen i browseren **på pc'en, der kører den** (http://localhost:8080), tryk på **Vejr: hjem** og **Brug min placering som hjem**. Browseren spørger om lov. Siger den nej, så slå placering til i Windows: *Indstillinger → Privatliv og sikkerhed → Placering*. Knappen virker kun på selve pc'en (eller over https), fordi browsere kun udleverer placeringen til sikre sider. En stationær pc finder sin placering via wifi eller internetadressen, så den kan være et par kilometer ved siden af – det betyder intet for vejret. Tryk på "Se på kort" for at tjekke den. Flytter I, så tryk igen.
+**Sæt hjemmet én gang:** Åbn appen i browseren **på pc'en, der kører den** (http://localhost:8080), åbn **Menu ⋯**, tryk på **Sæt hjem for vejret** og **Brug min placering som hjem**. Browseren spørger om lov. Siger den nej, så slå placering til i Windows: *Indstillinger → Privatliv og sikkerhed → Placering*. Knappen virker kun på selve pc'en (eller over https), fordi browsere kun udleverer placeringen til sikre sider. En stationær pc finder sin placering via wifi eller internetadressen, så den kan være et par kilometer ved siden af – det betyder intet for vejret. Tryk på "Se på kort" for at tjekke den. Flytter I, så tryk igen.
 
 **Privatliv:** Placeringen afrundes til ca. 1 km og gemmes kun i `web/home_location.json` (aldrig i git, aldrig i `family.json`). Kun den afrundede placering (2 decimaler) sendes til MET Norway, højst én gang i timen og aldrig før deres `Expires`. MET kræver kontaktoplysninger i User-Agent; appen sender et link til repoet (ret det med `contact` under `[weather]` i `config.toml`). Er MET nede, bruges en prognose op til 6 timer gammel; ellers er overblikket bare uden vejr. Tjek med selvtesten: linjerne *Vejr: hjem* og *Vejr (MET Norway)*.
 
@@ -205,11 +205,11 @@ Alt, der skal gemmes, ligger i `data/` (config, Aula-login og hentede data), så
 
 Aulas login fornyes automatisk, så MitID kun skal bruges, når fornyelsen fejler. Sker det, fortsætter serveren med de seneste Aula-data, viser en rød advarsel i appen og sender (hvis `notify_ntfy` er sat) en push-besked uden data i. Åbn `/auth` og log ind igen. Google-kalenderen opdateres uanset.
 
-### "Føj til kalender"
+### "Føj til familiekalenderen"
 
 Appen opretter **aldrig selv** aftaler eller forslag til kalenderen. Du vælger det, der skal med.
 
-På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står en knap "Føj til kalender". Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Øverst står, hvilken kalender aftalen oprettes i, og hvem den tildeles ud fra navnene i titlen. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i en kalender; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
+På *enhver* besked, ethvert opslag og ugeplanspunkt, hvor der kan udledes en **entydig dato og mindst et starttidspunkt**, står "Føj til familiekalenderen" med en knap "Tilføj". Den åbner en dialog, hvor du kan rette titel, dato, tid, sted og beskrivelse, før noget oprettes. Nederst står, at aftalen tilføjes til familiekalenderen, og hvem den tildeles ud fra navnene i titlen. Datoer kan skrives i de fleste former (`12/10`, `12.10.2026`, `12. okt`, `1210`, `i morgen`, `mandag`) eller vælges i datovælgeren; ugedagen vises under feltet, så du kan se, at du har ramt den rigtige dag. Har en sætning flere forskellige datoer, eller mangler der et tidspunkt, vises ingen knap.
 
 Titlen er forudfyldt ud fra teksten ("Lejrskole", "Tur til Zoo", "Karlas fødselsdag"). Datoer regnes ud fra, hvornår beskeden er skrevet, så "testen i morgen (torsdag)" og "på fredag" bliver til rigtige datoer. Findes der allerede en aftale samme dag med samme ord, vises knappen ikke.
 
@@ -230,7 +230,7 @@ Appen opretter aftaler direkte i familiekalenderen – du forlader aldrig appen,
 - [ ] I `config.toml`: sæt `write = true` på familiekalenderen under `[[google]]` (nødvendigt, hvis du har flere Google-kalendere – appen gætter aldrig), og `enabled = true` under `[calendar_write]`. Kalender-id'et udledes af iCal-adressen; ellers sæt `calendar_id` på kalenderen.
 - [ ] Påmindelser: hver forælder åbner familiekalenderens indstillinger i Google Kalender → **Standardunderretninger** og vælger fx "1 dag før". Google giver kun påmindelser til den, der opretter en aftale – her servicekontoen – så appen kan ikke sætte dem for jer. Fjern `reminder_minutes`, hvis den står i din config.
 - [ ] Genstart serveren og kør `python server.py --selftest`. Den opretter og sletter en prøveaftale langt ude i fremtiden og tjekker, at kalenderen også kan læses via API'et. Alt skal være ✔.
-- [ ] Prøv i appen: tryk "Føj til kalender" på en besked, og se at dialogen skriver "Oprettes i **Familiekalender**", at aftalen dukker op i Google Kalender, og at "Fortryd" i bekræftelsen fjerner den igen.
+- [ ] Prøv i appen: tryk "Tilføj" under "Føj til familiekalenderen" på en besked, og se at dialogen skriver "Tilføjes til **familiekalenderen**", at aftalen dukker op i Google Kalender, og at "Fortryd" i bekræftelsen fjerner den igen.
 
 Menuernes navne hos Google kan ændre sig lidt. Får du en fejl, forklarer appen den (fx "er kalenderen delt med servicekontoen?"). Hver aftale får et fast id, så den aldrig kan oprettes to gange, og "Fjern fra kalender" sletter den igen.
 
@@ -289,9 +289,9 @@ Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 17 om i 
 
 ## Kioskvisning
 
-En stor, rolig vægvisning til en tablet i køkkenet. Start den med knappen **Kioskvisning** i statuslinjen, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
+En stor, rolig vægvisning til en tablet i køkkenet. Start den med **Kioskvisning** i **Menu ⋯** øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
 
-- Ur, dato og dagen (I dag / I morgen, efter samme regel som ovenfor), et kort pr. barn (skoletid, hvad der er nu og næste, vikarer, ting at huske) samt Husk og frister og dagens aftaler.
+- Ur, dato og dagen (I dag / I morgen, efter samme regel som ovenfor), et kort pr. barn (skoletid, hvad der er nu og næste, vikarer, ting at huske) samt dagens overblik (eller Husk og lektier, hvis der intet overblik er) og dagens aftaler.
 - Teksten tilpasser sig skærmen, så alt kan ses uden at rulle. Data hentes på ny hvert andet minut, og skærmen holdes tændt (Wake Lock, hvor enheden understøtter det; ellers sæt Autolås til "Aldrig").
 - **Viser aldrig beskeder** og intet fra private samtaler.
 - Tryk et vilkårligt sted for at få **Afslut** frem i seks sekunder (på tastatur: `Esc`). Øverst står en rød advarsel, hvis data er over en time gamle, Aula-login er udløbet, eller Google Kalender ikke kunne hentes.
@@ -320,8 +320,8 @@ En besked om, at noget er **aflyst, udsat eller flyttet**, bliver ikke til en ny
 "Behold" lader aftalen stå og kan fortrydes.
 
 - Aftaler, som **ikke** er oprettet via appen, kan appen ikke ændre sikkert. De får en besked om at rette dem i Google Kalender.
-- Findes der ingen aftale at aflyse, sker der ingenting. Ved en flytning uden kendt gammel aftale kan du bruge "Føj til kalender" på beskeden med den **nye** dato.
-- Spørgsmål ("Skal vi på tur?"), betingelser og tvetydige tilfælde (to mulige aftaler) giver ikke noget gæt. En senere aflysning fjerner også "Føj til kalender"-muligheder om det samme.
+- Findes der ingen aftale at aflyse, sker der ingenting. Ved en flytning uden kendt gammel aftale kan du bruge "Føj til familiekalenderen" på beskeden med den **nye** dato.
+- Spørgsmål ("Skal vi på tur?"), betingelser og tvetydige tilfælde (to mulige aftaler) giver ikke noget gæt. En senere aflysning fjerner også "Føj til familiekalenderen"-muligheder om det samme.
 - Klokkeslæt som "kl. 7 om aftenen" læses som 19.00.
 
 ## Drift, tilsyn og selvtest
@@ -363,7 +363,7 @@ Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, de
 | `test_times.py` | sluttider: rigtige, tænkte (`endInferred`) og 45-minutters lektioner |
 | `test_server.py` | adgang, CSRF, spærring, private tråde og billeder, aflys/flyt |
 | `test_selftest.py` | selvtesten mod sunde og ødelagte opsætninger |
-| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til kalender" (oprettelse, fortryd, modtager), aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk, tilgængelighed |
+| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til familiekalenderen" (tilføjelse, fortryd, modtager), ensartede termer og menuen, aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk, tilgængelighed |
 
 `homework_test.py` og `messages_test.py` i roden er ældre hjælpescripts, der kører genkendelsen mod **dine egne filer** (`python homework_test.py weekplan.json`, `python messages_test.py aula_feed.json`) og indgår ikke i `pytest`.
 

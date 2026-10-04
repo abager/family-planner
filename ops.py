@@ -108,7 +108,7 @@ class StateFile:
 
 
 # ---------------------------------------------------------------- aftenpush
-SECTION_WORDS = {"Husk": "at huske", "Skal gøres": "skal gøres", "Særligt": "særligt", "Kommende frister": "frister på vej"}
+SECTION_WORDS = {"Husk": "at huske", "Skal gøres": "skal gøres", "Praktisk info": "praktisk info", "Kommende frister": "frister på vej"}
 
 
 def evening_push_text(briefing: dict, details: str = "summary") -> tuple[str, str, bool]:
@@ -116,7 +116,7 @@ def evening_push_text(briefing: dict, details: str = "summary") -> tuple[str, st
     day = datetime.fromisoformat(briefing["period"][0])
     title = f"I morgen, {DAYS[day.weekday()]}"
     secs = {s["titel"]: s.get("punkter", []) for s in briefing.get("afsnit", [])}
-    core = sum(len(secs.get(k, [])) for k in ("Husk", "Skal gøres", "Særligt"))
+    core = sum(len(secs.get(k, [])) for k in ("Husk", "Skal gøres", "Praktisk info"))
     if details == "full":
         lines = [f"{s['titel']}: " + "; ".join(p["tekst"] for p in s.get("punkter", [])[:4]) for s in briefing.get("afsnit", []) if s.get("punkter")]
         return title, "\n".join(lines) or "Intet særligt i morgen.", core > 0

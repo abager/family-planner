@@ -525,7 +525,7 @@ function draw(s){
   if(s.aula==='ok'||s.aula==='skipped'){
     o.innerHTML=`<span class="pill ok">${s.aula==='ok'?'Logget ind i Aula':'Aula er slået fra'}</span>
     <p style="margin-top:10px">Sidst hentet kl. ${t(s.last_success)}.${s.running?' Henter nu …':''}</p>
-    <div class="row"><button onclick="post('/api/refresh')">Hent data nu</button></div>`;return}
+    <div class="row"><button onclick="post('/api/refresh')">Opdatér nu</button></div>`;return}
   if(s.aula==='login_required'||s.aula==='unknown'){
     o.innerHTML=`<span class="pill warn">Login mangler</span><p style="margin-top:10px">Aula-loginet er udløbet. Appen viser de seneste data, men henter ikke nyt, før du har logget ind med MitID.</p>
     ${s.last_error?`<p class="err">${s.last_error}</p>`:''}<div class="row"><button onclick="post('/api/auth/start')">Log ind med MitID</button></div>`;return}

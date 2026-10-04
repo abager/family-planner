@@ -5,6 +5,29 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (consistent UI terms, no duplicates)
+- One word per concept, documented in CLAUDE.md → *UI vocabulary*. "Vigtig info" and the briefing section "Særligt" are
+  now **Praktisk info**; the kiosk heading follows the briefing ("Overblik i dag") or falls back to **Husk og lektier**;
+  the week legend says "Lektie, husk eller skal gøres".
+- The calendar is **familiekalenderen** everywhere (source labels, status, warnings, dialogs). Adding is "Føj til
+  familiekalenderen" (heading once) with "Tilføj" buttons; "Opret i kalender" is gone. The date picker is called
+  *datovælger* so it isn't confused with the family calendar.
+- The overview is written by **Familieassistenten**; the banner and footer no longer say "AI" / "Samlet automatisk".
+- Status line shows status and warnings only. Actions (Kioskvisning, Opdatér nu, Sæt hjem for vejret, Log ud) moved
+  to **Menu ⋯**. Missing home location shows as a warning link in the status line.
+- Feed filter "Alt" → "Alle" (as in Beskeder). Week board lane "Familien/Fælles" → "Hele familien". Kiosk clock
+  uses `08.00` like the rest of the app; task list dates use `man 12/10`. Aula login page button "Opdatér nu".
+- Private-threads dialog label "Kode til private samtaler" (distinct from the login password).
+
+### Fixed (duplicates)
+- The today view and the kiosk no longer show a week-plan homework/remember item both as practical info and as a
+  task: an item that produced tasks is shown only under "Husk og lektier".
+- The kiosk showed a substitute twice on one line (text plus a "vikar" tag).
+
+### Removed
+- HelloFresh leftovers in the frontend (recipe dialog and meal-card CSS) and dead feed code for messages/private
+  threads (messages are not shown in the feed). Duplicate constants (`MONTH_NAMES`, `pad2`).
+
 ### Changed (weather source)
 - Weather now comes from MET Norway (yr.no, Locationforecast 2.0) instead of DMI, which kept answering
   400/429. No key; the User-Agent carries a contact (default: the repo link, `[weather] contact` overrides).

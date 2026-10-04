@@ -38,6 +38,33 @@ tablets and a kiosk screen. Events can be added to Google Calendar from any mess
   shows a warning. A failing source must never produce an empty calendar.
 - Python 3.14 is required (the `aula` client needs it). Frontend is plain HTML/CSS/JS, no build step.
 
+## UI vocabulary (keep it consistent)
+
+One concept, one word. New UI text uses exactly these terms; don't introduce synonyms.
+
+| Term (Danish UI) | Means | Don't use |
+|---|---|---|
+| **Aftale** | A calendar event | aktivitet (in UI text), begivenhed |
+| **Lektie / Husk / Skal gøres** | The three task kinds (`kind`: lektie, husk, handling) | opgave as a kind |
+| **Husk og lektier** | The list of things to do (today view; kiosk fallback) | Husk og frister |
+| **Frist** | Only a due *date* ("frist torsdag"), never a category | |
+| **Praktisk info** | Deviations and practical info: omlagt dag, vikar, lukkedag, skolefoto (briefing section too) | Vigtig info, Særligt |
+| **Feed** | The tab with Aula posts and albums; filters *Alle · Opslag · Billeder* | Alt |
+| **Beskeder** / **Private samtaler** | Messages / the locked private threads | |
+| **Familiekalenderen** | The family's Google calendar, everywhere in UI text (fixed word, not the configured name). Only a link that opens Google's site says "Åbn i Google Kalender" | Google Kalender (as name), kalenderen |
+| **Føj til familiekalenderen** / **Tilføj** | Heading once / the action button and dialog submit | Opret i kalender, oprettes |
+| **Datovælger** | The date picker inside the dialog | kalender |
+| **Familieassistenten** | Writes the overview (AI); fallback text: "ud fra faste regler" | AI, Samlet automatisk, appens egne regler |
+| **Overblik** | Only the assistant's day/week summary | (not for the app in general) |
+| **Hele familien** | Everyone | Familien, Fælles |
+| **Opdatér nu** | Fetch data now | Hent data nu |
+| **Adgangskode** / **Kode til private samtaler** | Login / unlocking private threads | |
+| **Menu ⋯** | All actions (Kioskvisning, Opdatér nu, Sæt hjem for vejret, Log ud). The status line shows only status and warnings | |
+
+Formats: clock times `08.00` everywhere (kiosk clock too); dates `man 12/10` in lists, `mandag 12. oktober` in details.
+No duplicates on one screen: a week-plan item that produced tasks (task id `<plan id>:<n>`) is shown only as a task
+(`hasTasks` in `index.html`), in the today view and on the kiosk. The briefing may repeat items – it is a summary.
+
 ## Privacy rules (non-negotiable)
 
 - Private message threads (parents ↔ school) are **never** written to `family.json`. Their content lives in
@@ -85,7 +112,7 @@ familie_regler.md (free text)   ─┘                                     └�
 | `weather.py` | MET Norway weather (yr.no, Locationforecast 2.0 `/complete`, no key, User-Agent with contact): home location (rounded), hourly-cached fetch, coarse day summaries, rule-based advice |
 | `calendar_ai.py` | AI calendar items from messages/posts/week plans → same `(suggestions, options)` shape as `activities.find_all`; per-item cache, batches of 8, ≤3 requests/fetch, 30-request reserve for the briefing |
 | `ai.py` | The only way to call a language model: provider adapters (Gemini, Claude) over plain httpx, JSON output, content-hash cache, daily budget + RPM throttle, backoff, `AIUnavailable` |
-| `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Særligt", "Kommende frister"); AI with rule-based fallback |
+| `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Praktisk info", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
 | `private.py` | Storage and gating of private threads |
 | `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
@@ -140,7 +167,7 @@ Known gaps and open work:
 
 - **Weather has only been tested against a simulated MET Norway.** DMI was dropped 2026-10-03 (HTTP 400 on a wrong
   parameter name, then 429 "Server is busy"). Response shape from MET's Locationforecast 2.0 docs. First real
-  check: the selftest lines *Vejr: hjem* and *Vejr (MET Norway)*.
+  check: the selftest lines *Hjem for vejret* and *Vejr (MET Norway)*.
 
 - **AI (Phase 1) has only been tested against a simulated Gemini/Claude** (httpx `MockTransport`). The real
   endpoint, the model name `gemini-3.5-flash-lite`, Google's 429 detail format (`QuotaFailure` with a `PerDay`
@@ -217,15 +244,15 @@ Planned restructuring (do in small steps, tests green after each):
   (`KWX_CLOSE_MS`; opening again restarts the timer) so the rest of the screen gets its space back. The strip scrolls sideways, never the page.
 - Logging: `for_family` writes exactly one INFO line per run (off / home not set / no usable forecast / "N dage
   fra MET Norway (prognose hentet kl. HH:MM)"). Never coordinates in logs.
-- `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the "Vejr: hjem"
-  button turns into a warning ("Vejr: hjem er ikke sat").
+- `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the status line shows
+  a warning button ("Hjem for vejret er ikke sat"); the action itself is "Sæt hjem for vejret" in the menu.
 - Weather is an extra: any failure → no weather, never an error banner. Tests use a simulated MET Norway only.
 
 ## Calendar and time conventions
 
 - The app writes only to the calendar chosen by `suggestions.write_target()`; there is no "open Google" fallback.
 - **No automatic suggestions.** `activities.find_all()` still finds activities (their titles are reused for the manual
-  "Føj til kalender" options), but `family.json` `suggestions` only carries changes (`CHANGE_KINDS`: cancel, hold, move)
+  "Føj til familiekalenderen" options), but `family.json` `suggestions` only carries changes (`CHANGE_KINDS`: cancel, hold, move)
   of events already in the calendar. They are shown on the source message/post/weekly-plan item, not in a tab.
   Learned rules were removed; don't reintroduce a suggestions tab, badge or push without the user asking.
 - "I dag" switches to tomorrow automatically after `evening_hour` (`dayOffset = autoOffset`); there is no manual toggle.

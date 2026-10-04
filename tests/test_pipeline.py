@@ -166,7 +166,7 @@ def test_new_activities_are_only_offered_manually_never_suggested(cfg, fake_aula
     assert data["suggestions"] == []                                                  # intet automatisk forslag
     (m,) = [x for x in data["messages"] if x["id"].endswith("8") or "Lejrskole" in (x.get("subject") or "")]
     (opt,) = m["cal"]
-    assert opt["start"] == d.isoformat() and opt["start_time"] == "08:00" and "Lejrskole" in opt["title"]   # men "Føj til kalender" findes
+    assert opt["start"] == d.isoformat() and opt["start_time"] == "08:00" and "Lejrskole" in opt["title"]   # men "Føj til familiekalenderen" findes
     assert "learn" not in opt
 
 

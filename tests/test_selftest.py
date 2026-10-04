@@ -255,7 +255,7 @@ def test_selftest_offline_mode_sends_nothing(cfg):
 # ---------------------------------------------------------------- vejr (simuleret MET Norway)
 def test_selftest_weather_without_home_explains_the_button(cfg):
     r = T.check_weather(cfg)
-    assert r[0].status == T.WARN and "Vejr: hjem" in r[0].hint and "localhost" in r[0].hint
+    assert r[0].status == T.WARN and "Sæt hjem for vejret" in r[0].hint and "localhost" in r[0].hint
 
 
 def test_selftest_weather_asks_met_and_reports_days(cfg):

@@ -43,7 +43,7 @@ def test_statefile_survives_restart_and_removes_none(tmp_path):
 
 SECTIONS = [{"titel": "Husk", "punkter": [{"tekst": "Hugo: gymnastiktøj"}, {"tekst": "Carla: biblioteksbog"}]},
             {"titel": "Skal gøres", "punkter": [{"tekst": "Underskriv blanketten"}]},
-            {"titel": "Særligt", "punkter": [{"tekst": "Hugo har vikar i Idræt"}]}]
+            {"titel": "Praktisk info", "punkter": [{"tekst": "Hugo har vikar i Idræt"}]}]
 
 
 def briefing(day="2026-10-02", sections=SECTIONS):
@@ -53,7 +53,7 @@ def briefing(day="2026-10-02", sections=SECTIONS):
 def test_push_text_summary_contains_numbers_only_never_names():
     title, text, has = ops.evening_push_text(briefing())
     assert title == "I morgen, fredag" and has
-    assert text == "2 at huske · 1 skal gøres · 1 særligt. Åbn Familieplan for detaljer."
+    assert text == "2 at huske · 1 skal gøres · 1 praktisk info. Åbn Familieplan for detaljer."
     assert not any(w in text for w in ("Hugo", "Carla", "gymnastik", "vikar"))
 
 

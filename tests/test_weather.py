@@ -272,7 +272,7 @@ def test_the_hours_never_reach_the_ai(cfg):
 def test_the_log_says_when_home_is_not_set(cfg, caplog):
     caplog.set_level("INFO", logger="familieplanner.weather")
     W.for_family(cfg, NOW, T(Fake((200, met()))))
-    assert "hjemmets placering er ikke sat" in caplog.text and "Vejr: hjem" in caplog.text
+    assert "hjemmets placering er ikke sat" in caplog.text and "Sæt hjem for vejret" in caplog.text
 
 
 def test_the_log_says_how_many_days_and_when_fetched(cfg, caplog):

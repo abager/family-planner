@@ -1,4 +1,4 @@
-"""Forslag fundet af AI udfylder den eksisterende "Føj til kalender"-formular – ingen ny skærm."""
+"""Forslag fundet af AI udfylder den eksisterende "Føj til familiekalenderen"-formular – ingen ny skærm."""
 import datetime as dt
 import json
 

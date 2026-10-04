@@ -255,10 +255,10 @@ def check_weather(cfg: dict, transport=None) -> list[Result]:
     out = Path(cfg.get("output", "web/family.json")).parent
     home = weather.load_home(out)
     if not home:
-        return [Result(WARN, "Vejr: hjem", "ikke sat – overblikket er uden vejr",
-                       "Åbn http://localhost:8080 i browseren på pc'en, der kører appen, tryk på \"Vejr: hjem\" "
+        return [Result(WARN, "Hjem for vejret", "ikke sat – appen viser intet vejr",
+                       "Åbn http://localhost:8080 i browseren på pc'en, der kører appen, åbn \"Menu ⋯\" og tryk på \"Sæt hjem for vejret\" "
                        "og derefter \"Brug min placering som hjem\".")]
-    res = [Result(OK, "Vejr: hjem", "sat (afrundet til ca. 1 km)")]
+    res = [Result(OK, "Hjem for vejret", "sat (afrundet til ca. 1 km)")]
     try:
         rows = weather.fetch(home["lat"], home["lon"], transport, cfg=cfg)
     except weather.WeatherUnavailable as e:
