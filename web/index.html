@@ -781,12 +781,30 @@ button,a,.chip,.pill{touch-action:manipulation}
   <button type="button" id="homeUse">Brug min placering som hjem</button>
   <form method="dialog"><button>Luk</button></form>
 </dialog>
-<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">Mat: HelloFresh token</h3>
-  <p>Din HelloFresh bearer token bruges til at hente denne uges menu. Tokenet gemmes sikkert og sendes aldrig væk fra denne enhed.</p>
-  <p style="font-size:0.85rem;color:var(--muted)">Du finder din token i HelloFresh-appen: Login → Indstillinger → Din konto → API-adgang</p>
-  <label style="display:block;margin:12px 0">Token<input type="password" id="helloFreshToken" autocomplete="off" placeholder="paste_your_token_here"></label>
-  <p class="error" id="helloFreshError" role="alert"></p>
-  <div style="display:flex;gap:8px"><button type="button" id="helloFreshOk">Gem token</button><form method="dialog" style="flex:1"><button style="width:100%">Annullér</button></form></div>
+<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">Mat: HelloFresh login</h3>
+  <p>Login med din HelloFresh email for at hente denne uges menu. Vi sender en magic link til din email – klik linket for at fuldføre.</p>
+  
+  <label style="display:block;margin:12px 0">
+    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Email</span>
+    <input type="email" id="helloFreshEmail" autocomplete="email" placeholder="din@email.com" style="width:100%;margin-top:4px">
+  </label>
+  
+  <p style="font-size:0.85rem;color:var(--muted);margin:12px 0;border-top:1px solid var(--line);padding-top:12px">
+    <strong>Eller:</strong> Hvis du allerede har en bearer token, kan du paste den nedenfor (valgfrit)
+  </p>
+  
+  <label style="display:block;margin:12px 0">
+    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Bearer Token (valgfrit)</span>
+    <input type="password" id="helloFreshToken" autocomplete="off" placeholder="paste_your_existing_token_here" style="width:100%;margin-top:4px">
+  </label>
+  
+  <p class="error" id="helloFreshError" role="alert" style="color:#E4572E;margin:8px 0;font-size:0.9rem"></p>
+  <p class="success" id="helloFreshSuccess" role="status" style="color:#2F9E59;margin:8px 0;font-size:0.9rem"></p>
+  
+  <div style="display:flex;gap:8px;margin-top:16px">
+    <button type="button" id="helloFreshOk" style="flex:1">Login</button>
+    <form method="dialog"><button style="min-width:100px">Annullér</button></form>
+  </div>
 </dialog>
 <dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
 
@@ -1125,21 +1143,48 @@ function showRecipeModal(index){
   dlg.showModal();
 }
 
-// Åbn HelloFresh token dialog
+// Åbn HelloFresh login dialog (passwordless eller direct token)
 async function openHelloFreshDlg(){
-  const dlg=document.getElementById("helloFreshDlg"), errEl=document.getElementById("helloFreshError"), input=document.getElementById("helloFreshToken");
-  errEl.textContent="";
-  input.value="";
-  input.focus();
+  const dlg=document.getElementById("helloFreshDlg"), errEl=document.getElementById("helloFreshError"), 
+        successEl=document.getElementById("helloFreshSuccess"),
+        emailInput=document.getElementById("helloFreshEmail"), 
+        tokenInput=document.getElementById("helloFreshToken");
+  errEl.textContent=""; successEl.textContent="";
+  emailInput.value=""; tokenInput.value="";
+  emailInput.focus();
+  
   document.getElementById("helloFreshOk").onclick=async ()=>{
-    const token=(input.value||"").trim();
-    if(!token){ errEl.textContent="Token må ikke være tomt"; return; }
+    const email=(emailInput.value||"").trim();
+    const token=(tokenInput.value||"").trim();
+    
+    if(!email && !token){ errEl.textContent="Enten email eller token skal udfyldes"; return; }
+    
+    errEl.textContent=""; successEl.textContent="";
+    document.getElementById("helloFreshOk").disabled=true;
+    
     try{
-      const r=await fetch("api/hellofresh-token",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},
-        body:JSON.stringify({token})});
-      if(!r.ok){ const j=await r.json(); errEl.textContent=j.error||"Fejl ved gemning af token"; }
-      else { dlg.close(); render(); }
-    }catch(e){ errEl.textContent="Kunne ikke gemme token"; }
+      const r=await fetch("api/hellofresh-token",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},
+        body:JSON.stringify({email, token})
+      });
+      const j=await r.json();
+      
+      if(!r.ok){ 
+        errEl.textContent=j.error||"Fejl ved login"; 
+      } else if(email && j.success) {
+        successEl.textContent=j.message||"Magic link sendt! Klik linket i emailen.";
+        // Luk dialog efter 3 sekunder, eller lad brugeren lukke
+        setTimeout(()=>{ if(dlg.open) dlg.close(); }, 3000);
+      } else if(token) {
+        successEl.textContent="Token gemt! Henter menu...";
+        setTimeout(()=>{ dlg.close(); render(); }, 1500);
+      }
+    }catch(e){ 
+      errEl.textContent="Kunne ikke kontakte serveren"; 
+    } finally {
+      document.getElementById("helloFreshOk").disabled=false;
+    }
   };
   dlg.showModal();
 }

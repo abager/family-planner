@@ -59,6 +59,38 @@ def save_token(state_dir: Path, token: str) -> None:
     log.info("HelloFresh token gemt")
 
 
+async def start_passwordless_login_async(email: str, country: str = "DK", locale: str = "da-DK") -> dict:
+    """Start passwordless login – sender magic link til email."""
+    try:
+        from pyhellofresh import HelloFreshClient
+    except ImportError:
+        raise HelloFreshUnavailable("pyhellofresh biblioteket er ikke installeret") from None
+
+    try:
+        client = HelloFreshClient(country=country, locale=locale)
+        result = await client.start_passwordless_login(email)
+        log.info("Passwordless login startet for %s", email)
+        return result
+    except Exception as e:
+        raise HelloFreshUnavailable(f"Kunne ikke starte passwordless login: {type(e).__name__}: {e}") from e
+
+
+def start_passwordless_login(email: str) -> dict:
+    """Synkron wrapper omkring async passwordless login start."""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(start_passwordless_login_async(email))
+            return result
+        finally:
+            loop.close()
+    except HelloFreshUnavailable:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HelloFreshUnavailable(f"Passwordless login fejlede: {e}") from e
+
+
 def load_token(state_dir: Path) -> str | None:
     """Henter HelloFresh token. None hvis ikke sat."""
     data = _read(Path(state_dir) / TOKEN_FILE)
