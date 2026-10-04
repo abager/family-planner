@@ -249,6 +249,16 @@ def test_the_prompt_asks_for_a_warm_chronological_narrative_without_the_timetabl
         assert phrase in system
 
 
+
+def test_the_prompt_has_no_read_aloud_and_a_stray_one_is_dropped(acfg):
+    # Oplæsning er fjernet: prompten beder ikke om den, og svarer modellen alligevel med den, gemmes den ikke
+    fake = Fake(ok({**GOOD, "oplaesning": "I dag skal Carla til fodbold."}))
+    b = brief(acfg, fake)
+    system = json.loads(fake.requests[0].content)["systemInstruction"]["parts"][0]["text"]
+    assert "oplaesning" not in system and "LÆST HØJT" not in system
+    assert b["method"] == "ai" and "oplaesning" not in b
+
+
 def test_unchanged_data_costs_no_new_request(acfg):
     fake = Fake(ok(GOOD))
     brief(acfg, fake)

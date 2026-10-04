@@ -1209,12 +1209,6 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
         log.warning("Vejret sprunget over: %s", e)
         weather_data = None
-    try:
-        import hellofresh
-        hellofresh_data = hellofresh.for_family(cfg, now)  # ugens meny; None uden token eller fejl
-    except Exception as e:  # noqa: BLE001 – HelloFresh er et ekstra og må aldrig vælte hentningen
-        log.warning("HelloFresh sprunget over: %s", e)
-        hellofresh_data = None
     data = {
         "generated": iso(now),
         "people": people.public(),
@@ -1227,7 +1221,6 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         "suggestions": suggestions_list,
         "health": health,
         "weather": weather_data,
-        "hellofresh": hellofresh_data,
         "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 17)),
                      "lessonMinutes": lesson_minutes(cfg)},
     }

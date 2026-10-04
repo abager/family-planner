@@ -5,6 +5,18 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Removed (read-aloud, HelloFresh in the fetch script)
+- Read-aloud of the overview is gone: the "Læs op" button, voice picker and speech synthesis in the app, and in the
+  backend the `oplaesning` field and its rules in the prompt, `[assistant] speech` and its part of the cache key. A stray
+  `oplaesning` in a model answer is dropped. This also fixes that `speech = false` never removed the field from the
+  prompt (the strip string didn't match), so the model could spend tokens on it.
+- `fetch_family.py` no longer tries to import the deleted `hellofresh` module (it logged "HelloFresh sprunget over" on
+  every run) and `family.json` no longer has a `hellofresh` key. `[hellofresh]` removed from `config.example.toml`.
+
+### Changed (week picker)
+- The week picker shows the shown week as text ("Uge 41") between the arrows; the "Denne uge" button is gone.
+  The week number in the board's corner stays.
+
 ### Changed (consistent UI terms, no duplicates)
 - One word per concept, documented in CLAUDE.md → *UI vocabulary*. "Vigtig info" and the briefing section "Særligt" are
   now **Praktisk info**; the kiosk heading follows the briefing ("Overblik i dag") or falls back to **Husk og lektier**;

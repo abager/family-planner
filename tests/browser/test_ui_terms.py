@@ -32,3 +32,20 @@ def test_feed_filter_says_alle_like_messages(make_page):
     page, *_ = make_page(now=NOW, fixed=True)
     assert page.locator('[data-ft="all"]').text_content() == "Alle"
     assert page.locator('[data-mf="all"]').text_content() == "Alle"
+
+
+def test_week_picker_shows_the_shown_week_number_and_moves_with_the_arrows(make_page):
+    page, *_ = make_page(now=NOW, fixed=True)                       # 1. oktober 2026 ligger i uge 40
+    page.click("#v-week")
+    assert page.inner_text("#weekLabel") == "Uge 40" and page.locator("#now").count() == 0
+    page.click("#next")
+    assert page.inner_text("#weekLabel") == "Uge 41"
+    page.click("#prev")
+    page.click("#prev")
+    assert page.inner_text("#weekLabel") == "Uge 39"
+
+
+def test_the_overview_has_no_read_aloud(make_page):
+    page, *_ = make_page(now=NOW, fixed=True)
+    assert page.locator("#briefDay .speak, #briefDay select.voice").count() == 0
+    assert page.evaluate("typeof speak") == "undefined"

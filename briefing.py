@@ -196,27 +196,10 @@ Regler:
 
 Svar KUN med JSON (ingen markdown, ingen forklaring) i dette format:
 {
-  "oplaesning": "samme fortælling skrevet til at blive LÆST HØJT (se regler for oplæsning)",
   "fortaelling": ["første afsnit", "andet afsnit", …],
   "kilder": ["A1", "O2", …]
 }
-Er der intet særligt, så skriv kort og venligt, at det er en stille dag.
-
-Regler for "oplaesning" – teksten læses op af en talesyntese og skal lyde som en person, der fortæller:
-- Flydende talesprog i hele sætninger bundet sammen med "og", "men", "så", "bagefter". Ingen punktopstilling.
-- Højst ca. 90 ord. Start direkte med det vigtigste, fx "I dag skal Carla …".
-- Tider skrives som de siges: "klokken tolv", "halv fire", "kvart over otte", "fra klokken et til tre".
-- Datoer som ord: "på fredag", "den treogtyvende september" – aldrig 23/9.
-- Ingen forkortelser (skriv "cirka", "for eksempel"), ingen parenteser, skråstreger, tankestreger, semikolon, emojis eller kilde-id'er.
-- Brug fornavne, ikke "barnet"."""
-
-
-def system_prompt(speech: bool) -> str:
-    """Uden oplæsning fjernes feltet og reglerne for det – kortere svar, færre tokens."""
-    if speech:
-        return SYSTEM
-    s = SYSTEM.replace('  "oplaesning": "samme overblik skrevet til at blive LÆST HØJT (se regler for oplæsning)",\n', "")
-    return s.split("\n\nRegler for \"oplaesning\"")[0]
+Er der intet særligt, så skriv kort og venligt, at det er en stille dag."""
 
 
 def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[dict]:
@@ -269,8 +252,7 @@ def validate_narrative(result: dict, refs: dict[str, str], data_text: str, mode:
     kilder = [r for r in (result.get("kilder") or []) if isinstance(r, str) and r in refs]
     if refs and not kilder:
         raise ValueError("ingen gyldige kilder")
-    if "oplaesning" in result and not isinstance(result["oplaesning"], str):
-        raise ValueError("'oplaesning' skal være tekst")
+    result.pop("oplaesning", None)                # oplæsning findes ikke længere – svarer modellen med den alligevel, droppes den
     result["fortaelling"], result["kilder"] = f, kilder
     result.pop("afsnit", None)
 
@@ -298,8 +280,7 @@ def validate_result(result: dict, refs: dict[str, str]) -> None:
             points.append({**p, "refs": good})
         if points:
             kept.append({**sec, "punkter": points})
-    if "oplaesning" in result and not isinstance(result["oplaesning"], str):
-        raise ValueError("'oplaesning' skal være tekst")
+    result.pop("oplaesning", None)
     result["afsnit"] = kept
 
 
@@ -381,12 +362,11 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
             return old_ai
 
     client = client or ai_client(cfg)
-    speech = acfg.get("speech", False)
     data_text = messages[0]["content"].split("Data:", 1)[1] + "\n" + rules
     try:
-        result = client.generate_json(system_prompt(speech), messages[0]["content"],
+        result = client.generate_json(SYSTEM, messages[0]["content"],
                                       validate=lambda r: validate_narrative(r, digest["_refs"], data_text, mode),
-                                      cache_key="|".join([fingerprint, mode, headline, *period, str(speech)]))
+                                      cache_key="|".join([fingerprint, mode, headline, *period]))
     except ai.AIUnavailable as e:
         prev = (old or {}).get("ai_stale") or (old or {}).get("ai_fallback") or {}
         flag = {"reason": e.reason, "since": prev.get("since") or now.isoformat(timespec="minutes")}

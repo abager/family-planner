@@ -31,7 +31,6 @@ images_per_album = 12   # max billeder per album
 [assistant]
 mode = "ai"              # "ai" = sprogmodellen i [ai] skriver overblikket (appens egne regler er reserve) · "offline" = kun egne regler, intet forlader maskinen · "off" = intet overblik
 rules_file = "familie_regler.md"   # sendes med til sprogmodellen som den er – skriv ikke telefonnumre eller CPR-numre i den
-speech = false           # true = sprogmodellen skriver også en tekst til oplæsning, og appen viser "Læs op"
 min_minutes_between = 60           # dagsoverblik laves højst så ofte – og kun hvis data har ændret sig
 week_min_minutes_between = 360     # ugeoverblik
 # Private samtaler sendes aldrig. Se præcis hvad der sendes: python briefing.py --dry-run
@@ -62,12 +61,6 @@ enabled = true
 [weather]
 enabled = true
 # contact = "https://github.com/abager/family-planner"
-
-# HelloFresh: denne uges meny til overblikket. 
-# Bruger refresh_token som varer 60 dage og opdateres automatisk.
-# Første gang: åbn appen, tryk "Mat: instilling" og indsæt refresh_token fra HelloFresh cookies.
-[hellofresh]
-enabled = true
 
 # Google-kalendere: den PRIVATE iCal-adresse fra Google Kalender →
 # kalenderens "Indstillinger og deling" → "Integrer kalender" → "Hemmelig adresse i iCal-format".

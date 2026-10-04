@@ -92,6 +92,7 @@ h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02
 .chip[aria-pressed="false"]{opacity:.4;border-style:dashed}
 button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
 .weeknav{display:flex;gap:6px;align-items:center;margin-left:auto}
+.weeknav .wklabel{font:700 .95rem var(--body);color:var(--ink);min-width:4.5em;text-align:center}
 .weeknav button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:7px 12px;font:700 .9rem var(--body);cursor:pointer}
 
 /* Week board: the one bold element — swim lanes per person */
@@ -121,11 +122,6 @@ button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offse
 .brief .bhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brief .blabel{font:700 .82rem var(--body);color:var(--accent);margin:0 0 4px}
 .brief h2{font:800 1.4rem/1.1 var(--display);margin:0;flex:1;min-width:200px}
-.brief .speak{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;background:#2F6FDE;color:#fff;font:700 .95rem var(--body);padding:10px 18px;cursor:pointer}
-.brief .speak[aria-pressed="true"]{background:#E4572E}
-.brief .speak svg{width:18px;height:18px;fill:currentColor}
-.speakbox{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.speakbox .voice{font:inherit;font-size:.78rem;color:var(--muted);background:none;border:1px solid var(--line);border-radius:8px;padding:3px 6px;max-width:220px}
 .bsecs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 22px;margin-top:12px}
 .bsec h3{font:700 .95rem var(--display);margin:0 0 4px}
 .bsec ul{list-style:none;margin:0;padding:0}
@@ -628,7 +624,7 @@ button,a,.chip,.pill{touch-action:manipulation}
     <div class="people" id="people" aria-label="Vis personer"></div>
     <div class="weeknav hidden" id="weeknav">
       <button id="prev" aria-label="Forrige uge">‹</button>
-      <button id="now">Denne uge</button>
+      <span id="weekLabel" class="wklabel" aria-live="polite"></span>
       <button id="next" aria-label="Næste uge">›</button>
     </div>
   </nav>
@@ -1238,46 +1234,6 @@ function renderSkema(){
   document.getElementById("skema").innerHTML = cards.join("");
 }
 // ---------- Familieassistentens overblik
-const SPEAK_ICON = `<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4Zm-2.5-8.8v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6Z"/></svg>`;
-// Oplæsning: vælg den bedste danske stemme, gør teksten talevenlig og læs sætning for sætning
-const VOICE_KEY="fp-voice";
-const voiceScore = v => (/natural|neural|online|premium|enhanced|forbedret/i.test(v.name)?10:0) + (/google/i.test(v.name)?4:0) + (v.localService?0:1);
-function danishVoices(){ return (window.speechSynthesis?.getVoices()||[]).filter(v=>(v.lang||"").toLowerCase().startsWith("da")).sort((a,b)=>voiceScore(b)-voiceScore(a)); }
-function chosenVoice(){ const vs=danishVoices(); let saved=null; try{saved=localStorage.getItem(VOICE_KEY);}catch{} return vs.find(v=>v.name===saved) || vs[0] || null; }
-function speechText(t){
-  return (t||"")
-    .replace(/\bkl\.\s*/gi,"klokken ")
-    .replace(/\b(\d{1,2})[.:]00\b/g,"$1")
-    .replace(/\b(\d{1,2})[.:](\d{2})\b/g,"$1 $2")
-    .replace(/\b(\d{1,2})\/(\d{1,2})\b/g,(m,d,mo)=>`den ${d}. ${MONTHS[+mo-1]||mo}`)
-    .replace(/(\d)\s*[–-]\s*(\d)/g,"$1 til $2")
-    .replace(/\s[–—-]\s/g,", ")
-    .replace(/\bf\.eks\./gi,"for eksempel").replace(/\bca\./gi,"cirka").replace(/\bevt\./gi,"eventuelt").replace(/\bm\.m\./gi,"med mere")
-    .replace(/[()]/g,", ").replace(/\s*\/\s*/g," og ").replace(/;/g,",")
-    .replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu,"")
-    .replace(/\s+,/g,",").replace(/,\s*,/g,",").replace(/\s{2,}/g," ").trim();
-}
-function speak(text, btn){
-  const synth=window.speechSynthesis; if(!synth) return;
-  const reset=()=>{ btn.setAttribute("aria-pressed","false"); btn.lastChild.textContent=" Læs op"; };
-  if(synth.speaking || synth.pending){ synth.cancel(); reset(); return; }
-  const voice=chosenVoice();
-  // Sætning for sætning: undgår at Chrome klipper lange tekster af, og giver naturlige pauser
-  const parts=speechText(text).split(/(?<=[.!?])\s+(?=[A-ZÆØÅ])/).filter(Boolean);   // ikke ved "3. årgang"
-  parts.forEach((p,i)=>{
-    const u=new SpeechSynthesisUtterance(p.trim()); u.lang="da-DK"; if(voice) u.voice=voice;
-    u.rate = voice && voiceScore(voice)>=10 ? 1.0 : 0.92;   // gamle stemmer lyder bedre lidt langsommere
-    if(i===parts.length-1){ u.onend=reset; } u.onerror=reset;
-    synth.speak(u);
-  });
-  btn.setAttribute("aria-pressed","true"); btn.lastChild.textContent=" Stop";
-}
-function voicePicker(){
-  const vs=danishVoices(); if(vs.length<2) return "";
-  const cur=chosenVoice()?.name;
-  return `<select class="voice" aria-label="Stemme">${vs.map(v=>`<option ${v.name===cur?"selected":""}>${esc(v.name)}</option>`).join("")}</select>`;
-}
-if(window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if(state.data && state.view==="today") renderBrief("day","briefDay"); };
 function personByName(n){ return state.data.people.find(p=>p.name.toLowerCase()===String(n).toLowerCase()); }
 function renderBrief(kind, elId){
   const el=document.getElementById(elId), b=state.briefing?.[kind];
@@ -1295,12 +1251,9 @@ function renderBrief(kind, elId){
   const g=new Date(b.generated);
   const title = kind==="week" ? `Overblik ${String(b.headline_label||"denne uge").toLowerCase()}` : "Overblik "+dayWord();
   const empty = kind==="week" ? "Intet særligt i denne uge – ingen frister, ting at huske eller afvigelser." : `Intet særligt ${dayWord()} – ingen frister, ting at huske eller afvigelser.`;
-  el.innerHTML=`<div class="bhead"><h2>${esc(title)}</h2>
-      ${window.speechSynthesis&&b.oplaesning?`<div class="speakbox"><button class="speak" aria-pressed="false">${SPEAK_ICON} Læs op</button>${voicePicker()}</div>`:""}</div>
+  el.innerHTML=`<div class="bhead"><h2>${esc(title)}</h2></div>
     ${story ? `<div class="story">${story}</div>` : secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
     <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet af familieassistenten ud fra faste regler"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og vejrdata fra MET Norway":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
-  el.querySelector(".speak")?.addEventListener("click",e=>speak(b.oplaesning,e.currentTarget));
-  el.querySelector(".voice")?.addEventListener("change",e=>{ try{localStorage.setItem(VOICE_KEY,e.target.value);}catch{} speechSynthesis.cancel(); });
 }
 function renderToday(){
   renderBrief("day","briefDay");
@@ -1354,6 +1307,7 @@ function renderWeek(){
   const board=document.getElementById("board"), agenda=document.getElementById("agenda"), todayKey=ymd(new Date());
   const days=[...Array(7)].map((_,i)=>addDays(state.weekStart,i)), lanes=weekLanes();
   // Tavle (bred skærm): én bane pr. person, én kolonne pr. dag
+  document.getElementById("weekLabel").textContent=`Uge ${isoWeek(state.weekStart)}`;
   let html=`<div class="dh">Uge ${isoWeek(state.weekStart)}</div>`;
   html+=days.map(d=>`<div class="dh ${ymd(d)===todayKey?"is-today":""}">${DAYS[d.getDay()].slice(0,3)}<strong>${d.getDate()}</strong></div>`).join("");
   lanes.forEach(l=>{
@@ -2286,7 +2240,6 @@ document.getElementById("v-aula").onclick=()=>{state.view="aula";render();};
 document.getElementById("v-mail").onclick=()=>{state.view="mail";state.mail.readerKey=null;render();};
 document.getElementById("prev").onclick=()=>{state.weekStart=addDays(state.weekStart,-7);render();};
 document.getElementById("next").onclick=()=>{state.weekStart=addDays(state.weekStart,7);render();};
-document.getElementById("now").onclick=()=>{state.weekStart=startOfWeek(new Date());render();};
 load().then(()=>{ if(new URLSearchParams(location.search).has("kiosk")) enterKiosk(); });
 setInterval(load, 5*60*1000); // hent nye data hvert 5. minut
 </script>
