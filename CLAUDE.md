@@ -58,7 +58,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 | **Overblik** | Only the assistant's day/week summary | (not for the app in general) |
 | **Hele familien** | Everyone | Familien, Fælles |
 | **Adgangskode** / **Kode til private samtaler** | Login / unlocking private threads | |
-| **Indstillinger** (gear icon) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status and warnings; a spinning sync icon while the server fetches | Menu, Opdatér nu (removed: the server fetches by itself) |
+| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status and warnings; a spinning sync icon while the server fetches | Menu, Opdatér nu (removed: the server fetches by itself) |
 
 Formats: clock times `08.00` everywhere (kiosk clock too); dates `man 12/10` in lists, `mandag 12. oktober` in details.
 No duplicates on one screen: a week-plan item that produced tasks (task id `<plan id>:<n>`) is shown only as a task

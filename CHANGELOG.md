@@ -9,7 +9,9 @@ All notable changes to this project. Versions are git tags. The format is loosel
 - While the server fetches, the status line shows a spinning sync icon (static with reduced motion; screen readers
   hear "Henter data") instead of "Henter …". The app then checks `/api/status` every 3 seconds until the run is done
   and reloads the data at once, so the icon neither lingers nor is missed between the 5-minute reloads. Not on the kiosk.
-- The action menu opens from a gear icon labelled "Indstillinger" instead of "Menu ⋯".
+- The action menu opens from a gear icon labelled "Indstillinger" instead of "Menu ⋯". The gear sits in the header's
+  top-right corner on every screen size (it used to follow the status row and ended up on the left on phones); the
+  status row stays bottom-right and only shows its warning line when there are warnings.
 
 ### Removed
 - "Opdatér nu" in the app menu and on the Aula login page (the server fetches by itself every 15 minutes, and a

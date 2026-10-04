@@ -66,3 +66,19 @@ def test_a_spinning_icon_replaces_the_fetching_text_while_the_server_fetches(mak
     assert page.locator("#status .spin .sronly").text_content() == "Henter data"
     page.evaluate("state.server={running:false,runs:2,aula:'ok'}; renderChrome()")
     assert page.locator("#status .spin").count() == 0
+
+
+def _gear_box(page):
+    return page.evaluate("""(()=>{const g=document.getElementById('menuBtn').getBoundingClientRect(), h=document.querySelector('header').getBoundingClientRect(),
+        t=document.getElementById('greeting').getBoundingClientRect(); return {gr:g.right, gt:g.top, gb:g.bottom, hr:h.right, ht:h.top, tt:t.top, tb:t.bottom};})()""")
+
+
+def test_the_gear_sits_in_the_top_right_corner_on_desktop_and_phone(make_page):
+    for width, height in ((1280, 900), (390, 844)):
+        page, *_ = make_page(now=NOW, fixed=True, width=width, height=height)
+        b = _gear_box(page)
+        assert abs(b["gr"] - b["hr"]) <= 2, (width, b)                  # helt ude til højre
+        assert b["gt"] - b["ht"] <= 4 and b["gt"] < b["tb"], (width, b)  # øverst, på linje med hilsenen
+        page.click("#menuBtn")
+        m = page.evaluate("(()=>{const r=document.getElementById('actMenu').getBoundingClientRect(); return {l:r.left, r:r.right};})()")
+        assert m["l"] >= 0 and m["r"] <= width, (width, m)               # menuen folder sig ud inden for skærmen

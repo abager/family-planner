@@ -56,7 +56,10 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:inherit}
 body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--body)}
 .wrap{max-width:1280px;margin:0 auto;padding:20px 16px 48px}
-header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}
+header{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main gear" "main status";column-gap:16px;row-gap:6px;margin-bottom:20px}
+header > .hmain{grid-area:main}
+.hdrgear{grid-area:gear;align-self:start;justify-self:end}
+.status{grid-area:status;align-self:end;justify-self:end}
 h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02em}
 .sub{color:var(--muted);margin:6px 0 0}
 .status{font-size:.85rem;color:var(--muted)}
@@ -85,7 +88,6 @@ h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02
 .menu button:focus-visible{outline:3px solid #2F6FDE;outline-offset:-3px}
 .menu button[disabled]{cursor:default;color:var(--muted)}
 @media (pointer:coarse){.menu button{min-height:44px}}
-@media (max-width:699px){.menu{right:auto;left:0}}
 .srvbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:4px}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
 .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
@@ -554,10 +556,10 @@ button,a,.chip,.pill{touch-action:manipulation}
 /* Telefon: kompakt top, bundmenu som i en app */
 @media (max-width:699px){
   .wrap{padding-top:14px;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
-  header{margin-bottom:12px;gap:2px}
+  header{margin-bottom:12px;row-gap:2px;column-gap:8px;grid-template-areas:"main gear" "status status"}
   h1{font-size:1.9rem}
   .sub{margin-top:2px;font-size:.92rem}
-  .status{width:100%;font-size:.8rem}
+  .status{width:100%;font-size:.8rem;justify-self:stretch}
   .srv{justify-content:flex-start;margin-top:2px}
   .controls{margin-bottom:12px;gap:8px}
   .seg{position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:none;overflow:visible;border:0;border-top:1px solid var(--line);border-radius:0;
@@ -614,11 +616,12 @@ button,a,.chip,.pill{touch-action:manipulation}
 <div class="wrap">
   <div class="aibanner hidden" id="aiBanner" role="status"></div>
   <header>
-    <div>
+    <div class="hmain">
       <h1 id="greeting">Familieplan</h1>
       <p class="sub" id="dateline"></p>
       <div id="wxHead"></div>
     </div>
+    <div class="hdrgear actmenu" id="hdrGear"></div>
     <div class="status" id="status"></div>
   </header>
   <div class="wxpanel" id="wxHeadPanel" hidden></div>
@@ -1137,8 +1140,9 @@ function renderChrome(){
   const gh=state.data.health?.google;
   if(gh && gh.ok===false) warn.push(`<span class="srvwarn" title="${esc((gh.failed||[]).join(", "))}">Familiekalenderen kunne ikke hentes – viser seneste kendte aftaler${gh.last_ok?` (fra kl. ${hm(new Date(gh.last_ok))})`:""}</span>`);
   const open=!!state.menuOpen;
-  line += `<div class="srv">${warn.join("")}<div class="actmenu"><button type="button" class="srvbtn gear" id="menuBtn" aria-label="Indstillinger" title="Indstillinger" aria-expanded="${open}" aria-controls="actMenu"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></button>`
-        + `<div class="menu" id="actMenu"${open?"":" hidden"}>${items.join("")}</div></div></div>`;
+  if(warn.length) line += `<div class="srv">${warn.join("")}</div>`;
+  document.getElementById("hdrGear").innerHTML = `<button type="button" class="srvbtn gear" id="menuBtn" aria-label="Indstillinger" title="Indstillinger" aria-expanded="${open}" aria-controls="actMenu"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></button>`
+        + `<div class="menu" id="actMenu"${open?"":" hidden"}>${items.join("")}</div>`;
   document.getElementById("status").innerHTML = line;
   const closeMenu=()=>{ state.menuOpen=false; document.getElementById("actMenu").hidden=true; document.getElementById("menuBtn").setAttribute("aria-expanded","false"); };
   const act=(id,fn)=>document.getElementById(id)?.addEventListener("click",()=>{ closeMenu(); fn(); });
