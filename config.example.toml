@@ -60,8 +60,7 @@ enabled = true
 [weather]
 enabled = true
 
-# HelloFresh: denne uges meny til overblikket. Tokenet sættes i appen (API).
-# Åbn appen, tryk "Mat: instilling" og indsæt dit HelloFresh bearer token. Det gemmes sikkert i secrets/hellofresh_token.json.
+# HelloFresh: denne uges meny til overblikket. Bruger HelloFresh's offentlige API – ingen opsætning nødvendig.
 [hellofresh]
 enabled = true
 

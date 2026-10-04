@@ -54,7 +54,7 @@ DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json",
               "home_location.json", "weather_cache.json",
-              "hellofresh_token.json", "hellofresh_cache.json"}
+              "hellofresh_cache.json", "hellofresh_token_cache.json"}
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
 log = logging.getLogger("familieplan.server")
@@ -725,25 +725,7 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         runner.trigger(interactive=False)                     # hent vejret med det samme
         return await home_get()
 
-    @app.post("/api/hellofresh-token")
-    async def hellofresh_token_set(request: Request):
-        import hellofresh
-        try:
-            body = await request.json()
-            token = body.get("token", "").strip()
-        except (ValueError, KeyError, TypeError):
-            return JSONResponse({"error": "bad request"}, status_code=400)
-        
-        if not token:
-            return JSONResponse({"error": "token må ikke være tomt"}, status_code=400)
-        
-        try:
-            hellofresh.save_token(out_dir, token)
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
-        log.info("HelloFresh token er sat")
-        runner.trigger(interactive=False)
-        return _hellofresh_status()
+
 
     @app.post("/api/messages/read")
     async def messages_read(request: Request):

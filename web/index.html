@@ -781,23 +781,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   <button type="button" id="homeUse">Brug min placering som hjem</button>
   <form method="dialog"><button>Luk</button></form>
 </dialog>
-<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">Mat: HelloFresh token</h3>
-  <p>Dine HelloFresh bearer token bruges til at hente denne uges menu til overblikket. Tokenet gemmes sikkert på enheden.</p>
-  <p style="font-size:0.85rem;color:var(--muted)">Find tokenet her: <strong>HelloFresh app → Indstillinger → Min konto → API-adgang</strong></p>
-  
-  <label style="display:block;margin:12px 0">
-    <span style="font-size:0.9rem;color:var(--ink);font-weight:700">Bearer Token</span>
-    <input type="password" id="helloFreshToken" autocomplete="off" placeholder="eyJ..." style="width:100%;margin-top:4px">
-  </label>
-  
-  <p class="error" id="helloFreshError" role="alert" style="color:#E4572E;margin:8px 0;font-size:0.9rem"></p>
-  <p class="success" id="helloFreshSuccess" role="status" style="color:#2F9E59;margin:8px 0;font-size:0.9rem"></p>
-  
-  <div style="display:flex;gap:8px;margin-top:16px">
-    <button type="button" id="helloFreshOk" style="flex:1">Gem token</button>
-    <form method="dialog"><button style="min-width:100px">Annullér</button></form>
-  </div>
-</dialog>
+
 <dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
 
 <script>
@@ -1135,46 +1119,6 @@ function showRecipeModal(index){
   dlg.showModal();
 }
 
-// Åbn HelloFresh token dialog
-async function openHelloFreshDlg(){
-  const dlg=document.getElementById("helloFreshDlg"), errEl=document.getElementById("helloFreshError"), 
-        successEl=document.getElementById("helloFreshSuccess"),
-        tokenInput=document.getElementById("helloFreshToken");
-  errEl.textContent=""; successEl.textContent="";
-  tokenInput.value="";
-  tokenInput.focus();
-  
-  document.getElementById("helloFreshOk").onclick=async ()=>{
-    const token=(tokenInput.value||"").trim();
-    
-    if(!token){ errEl.textContent="Token må ikke være tomt"; return; }
-    
-    errEl.textContent=""; successEl.textContent="";
-    document.getElementById("helloFreshOk").disabled=true;
-    
-    try{
-      const r=await fetch("api/hellofresh-token",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},
-        body:JSON.stringify({token})
-      });
-      const j=await r.json();
-      
-      if(!r.ok){ 
-        errEl.textContent=j.error||"Fejl ved gemning af token"; 
-      } else {
-        successEl.textContent="Token gemt! Henter menu...";
-        setTimeout(()=>{ dlg.close(); render(); }, 1500);
-      }
-    }catch(e){ 
-      errEl.textContent="Kunne ikke kontakte serveren"; 
-    } finally {
-      document.getElementById("helloFreshOk").disabled=false;
-    }
-  };
-  dlg.showModal();
-}
-
 // "Vejr: hjem": sæt hjemmets placering én gang med browserens placering. Virker kun på en sikker side
 // (http://localhost på pc'en, eller https). Serveren afrunder til ca. 1 km.
 async function openHomeDlg(){
@@ -1238,9 +1182,6 @@ function renderChrome(){
     const noHome = sv.weather?.enabled && sv.weather.home===false;     // vejret er slået til, men hjemmet mangler
     bits.push(noHome ? `<button class="srvbtn srvwarn" id="homeBtn" title="Uden hjemmets placering er der intet vejr i overblikket">Vejr: hjem er ikke sat</button>`
                      : `<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
-    const noHF = sv.hellofresh?.enabled && sv.hellofresh.token_set===false;  // HelloFresh slået til, men token mangler
-    bits.push(noHF ? `<button class="srvbtn srvwarn" id="mealBtn" title="Sæt HelloFresh token for at se denne uges menu">Mat: instilling</button>`
-                   : `<button class="srvbtn" id="mealBtn">Mat: instilling</button>`);
     bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
     line += `<div class="srv">${bits.join("")}</div>`;
   }
@@ -1253,7 +1194,6 @@ function renderChrome(){
   document.getElementById("kioskBtn")?.addEventListener("click", enterKiosk);
   document.getElementById("refreshNow")?.addEventListener("click", refreshNow);
   document.getElementById("homeBtn")?.addEventListener("click", openHomeDlg);
-  document.getElementById("mealBtn")?.addEventListener("click", openHelloFreshDlg);
   document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{ await fetch("logout",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); toLogin(); });
   const box=document.getElementById("people"); box.innerHTML="";
   state.data.people.forEach(p=>{
