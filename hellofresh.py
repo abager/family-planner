@@ -2,6 +2,7 @@
 
 Login med email + password mod /gw/login endpoint.
 Tokens refreshes automatisk når de udløber.
+Bruger curl_cffi for at bypass Cloudflare bot protection.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ CACHE_FILE = "hellofresh_cache.json"
 FETCH_EVERY = dt.timedelta(days=7)
 MAX_CACHE_AGE = dt.timedelta(days=8)
 
-HF_LOGIN_URL = "https://gw.hellofresh.com/auth/login"
+HF_LOGIN_URL = "https://gw.hellofresh.com/gw/login"
 HF_API_BASE = "https://www.hellofresh.com/api/v1"
 
 
@@ -70,14 +71,17 @@ def load_credentials(state_dir: Path) -> tuple[str, str] | None:
 
 
 def _login_and_get_token(email: str, password: str) -> str:
-    """Login med email + password, få access_token."""
+    """Login med email + password, få access_token. Bruger curl_cffi for at bypass Cloudflare."""
     try:
-        import requests
+        from curl_cffi.requests import Requests
     except ImportError:
-        raise HelloFreshUnavailable("requests biblioteket er ikke installeret") from None
+        raise HelloFreshUnavailable("curl_cffi biblioteket er ikke installeret") from None
     
     try:
-        r = requests.post(
+        # curl_cffi med Chrome impersonation for at bypass Cloudflare bot protection
+        session = Requests(impersonate="chrome120")
+        
+        r = session.post(
             HF_LOGIN_URL,
             json={"email": email, "password": password},
             timeout=10
@@ -89,10 +93,10 @@ def _login_and_get_token(email: str, password: str) -> str:
         if not access_token:
             raise HelloFreshUnavailable("Ingen access_token i login response")
         
-        log.info("HelloFresh login vellykket")
+        log.info("HelloFresh login vellykket (curl_cffi)")
         return access_token
     
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         raise HelloFreshUnavailable(f"HelloFresh login fejlede: {e}") from e
 
 
@@ -130,15 +134,16 @@ def _get_access_token(state_dir: Path) -> str:
 def _fetch_recipes(token: str, country: str = "DK") -> list:
     """Hent recepter fra HelloFresh API."""
     try:
-        import requests
+        from curl_cffi.requests import Requests
     except ImportError:
-        raise HelloFreshUnavailable("requests biblioteket er ikke installeret") from None
+        raise HelloFreshUnavailable("curl_cffi biblioteket er ikke installeret") from None
     
     try:
+        session = Requests(impersonate="chrome120")
         headers = {"Authorization": f"Bearer {token}"}
         
         # Hent denne uges meny
-        r = requests.get(
+        r = session.get(
             f"{HF_API_BASE}/recurring_plan?country={country}",
             headers=headers,
             timeout=10
@@ -153,10 +158,8 @@ def _fetch_recipes(token: str, country: str = "DK") -> list:
         log.info("HelloFresh menu hentet (%d måltider)", len(recipes))
         return recipes[:3]  # Tag kun de første 3
     
-    except requests.exceptions.RequestException as e:
-        raise HelloFreshUnavailable(f"HelloFresh API fejl: {e}") from e
     except Exception as e:
-        raise HelloFreshUnavailable(f"Fejl ved hentning af menu: {e}") from e
+        raise HelloFreshUnavailable(f"HelloFresh API fejl: {e}") from e
 
 
 def _format_recipe(recipe: dict) -> dict:
