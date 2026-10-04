@@ -657,23 +657,24 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
                 "weather": _weather_status(), # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
                 "hellofresh": _hellofresh_status()}  # HelloFresh slået til / token sat (kun ja/nej, aldrig tokenet)
 
-    @app.post("/api/hellofresh-refresh-token")
-    async def hellofresh_save_refresh_token(request: Request):
+    @app.post("/api/hellofresh-login")
+    async def hellofresh_save_credentials(request: Request):
         import hellofresh
         try:
             body = await request.json()
-            refresh_token = body.get("refresh_token", "").strip()
+            email = body.get("email", "").strip()
+            password = body.get("password", "").strip()
         except (ValueError, KeyError, TypeError):
             return JSONResponse({"error": "bad request"}, status_code=400)
         
-        if not refresh_token:
-            return JSONResponse({"error": "refresh_token må ikke være tomt"}, status_code=400)
+        if not email or not password:
+            return JSONResponse({"error": "email og password må ikke være tomme"}, status_code=400)
         
         try:
-            hellofresh.save_refresh_token(out_dir, refresh_token)
+            hellofresh.save_credentials(out_dir, email, password)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
-        log.info("HelloFresh refresh_token er sat (varer 60 dage)")
+        log.info("HelloFresh login gemt")
         runner.trigger(interactive=False)
         return _hellofresh_status()
 
