@@ -53,7 +53,8 @@ PRIV_COOKIE = "fp_private"
 DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json",
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json",
-              "home_location.json", "weather_cache.json"}
+              "home_location.json", "weather_cache.json",
+              "hellofresh_token.json", "hellofresh_cache.json"}
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
 log = logging.getLogger("familieplan.server")
@@ -641,12 +642,20 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         except Exception:  # noqa: BLE001 – status må aldrig fejle på grund af vejret
             return {"enabled": False, "home": False}
 
+    def _hellofresh_status() -> dict:
+        try:
+            import hellofresh
+            return hellofresh.status(cfg, out_dir)
+        except Exception:  # noqa: BLE001 – status må aldrig fejle på grund af HelloFresh
+            return {"enabled": False, "token_set": False}
+
     @app.get("/api/status")
     async def status():
         return {**state.public(), "interval_minutes": settings.interval // 60, "aula_enabled": settings.use_aula,
                 "mark_read_enabled": settings.mark_read and settings.use_aula,
                 "ai": _ai_status(),            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
-                "weather": _weather_status()}  # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
+                "weather": _weather_status(), # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
+                "hellofresh": _hellofresh_status()}  # HelloFresh slået til / token sat (kun ja/nej, aldrig tokenet)
 
     # ----- private tråde: indholdet udleveres kun mod den ekstra kode
     @app.get("/api/private/status")
@@ -715,6 +724,24 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         log.info("Hjemmets placering er sat (afrundet)")      # aldrig koordinaterne i loggen
         runner.trigger(interactive=False)                     # hent vejret med det samme
         return await home_get()
+
+    @app.post("/api/hellofresh-token")
+    async def hellofresh_token_set(request: Request):
+        import hellofresh
+        try:
+            body = await request.json()
+            token = body.get("token", "").strip()
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        if not token:
+            return JSONResponse({"error": "token må ikke være tomt"}, status_code=400)
+        try:
+            hellofresh.save_token(out_dir, token)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        log.info("HelloFresh token er sat")
+        runner.trigger(interactive=False)                     # hent menu med det samme
+        return _hellofresh_status()
 
     @app.post("/api/messages/read")
     async def messages_read(request: Request):
