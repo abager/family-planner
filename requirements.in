@@ -9,3 +9,4 @@ tzdata
 google-auth             # skriver forslag til Google Kalender (servicekonto)
 requests
 pyhellofresh            # HelloFresh API-klient til ugens meny
+nest-asyncio            # Tillader nested event loops (serveren kører allerede en)

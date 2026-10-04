@@ -78,13 +78,17 @@ async def start_passwordless_login_async(email: str, country: str = "DK", locale
 def start_passwordless_login(email: str) -> dict:
     """Synkron wrapper omkring async passwordless login start."""
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(start_passwordless_login_async(email))
-            return result
-        finally:
-            loop.close()
+        # Tillad nested event loops (server kører allerede en loop)
+        import nest_asyncio
+        nest_asyncio.apply()
+        
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        result = loop.run_until_complete(start_passwordless_login_async(email))
+        return result
     except HelloFreshUnavailable:
         raise
     except Exception as e:  # noqa: BLE001
@@ -139,15 +143,22 @@ def fetch_menu(state_dir: Path) -> dict | None:
         return None
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(_fetch_menu_async(token))
-            return result
-        finally:
-            loop.close()
+        # Tillad nested event loops (server kører allerede en loop)
+        import nest_asyncio
+        nest_asyncio.apply()
+        
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        result = loop.run_until_complete(_fetch_menu_async(token))
+        return result
     except HelloFreshUnavailable as e:
         log.warning("HelloFresh menu kunne ikke hentes: %s", e)
+        return None
+    except Exception as e:  # noqa: BLE001
+        log.warning("HelloFresh fetch kritisk fejl: %s", e)
         return None
 
 

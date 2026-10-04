@@ -28,6 +28,7 @@ idna==3.20                # via anyio, httpx, pyhellofresh, requests, yarl
 marshmallow==3.26.2       # via dataclasses-json
 multidict==6.9.1          # via aiohttp, yarl
 mypy-extensions==1.1.0    # via typing-inspect
+nest-asyncio==1.6.0       # via -r requirements.in
 opentelemetry-api==1.45.0  # via fastapi
 packaging==26.3           # via marshmallow
 propcache==0.5.4          # via aiohttp, yarl
