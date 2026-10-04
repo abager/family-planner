@@ -784,7 +784,7 @@ button,a,.chip,.pill{touch-action:manipulation}
 
 <dialog id="detail"><h3 id="dTitle"></h3><div id="dBody"></div><form method="dialog"><button>Luk</button></form></dialog>
 
-<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">Mat: HelloFresh login</h3>
+<dialog id="helloFreshDlg" aria-labelledby="helloFreshHead"><h3 id="helloFreshHead">HelloFresh credentials</h3>
   <p>Dine HelloFresh credentials bruges til at hente denne uges menu. Appen logger automatisk ind hver gang tokens skal opdateres.</p>
   
   <label style="display:block;margin:12px 0">
@@ -1247,8 +1247,8 @@ function renderChrome(){
     bits.push(noHome ? `<button class="srvbtn srvwarn" id="homeBtn" title="Uden hjemmets placering er der intet vejr i overblikket">Vejr: hjem er ikke sat</button>`
                      : `<button class="srvbtn" id="homeBtn">Vejr: hjem</button>`);
     const noHF = sv.hellofresh?.enabled && sv.hellofresh.token_set===false;  // HelloFresh slået til, men token mangler
-    bits.push(noHF ? `<button class="srvbtn srvwarn" id="mealBtn" title="Sæt HelloFresh refresh_token for at se denne uges menu">Mat: instilling</button>`
-                   : `<button class="srvbtn" id="mealBtn">Mat: instilling</button>`);
+    bits.push(noHF ? `<button class="srvbtn srvwarn" id="mealBtn" title="Sæt HelloFresh credentials for at se denne uges menu">HelloFresh</button>`
+                   : `<button class="srvbtn" id="mealBtn">HelloFresh</button>`);
     bits.push(`<button class="srvbtn" id="logoutBtn">Log ud</button>`);
     line += `<div class="srv">${bits.join("")}</div>`;
   }
