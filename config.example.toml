@@ -63,6 +63,11 @@ enabled = true
 enabled = true
 # contact = "https://github.com/abager/family-planner"
 
+# HelloFresh: denne uges meny til overblikket. Tokenet sættes i appen (API).
+# Åbn appen, tryk "Mat: instilling" og indsæt dit HelloFresh bearer token. Det gemmes sikkert i secrets/hellofresh_token.json.
+[hellofresh]
+enabled = true
+
 # Google-kalendere: den PRIVATE iCal-adresse fra Google Kalender →
 # kalenderens "Indstillinger og deling" → "Integrer kalender" → "Hemmelig adresse i iCal-format".
 # Aftaler tildeles personer ud fra navne/aliasser i titlen ("Hugo fodbold", "Carla + Leo svømning").
