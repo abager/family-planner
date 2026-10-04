@@ -1,22 +1,19 @@
-"""HelloFresh integrasjon – ugens meny til familieoverblikket.
+"""HelloFresh integration – ugens meny til familieoverblikket.
 
 - Token gemmes sikkert i secrets/hellofresh_token.json (read-only fil)
 - Menu cachas i hellofresh_cache.json – opdateres én gang om ugen (tirsdag når ny menu kommer)
 - Viser 3 måltider + billeder + ingredienser + opskrift
 - Degrade gracefully: ingen menu = ingen HelloFresh i appen (aldrig fejl)
+- Bruger synkrone HTTP requests (requests bibliotek) – ingen async kompleksitet
 """
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import json
 import logging
 import os
-import threading
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
-import httpx
 
 log = logging.getLogger("familieplanner.hellofresh")
 TZ = ZoneInfo("Europe/Copenhagen")
@@ -60,142 +57,53 @@ def save_token(state_dir: Path, token: str) -> None:
     log.info("HelloFresh token gemt")
 
 
-async def start_passwordless_login_async(email: str, country: str = "DK", locale: str = "da-DK") -> dict:
-    """Start passwordless login – sender magic link til email."""
-    try:
-        from pyhellofresh import HelloFreshClient
-    except ImportError:
-        raise HelloFreshUnavailable("pyhellofresh biblioteket er ikke installeret") from None
-
-    try:
-        client = HelloFreshClient(country=country, locale=locale)
-        result = await client.start_passwordless_login(email)
-        log.info("Passwordless login startet for %s", email)
-        return result
-    except Exception as e:
-        raise HelloFreshUnavailable(f"Kunne ikke starte passwordless login: {type(e).__name__}: {e}") from e
-
-
-def start_passwordless_login(email: str) -> dict:
-    """Synkron wrapper omkring async passwordless login start (kører i separate thread)."""
-    try:
-        result = _run_async_in_thread(start_passwordless_login_async(email))
-        return result
-    except HelloFreshUnavailable:
-        raise
-    except Exception as e:  # noqa: BLE001
-        raise HelloFreshUnavailable(f"Passwordless login fejlede: {e}") from e
-
-
 def load_token(state_dir: Path) -> str | None:
     """Henter HelloFresh token. None hvis ikke sat."""
     data = _read(Path(state_dir) / TOKEN_FILE)
     return data.get("token") if data else None
 
 
-def _run_async_in_thread(coro):
-    """Kør async-kode i separate thread for at undgå event loop konflikter."""
-    result = [None]
-    exception = [None]
-
-    def run_in_new_loop():
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result[0] = loop.run_until_complete(coro)
-            finally:
-                loop.close()
-        except Exception as e:  # noqa: BLE001
-            exception[0] = e
-
-    thread = threading.Thread(target=run_in_new_loop, daemon=True)
-    thread.start()
-    thread.join(timeout=30)  # Max 30 sekunder
-
-    if exception[0]:
-        raise exception[0]
-    return result[0]
-
-
-async def _fetch_menu_async(token: str, country: str = "DK", locale: str = "da-DK") -> dict:
-    """Henter ugens meny fra HelloFresh API (async)."""
+def _fetch_menu_sync(token: str, country: str = "DK") -> dict:
+    """Henter ugens meny fra HelloFresh API (synkront via requests)."""
     try:
-        from pyhellofresh import HelloFreshClient
+        import requests
     except ImportError:
-        raise HelloFreshUnavailable("pyhellofresh biblioteket er ikke installeret") from None
+        raise HelloFreshUnavailable("requests biblioteket er ikke installeret") from None
 
     try:
-        client = HelloFreshClient(access_token=token, country=country, locale=locale)
+        # HelloFresh API base URL
+        base_url = "https://www.hellofresh.com/api/v1"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "familieplan/1.0",
+            "Accept": "application/json",
+        }
 
         # Hent denne uges meny
-        menu = await client.get_menu()
-        if not menu or not menu.get("recipes"):
+        r = requests.get(f"{base_url}/recurring_plan?country={country}", headers=headers, timeout=10)
+        r.raise_for_status()
+        menu_data = r.json()
+
+        if not menu_data or not menu_data.get("recipes"):
             raise HelloFreshUnavailable("Ingen menu returneret fra HelloFresh")
 
-        # Hent fuld opskrift data for hver recipe
+        # Formater recepter (tag fuld data fra menu response)
         recipes_data = []
-        for recipe in menu["recipes"]:
-            recipe_id = recipe.get("id")
-            if recipe_id:
-                try:
-                    full_recipe = await client.get_recipe(recipe_id)
-                    recipes_data.append(full_recipe)
-                except Exception as e:
-                    log.warning("Kunne ikke hente opskrift %s: %s", recipe_id, e)
-                    recipes_data.append(recipe)
+        for recipe in menu_data.get("recipes", [])[:3]:  # Tag kun de første 3
+            recipes_data.append(recipe)
 
         return {"recipes": recipes_data, "fetched": dt.datetime.now(TZ).isoformat()}
 
     except HelloFreshUnavailable:
         raise
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         raise HelloFreshUnavailable(f"HelloFresh API fejl: {type(e).__name__}: {e}") from e
+    except Exception as e:
+        raise HelloFreshUnavailable(f"HelloFresh fejl: {type(e).__name__}: {e}") from e
 
 
 def fetch_menu(state_dir: Path) -> dict | None:
-    """Synkron wrapper omkring async fetch (kører i separate thread)."""
-    token = load_token(state_dir)
-    if not token:
-        return None
-
-    try:
-        result = _run_async_in_thread(_fetch_menu_async(token))
-        return result
-    except HelloFreshUnavailable as e:
-        log.warning("HelloFresh menu kunne ikke hentes: %s", e)
-        return None
-    except Exception as e:  # noqa: BLE001
-        log.warning("HelloFresh fetch kritisk fejl: %s", e)
-        return None
-
-
-def _format_recipe(recipe: dict) -> dict:
-    """Formatter en HelloFresh opskrift til familie.json format."""
-    return {
-        "id": recipe.get("id", "unknown"),
-        "titel": recipe.get("title", "Ukendt måltid"),
-        "billede": recipe.get("image", ""),
-        "servinger": recipe.get("servings", 2),
-        "tid_minutter": recipe.get("prepTime", 0) + recipe.get("cookTime", 0),
-        "ingredienser": [
-            {"navn": ing.get("name", ""), "mængde": ing.get("quantity", ""), "enhed": ing.get("unit", "")}
-            for ing in recipe.get("ingredients", [])
-        ],
-        "trin": recipe.get("instructions", []),
-        "ernæring": recipe.get("nutrition", {}),
-    }
-
-
-def get_menu(state_dir: Path, now: dt.datetime) -> list[dict] | None:
-    """Henter ugens menu fra cache eller HelloFresh API.
-
-    Cachebehaviour:
-    - Hvis cache er mindre end FETCH_EVERY siden hentning: brug cache
-    - Ellers hent nyt fra API
-    - Hvis API fejler og cache er mindre end MAX_CACHE_AGE: brug cache
-    - None hvis cache er tom eller for gammel
-    """
+    """Henter ugens menu fra cache eller HelloFresh API (synkront)."""
     state_path = Path(state_dir)
     cache_path = state_path / CACHE_FILE
 
@@ -204,32 +112,55 @@ def get_menu(state_dir: Path, now: dt.datetime) -> list[dict] | None:
     fetched = dt.datetime.fromisoformat(cache["fetched"]) if cache.get("fetched") else None
 
     # Hvis cache er frisk nok: brug den
-    if fetched and now - fetched < FETCH_EVERY and cache.get("recipes"):
-        log.debug("HelloFresh menu fra cache (%.1f timer siden)", (now - fetched).total_seconds() / 3600)
+    if fetched and dt.datetime.now(TZ) - fetched < FETCH_EVERY and cache.get("recipes"):
+        log.debug("HelloFresh menu fra cache (%.1f timer siden)", (dt.datetime.now(TZ) - fetched).total_seconds() / 3600)
         return [_format_recipe(r) for r in cache.get("recipes", [])]
+
+    token = load_token(state_dir)
+    if not token:
+        log.debug("HelloFresh: ingen token sat")
+        return None
 
     # Prøv at hente nyt
     try:
-        new_data = fetch_menu(state_dir)
+        new_data = _fetch_menu_sync(token)
         if new_data and new_data.get("recipes"):
             # Gem nyt i cache
             _write_secure(cache_path, new_data)
             log.info("HelloFresh menu hentet og cachet (%d måltider)", len(new_data["recipes"]))
             return [_format_recipe(r) for r in new_data.get("recipes", [])]
-    except Exception as e:
+    except HelloFreshUnavailable as e:
         log.warning("HelloFresh fetch fejlede: %s", e)
 
     # Fallback: brug cache hvis det ikke er for gammelt
     if cache.get("recipes"):
-        cache_age = now - fetched if fetched else None
+        cache_age = dt.datetime.now(TZ) - fetched if fetched else None
         if cache_age and cache_age < MAX_CACHE_AGE:
             log.info("HelloFresh menu fra cache (%.1f timer gamle – fetch fejlede)", cache_age.total_seconds() / 3600)
             return [_format_recipe(r) for r in cache.get("recipes", [])]
         else:
-            log.warning("HelloFresh cache er for gamle (%.1f dage) – ingen menu", cache_age.total_seconds() / 86400)
+            age_days = cache_age.total_seconds() / 86400 if cache_age else 999
+            log.warning("HelloFresh cache er for gamle (%.1f dage) – ingen menu", age_days)
 
     log.info("HelloFresh: ingen brugbar menu")
     return None
+
+
+def _format_recipe(recipe: dict) -> dict:
+    """Formatter en HelloFresh opskrift til familie.json format."""
+    return {
+        "id": recipe.get("id", "unknown"),
+        "titel": recipe.get("title") or recipe.get("name", "Ukendt måltid"),
+        "billede": recipe.get("image_url") or recipe.get("image", ""),
+        "servinger": recipe.get("servings", 2),
+        "tid_minutter": (recipe.get("prep_time", 0) or 0) + (recipe.get("cook_time", 0) or 0),
+        "ingredienser": [
+            {"navn": ing.get("name", ""), "mængde": ing.get("amount", ""), "enhed": ing.get("unit", "")}
+            for ing in recipe.get("ingredients", [])
+        ],
+        "trin": [s.get("instruction", "") if isinstance(s, dict) else str(s) for s in recipe.get("steps", [])],
+        "ernæring": recipe.get("nutrition", {}),
+    }
 
 
 def for_family(cfg: dict, now: dt.datetime) -> dict | None:
@@ -241,7 +172,7 @@ def for_family(cfg: dict, now: dt.datetime) -> dict | None:
     state_dir = Path(cfg.get("output", "web/family.json")).parent
 
     try:
-        recipes = get_menu(state_dir, now)
+        recipes = fetch_menu(state_dir)
     except Exception as e:  # noqa: BLE001
         log.warning("HelloFresh sprunget over: %s", e)
         return None

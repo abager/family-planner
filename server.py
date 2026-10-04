@@ -731,34 +731,19 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         try:
             body = await request.json()
             token = body.get("token", "").strip()
-            email = body.get("email", "").strip()
         except (ValueError, KeyError, TypeError):
             return JSONResponse({"error": "bad request"}, status_code=400)
         
-        # Hvis bearer token er givet direkte
-        if token:
-            try:
-                hellofresh.save_token(out_dir, token)
-            except ValueError as e:
-                return JSONResponse({"error": str(e)}, status_code=400)
-            log.info("HelloFresh token er sat")
-            runner.trigger(interactive=False)
-            return _hellofresh_status()
+        if not token:
+            return JSONResponse({"error": "token må ikke være tomt"}, status_code=400)
         
-        # Hvis email er givet – start passwordless login
-        if email:
-            try:
-                result = hellofresh.start_passwordless_login(email)
-                log.info("HelloFresh passwordless login startet for %s", email)
-                return JSONResponse({
-                    "success": True,
-                    "message": f"Magic link sendt til {email}. Klik linket i emailen for at fuldføre login.",
-                    "email": email
-                })
-            except Exception as e:
-                return JSONResponse({"error": str(e)}, status_code=400)
-        
-        return JSONResponse({"error": "enten token eller email må være angivet"}, status_code=400)
+        try:
+            hellofresh.save_token(out_dir, token)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        log.info("HelloFresh token er sat")
+        runner.trigger(interactive=False)
+        return _hellofresh_status()
 
     @app.post("/api/messages/read")
     async def messages_read(request: Request):

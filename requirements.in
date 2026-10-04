@@ -7,5 +7,4 @@ fastapi
 uvicorn
 tzdata
 google-auth             # skriver forslag til Google Kalender (servicekonto)
-requests
-pyhellofresh            # HelloFresh API-klient til ugens meny
+requests                # HTTP requests til HelloFresh API
