@@ -17,6 +17,13 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+# Tillad nested event loops (FastAPI serveren kører allerede en loop)
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    pass
+
 log = logging.getLogger("familieplanner.hellofresh")
 TZ = ZoneInfo("Europe/Copenhagen")
 
@@ -76,18 +83,9 @@ async def start_passwordless_login_async(email: str, country: str = "DK", locale
 
 
 def start_passwordless_login(email: str) -> dict:
-    """Synkron wrapper omkring async passwordless login start."""
+    """Synkron wrapper omkring async passwordless login start (nest_asyncio håndterer event loop)."""
     try:
-        # Tillad nested event loops (server kører allerede en loop)
-        import nest_asyncio
-        nest_asyncio.apply()
-        
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        result = loop.run_until_complete(start_passwordless_login_async(email))
+        result = asyncio.run(start_passwordless_login_async(email))
         return result
     except HelloFreshUnavailable:
         raise
@@ -137,22 +135,13 @@ async def _fetch_menu_async(token: str, country: str = "DK", locale: str = "da-D
 
 
 def fetch_menu(state_dir: Path) -> dict | None:
-    """Synkron wrapper omkring async fetch."""
+    """Synkron wrapper omkring async fetch (nest_asyncio håndterer event loop)."""
     token = load_token(state_dir)
     if not token:
         return None
 
     try:
-        # Tillad nested event loops (server kører allerede en loop)
-        import nest_asyncio
-        nest_asyncio.apply()
-        
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        result = loop.run_until_complete(_fetch_menu_async(token))
+        result = asyncio.run(_fetch_menu_async(token))
         return result
     except HelloFreshUnavailable as e:
         log.warning("HelloFresh menu kunne ikke hentes: %s", e)
