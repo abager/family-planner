@@ -60,7 +60,9 @@ enabled = true
 [weather]
 enabled = true
 
-# HelloFresh: denne uges meny til overblikket. Bruger HelloFresh's offentlige API – ingen opsætning nødvendig.
+# HelloFresh: denne uges meny til overblikket. 
+# Bruger refresh_token som varer 60 dage og opdateres automatisk.
+# Første gang: åbn appen, tryk "Mat: instilling" og indsæt refresh_token fra HelloFresh cookies.
 [hellofresh]
 enabled = true
 

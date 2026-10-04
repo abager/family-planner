@@ -54,7 +54,7 @@ DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json",
               "home_location.json", "weather_cache.json",
-              "hellofresh_cache.json", "hellofresh_token_cache.json"}
+              "hellofresh_refresh_token.json", "hellofresh_access_token_cache.json", "hellofresh_cache.json"}
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
 log = logging.getLogger("familieplan.server")
@@ -656,6 +656,26 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
                 "ai": _ai_status(),            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
                 "weather": _weather_status(), # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
                 "hellofresh": _hellofresh_status()}  # HelloFresh slået til / token sat (kun ja/nej, aldrig tokenet)
+
+    @app.post("/api/hellofresh-refresh-token")
+    async def hellofresh_save_refresh_token(request: Request):
+        import hellofresh
+        try:
+            body = await request.json()
+            refresh_token = body.get("refresh_token", "").strip()
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        
+        if not refresh_token:
+            return JSONResponse({"error": "refresh_token må ikke være tomt"}, status_code=400)
+        
+        try:
+            hellofresh.save_refresh_token(out_dir, refresh_token)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        log.info("HelloFresh refresh_token er sat (varer 60 dage)")
+        runner.trigger(interactive=False)
+        return _hellofresh_status()
 
     # ----- private tråde: indholdet udleveres kun mod den ekstra kode
     @app.get("/api/private/status")
