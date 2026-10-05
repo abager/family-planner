@@ -1284,14 +1284,16 @@ function renderToday(){
     return `<li style="--c:${p.color}"><button class="item" data-plan="${esc(w.id)}"><div class="head"><span class="subj">${icon(planIcon(w))}${esc(w.subject||w.title)}</span>${w.category&&w.category!=="undervisning"?`<span class="flag">${CAT[w.category]||""}</span>`:w.label?`<span class="flag">${esc(w.label)}</span>`:""}</div>
       <div class="snip">${esc(p.name)} · ${esc(planSummary(w))}</div></button></li>`; }).join("") || `<li class="empty">Ingen praktisk info</li>`;
   planBox.querySelectorAll("[data-plan]").forEach(b=>b.onclick=()=>showPlan(b.dataset.plan));
-  const from=ymd(fday), to=ymd(addDays(fday,6)), realToday=ymd(new Date()), realTomorrow=ymd(addDays(new Date(),1));
+  const realToday=ymd(new Date()), realTomorrow=ymd(addDays(new Date(),1));
   const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"};
   const todayKey=ymd(fday);
+  // Kun det, der gælder fokusdagen (i dag, efter kl. 17 i morgen – samme regel som skemaet). Ting med frist senere
+  // på ugen står i "Ugen" på fristdagen. Undtagelser: "hver dag", "snarest" og perioder (startdato → frist).
   const active = t => t.recurring==="daily"
       ? (t.from||t.due)<=todayKey && todayKey<=ymd(addDays(new Date((t.from||t.due)+"T12:00"),6))
       : t.openEnded
         ? t.from && t.from<=todayKey && todayKey<=ymd(addDays(new Date(t.from+"T12:00"),7))   // uden frist: vis en uge fra beskeden
-        : (t.due>=from && t.due<=to) || (t.from && t.from<=todayKey && t.due>=todayKey);
+        : t.due===todayKey || (t.from && t.from<=todayKey && t.due>=todayKey);
   const list = state.data.tasks.filter(t=>active(t)&&personVisible(tPeople(t)))
     .sort((a,b)=>((b.recurring==="daily")-(a.recurring==="daily")) || a.due.localeCompare(b.due));
   document.getElementById("taskList").innerHTML = list.map(t=>{
@@ -1299,7 +1301,7 @@ function renderToday(){
     const whenTxt = t.recurring==="daily" ? "hver dag" : t.openEnded ? "snarest" : (t.due===realToday ? "i dag" : t.due===realTomorrow ? "i morgen" : `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`);
     return `<li style="--c:${tColor(t)}"><button class="item" data-task="${esc(t.id)}" style="padding:0"><strong>${icon("task")}${esc(t.title)}</strong>${t.confidence==="middel"?`<span class="flag">Muligvis</span>`:""}
       <div class="meta">${esc(whoText(tPeople(t)))} · ${kinds[t.kind]||t.kind} · ${whenTxt}</div></button></li>`;
-  }).join("") || `<li class="empty" style="border:0;background:none">Intet de næste 7 dage</li>`;
+  }).join("") || `<li class="empty" style="border:0;background:none">Intet ${dayWord()}</li>`;
   document.querySelectorAll("#taskList [data-task]").forEach(b=>b.onclick=()=>showTask(b.dataset.task));
 
 }

@@ -5,6 +5,13 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (Husk og lektier)
+- The today view's "Husk og lektier" only lists what is due on the focus day (today; after 17:00 tomorrow, like the
+  timetable) instead of everything due in the next 7 days. Still listed: daily tasks, open-ended tasks ("snarest",
+  a week from the message) and tasks with a period (start date → deadline) until the deadline. Tasks due later in the
+  week are on their day in "Ugen" as before. The empty text says "Intet i dag"/"Intet i morgen". The overview's
+  "Kommende frister" and the kiosk are unchanged.
+
 ### Changed (status line and settings)
 - While the server fetches, the status line shows a spinning sync icon (static with reduced motion; screen readers
   hear "Henter data") instead of "Henter …". The app then checks `/api/status` every 3 seconds until the run is done

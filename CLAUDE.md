@@ -46,7 +46,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 |---|---|---|
 | **Aftale** | A calendar event | aktivitet (in UI text), begivenhed |
 | **Lektie / Husk / Skal gøres** | The three task kinds (`kind`: lektie, husk, handling) | opgave as a kind |
-| **Husk og lektier** | The list of things to do (today view; kiosk fallback) | Husk og frister |
+| **Husk og lektier** | The list of things to do (today view: focus day only, plus daily, open-ended and periods; kiosk fallback) | Husk og frister |
 | **Frist** | Only a due *date* ("frist torsdag"), never a category | |
 | **Praktisk info** | Deviations and practical info: omlagt dag, vikar, lukkedag, skolefoto (briefing section too) | Vigtig info, Særligt |
 | **Feed** | The tab with Aula posts and albums; filters *Alle · Opslag · Billeder* | Alt |
