@@ -91,7 +91,7 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 ## Overblik (briefing.py)
 
-Øverst i "I dag" og "Ugen" står et overblik. **Med AI** er det en varm, kronologisk fortælling til jer forældre – fra morgen til aften (ugen: dag for dag) – i nogle få korte afsnit, ca. 150 ord: hvad der skal med ud ad døren, afvigelser i skoledagen, afhentning, fritid og aftaler, og vejret, hvor det betyder noget. Det normale skoleskema nævnes ikke – det står allerede i appen. Hvem der henter/bringer nævnes kun, hvis det står i en aftale eller i `familie_regler.md`. Kioskskærmen viser fortællingen under "Dagen".
+Øverst i "I dag" og "Ugen" står et overblik. **Med AI** er det en varm, kronologisk fortælling til jer forældre – fra morgen til aften (ugen: dag for dag) – i nogle få korte afsnit, ca. 150 ord: hvad der skal med ud ad døren, afvigelser i skoledagen, afhentning, fritid og aftaler, og vejret, hvor det betyder noget. Det normale skoleskema nævnes ikke – det står allerede i appen. Hvem der henter/bringer nævnes kun, hvis det står i en aftale eller i `familie_regler.md`. Kioskskærmen viser fortællingen i fuld bredde øverst, højst fire linjer.
 
 **Uden AI** laver appens egne regler en liste: *Vejr*, *Husk*, *Skal gøres*, *Praktisk info* og *Kommende frister*, hvert punkt med barnets ikon og kilde.
 
@@ -126,7 +126,7 @@ Alt, hvad AI'en foreslår, kontrolleres mod punktets egen tekst: datoen skal st�
 
 ### Vejr (MET Norway / yr.no)
 
-Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"). Under datoen øverst i appen står dagens vejr som ét ikon med temperatur – tryk på det for at se resten af dagen time for time (ikon, temperatur og regn). Efter kl. 19 viser det i morgen. Kioskskærmen viser vejrlinjen under datoen; tryk på den for at folde timerne ud. På kiosken lukker timerne sig selv efter 30 sekunder. Vejret kommer fra MET Norway (de samme data som yr.no) – ingen nøgle, ingen konto. Prognosen er time for time ca. 2½ døgn frem, så ugeoverblikket har kun vejr for de dage, der er dækket. Data fra MET Norway, licens CC BY 4.0 – krediteret i overblikkets fodlinje.
+Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11°, regn om eftermiddagen – regntøj og gummistøvler"). Under datoen øverst i appen står dagens vejr som ét ikon med temperatur – tryk på det for at se resten af dagen time for time (ikon, temperatur og regn). Efter kl. 19 viser det i morgen. Kioskskærmen viser temperaturen nu, dagens laveste–højeste og en stribe med de næste timer øverst; tryk på vejret for hele dagen time for time. Vejret kommer fra MET Norway (de samme data som yr.no) – ingen nøgle, ingen konto. Prognosen er time for time ca. 2½ døgn frem, så ugeoverblikket har kun vejr for de dage, der er dækket. Data fra MET Norway, licens CC BY 4.0 – krediteret i overblikkets fodlinje.
 
 **Sæt hjemmet én gang:** Åbn appen i browseren **på pc'en, der kører den** (http://localhost:8080), tryk på **tandhjulet** (Indstillinger), tryk på **Sæt hjem for vejret** og **Brug min placering som hjem**. Browseren spørger om lov. Siger den nej, så slå placering til i Windows: *Indstillinger → Privatliv og sikkerhed → Placering*. Knappen virker kun på selve pc'en (eller over https), fordi browsere kun udleverer placeringen til sikre sider. En stationær pc finder sin placering via wifi eller internetadressen, så den kan være et par kilometer ved siden af – det betyder intet for vejret. Tryk på "Se på kort" for at tjekke den. Flytter I, så tryk igen.
 
@@ -291,12 +291,18 @@ Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 18 om i 
 
 ## Kioskvisning
 
-En stor, rolig vægvisning til en tablet i køkkenet. Start den med **Kioskvisning** under **tandhjulet** (Indstillinger) øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
+En rolig vægvisning i mørkt tema til en iPad på langs i køkkenet. Start den med **Kioskvisning** under **tandhjulet** (Indstillinger) øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
 
-- Ur, dato og dagen (I dag / I morgen, efter samme regel som ovenfor), et kort pr. barn (skoletid, hvad der er nu og næste, vikarer, ting at huske) samt dagens overblik (eller Husk og lektier, hvis der intet overblik er) og dagens aftaler.
-- Teksten tilpasser sig skærmen, så alt kan ses uden at rulle. Data hentes på ny hvert andet minut, og skærmen holdes tændt (Wake Lock, hvor enheden understøtter det; ellers sæt Autolås til "Aldrig").
-- **Viser aldrig beskeder** og intet fra private samtaler.
-- Tryk et vilkårligt sted for at få **Afslut** frem i seks sekunder (på tastatur: `Esc`). Øverst står en rød advarsel, hvis data er over en time gamle, Aula-login er udløbet, eller Google Kalender ikke kunne hentes.
+- **Øverst:** ur, dato og I dag / I morgen, eventuelle advarsler og vejret: temperaturen nu, dagens laveste–højeste, råd og de næste timer.
+- **Overblikket** i fuld bredde: familieassistentens fortælling, højst fire linjer. Er den længere, afkortes den ved en sætning med "…".
+- **Én kolonne pr. person**, børnene først og så de voksne: skoletid, lektioner (den nuværende er fremhævet, de overståede nedtonede), aftaler og praktisk info fra ugeplanen. Aftaler for hele familien står hos alle.
+- **Husk** i en smal kolonne til højre: dagen og de to næste dage. "Hver dag"-opgaver, opgaver uden frist og perioder står kun på den første dag.
+- Hele skærmen skifter til i morgen kl. 18 (`[display] evening_hour`): overblik, skemaer, vejr og husk.
+- **Tryk på noget** (en lektion, en aftale, en opgave, vejret eller overblikket) for at se detaljerne. De lukker af sig selv efter 10 sekunder eller ved et tryk uden for.
+- Alt er på én skærm uden at rulle. Er en kolonne for lang, bliver teksten lidt mindre, og resten skjules bag **+N flere** (tryk for hele listen). Designet til liggende format; på stående skærm vises det samme layout, bare tættere.
+- Data hentes på ny hvert andet minut, og skærmen holdes tændt (Wake Lock, hvor enheden understøtter det; ellers sæt Autolås til "Aldrig").
+- **Viser aldrig beskeder** og intet fra private samtaler – heller ikke i detaljerne for en opgave.
+- Tryk et vilkårligt sted for at få **Afslut** frem i seks sekunder (på tastatur: `Esc`, der først lukker åbne detaljer). Øverst står en advarsel, hvis data er over en time gamle, Aula-login er udløbet, eller familiekalenderen ikke kunne hentes.
 
 ## Private samtaler
 
@@ -365,7 +371,7 @@ Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, de
 | `test_times.py` | sluttider: rigtige, tænkte (`endInferred`) og 45-minutters lektioner |
 | `test_server.py` | adgang, CSRF, spærring, private tråde og billeder, aflys/flyt |
 | `test_selftest.py` | selvtesten mod sunde og ødelagte opsætninger |
-| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til familiekalenderen" (tilføjelse, fortryd, modtager), ensartede termer og menuen, aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk, tilgængelighed |
+| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til familiekalenderen" (tilføjelse, fortryd, modtager), ensartede termer og menuen, aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk (layout, husk for tre dage, "+N flere", detaljer ved tryk, mørkt tema), tilgængelighed |
 
 `homework_test.py` og `messages_test.py` i roden er ældre hjælpescripts, der kører genkendelsen mod **dine egne filer** (`python homework_test.py weekplan.json`, `python messages_test.py aula_feed.json`) og indgår ikke i `pytest`.
 

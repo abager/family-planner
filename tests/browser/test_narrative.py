@@ -44,22 +44,35 @@ def test_narrative_text_is_escaped(make_page, site):
     assert "<img" in page.inner_text("#briefDay .story")
 
 
-def test_the_kiosk_shows_the_narrative_under_the_heading_dagen_and_fits_one_screen(make_page, site):
-    for vp in ({"width": 1280, "height": 800}, {"width": 1920, "height": 1080}, {"width": 1024, "height": 768}):
+def test_the_kiosk_shows_the_narrative_in_full_width_and_fits_one_screen(make_page, site):
+    for vp in ({"width": 1180, "height": 820}, {"width": 1920, "height": 1080}, {"width": 1024, "height": 768}):
         page = open_app(make_page, site, brief(), kiosk=True, viewport=vp)
-        assert page.inner_text("#kRememberHead").startswith("Overblik ")
-        assert page.eval_on_selector_all("#kRemember p", "ps => ps.map(p => p.textContent)") == STORY
+        assert page.inner_text("#kBriefHead") == "Overblik i dag"
+        assert page.inner_text("#kBriefText").startswith(STORY[0])
         assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1"), vp
+        w = page.evaluate("['kBrief','kPeople'].map(id => document.getElementById(id).getBoundingClientRect().width)")
+        assert w[0] > w[1]                                               # fuld bredde over skemaerne
 
 
-def test_a_long_narrative_still_fits_the_kiosk(make_page, site):
-    long = [" ".join(["Carla og Hugo skal huske regntøj, og der er fodbold om eftermiddagen."] * 4)] * 4   # ~180 ord
-    page = open_app(make_page, site, brief(fortaelling=long), kiosk=True, viewport={"width": 1280, "height": 800})
+def test_a_long_narrative_is_cut_at_a_sentence_with_at_most_four_lines(make_page, site):
+    long = [" ".join([f"Carla og Hugo skal huske regntøj nummer {i}, og der er fodbold om eftermiddagen." for i in range(4)])] * 4
+    page = open_app(make_page, site, brief(fortaelling=long), kiosk=True, viewport={"width": 1180, "height": 820})
+    t = page.inner_text("#kBriefText")
+    assert t.endswith(". …") and len(t) < len(" ".join(long))
+    lines = page.evaluate("(()=>{ const b=kBriefText; return Math.round(b.scrollHeight/parseFloat(getComputedStyle(b).lineHeight)); })()")
+    assert lines <= 4
     assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1")
+    page.click("#kBrief")                                                # hele fortællingen ved et tryk
+    assert page.eval_on_selector_all("#dBody .story p", "ps => ps.map(p => p.textContent)") == long
 
 
-def test_the_kiosk_keeps_the_list_heading_without_a_narrative(make_page, site):
+def test_the_kiosk_shows_the_rules_points_without_a_narrative(make_page, site):
     b = brief(method="offline", afsnit=[{"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}])
     del b["fortaelling"]
     page = open_app(make_page, site, b, kiosk=True)
-    assert page.inner_text("#kRememberHead").startswith("Overblik ") and "Gymnastiktøj" in page.inner_text("#kRemember")
+    assert page.inner_text("#kBriefHead") == "Overblik i dag" and "Gymnastiktøj" in page.inner_text("#kBriefText")
+
+
+def test_without_an_overview_the_kiosk_says_so(make_page, site):
+    page = open_app(make_page, site, None, kiosk=True)
+    assert "har ikke lavet et overblik for i dag endnu" in page.inner_text("#kBriefText")

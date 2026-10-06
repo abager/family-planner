@@ -1,4 +1,4 @@
-"""Efter kl. 18 handler I dag-fanen om i morgen. Kioskvisningen er en stor vægvisning, der følger samme regel."""
+"""Efter kl. 18 handler I dag-fanen om i morgen. Kioskvisningen er en stor vægvisning, der følger samme regel (hele skærmen skifter)."""
 import datetime as dt
 from zoneinfo import ZoneInfo
 
@@ -86,7 +86,7 @@ def test_deadlines_in_the_task_list_say_tomorrow_when_it_is(make_page):
 # ---------------------------------------------------------------- kioskvisning
 def kiosk(page):
     return page.evaluate("""({on:state.kiosk,url:location.search,hdr:getComputedStyle(document.querySelector('header')).display,shown:!document.getElementById('kioskView').classList.contains('hidden'),
-        clock:kClock.textContent,day:kDay.textContent,date:kDate.textContent,apt:kAptTitle.textContent,kids:document.querySelectorAll('.k-kid').length,
+        clock:kClock.textContent,day:kDay.textContent,date:kDate.textContent,brief:kBriefHead.textContent,people:document.querySelectorAll('.k-person').length,
         ox:document.documentElement.scrollWidth-document.documentElement.clientWidth,oy:document.documentElement.scrollHeight-innerHeight,exit:getComputedStyle(kExit).opacity,fs:parseFloat(getComputedStyle(kioskView).fontSize)})""")
 
 
@@ -96,9 +96,9 @@ def test_kiosk_button_starts_a_clean_full_screen_view(make_page):
     page.click("#kioskBtn")
     page.wait_for_timeout(300)
     k = kiosk(page)
-    assert k["on"] and k["url"] == "?kiosk=1" and k["hdr"] == "none" and k["shown"] and k["kids"] == 3
-    assert k["clock"] == "10:20" and k["day"] == "I dag" and k["date"] == "torsdag 1. oktober" and k["apt"] == "Dagens aftaler"
-    assert k["ox"] == 0 and k["oy"] == 0 and k["fs"] >= 18
+    assert k["on"] and k["url"] == "?kiosk=1" and k["hdr"] == "none" and k["shown"] and k["people"] == 5
+    assert k["clock"] == "10.20" and k["day"] == "I dag" and k["date"] == "torsdag 1. oktober" and k["brief"] == "Overblik i dag"
+    assert k["ox"] == 0 and k["oy"] == 0 and k["fs"] >= 16
     assert page.locator("#v-today:visible").count() == 0                         # ingen menu, ingen knapper at komme til at trykke på
 
 
@@ -139,7 +139,7 @@ def test_escape_leaves_the_kiosk(make_page):
 
 def test_a_link_with_kiosk_in_it_starts_in_kiosk(make_page):
     page, *_ = make_page(now=at(10), url="/index.html?kiosk=1")
-    assert kiosk(page)["on"] and kiosk(page)["kids"] == 3
+    assert kiosk(page)["on"] and kiosk(page)["people"] == 5
 
 
 def test_the_kiosk_switches_to_tomorrow_by_itself_in_the_evening(make_page):
@@ -148,7 +148,7 @@ def test_the_kiosk_switches_to_tomorrow_by_itself_in_the_evening(make_page):
     page.clock.run_for(2 * 60 * 1000)
     page.wait_for_timeout(300)
     k = kiosk(page)
-    assert (k["day"], k["date"], k["apt"], k["clock"]) == ("I morgen", "fredag 2. oktober", "Aftaler i morgen", "18:01")
+    assert (k["day"], k["date"], k["brief"], k["clock"]) == ("I morgen", "fredag 2. oktober", "Overblik i morgen", "18.01")
 
 
 def test_the_kiosk_never_shows_messages_and_refreshes_its_data(make_page):
@@ -182,8 +182,10 @@ def test_the_kiosk_shows_a_warning_when_data_is_old_or_google_is_down(make_page)
     assert "over en time gamle" in s and "Familiekalenderen ikke hentet" in s
 
 
-@pytest.mark.parametrize("w,h", [(1180, 820), (820, 1180), (1920, 1080)])
-def test_the_kiosk_fits_tablets_in_both_orientations(make_page, w, h):
+# Designet til iPad på langs; stående og store skærme skal stadig være på én skærm uden rulning
+@pytest.mark.parametrize("w,h", [(1180, 820), (1024, 768), (1366, 1024), (1920, 1080), (820, 1180)])
+def test_the_kiosk_fits_one_screen_without_scrolling(make_page, w, h):
     page, *_ = make_page(now=at(10, 20), width=w, height=h, url="/index.html?kiosk=1")
     k = kiosk(page)
-    assert k["kids"] == 3 and k["ox"] == 0 and k["oy"] == 0
+    assert k["people"] == 5 and k["ox"] == 0 and k["oy"] == 0
+    assert page.evaluate("[...document.querySelectorAll('.k-person,.k-husk')].every(b=>b.scrollHeight<=b.clientHeight+1)")

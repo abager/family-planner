@@ -53,9 +53,16 @@ def test_a_lesson_without_end_lasts_45_minutes_and_ends_the_school_day_correctly
     assert texts(page, "#skema .scard:has-text('Hugo') .lessons time")[-1] == "13.00–13.50"
 
 
-def test_kiosk_shows_ranges_for_events_and_the_next_lesson(make_page):
+def test_kiosk_shows_start_times_in_the_columns_and_ranges_in_the_details(make_page):
     page, *_ = make_page(now=THU, fixed=True, url="/index.html?kiosk=1")
-    leo = page.locator(".k-kid", has_text="Leo").inner_text()
-    assert "Bedsteforældredag · 09.00–11.00" in leo
-    hugo = page.locator(".k-kid", has_text="Hugo").inner_text()
-    assert "Næste: Matematik kl. 10.00–10.45" in hugo
+    leo = page.locator(".k-person[data-person=leo]")
+    assert "09.00 Bedsteforældredag" in " ".join(leo.inner_text().split())
+    leo.locator(".k-row", has_text="Bedsteforældredag").click()
+    assert "09.00–11.00" in page.inner_text("#dBody")
+    page.keyboard.press("Escape")
+    hugo = page.locator(".k-person[data-person=hugo]")
+    math = hugo.locator(".k-row", has_text="Matematik").first
+    assert "past" not in math.get_attribute("class") and "now" not in math.get_attribute("class")   # frikvarter kl. 9.40: næste lektion
+    assert "past" in hugo.locator(".k-row").first.get_attribute("class")
+    math.click()
+    assert "10.00–10.45" in page.inner_text("#dBody")

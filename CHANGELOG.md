@@ -5,6 +5,19 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (kiosk)
+- New kiosk layout: one dark screen for an iPad in landscape. Top bar with clock, day, status and weather (hour now,
+  min–max, advice, a strip of the next hours); the overview in full width (max 4 lines, cut at a sentence with "…");
+  one column per person – children first, then adults – with lessons and events in time order and family events in
+  every column; a narrow "Husk" column for the focus day and the next two days. Replaces the per-child cards, the
+  side cards ("Overblik"/"Husk og lektier" and "Dagens aftaler") and the fold-out weather hours.
+- Tapping a lesson, event, task, the weather or the overview opens details that close after 10 seconds or on a tap
+  outside. Columns that don't fit end with "+N flere" (the font shrinks at most 2 px first).
+- Only the kiosk is dark; the rest of the app is unchanged.
+
+### Fixed (kiosk)
+- Kiosk tests expected the clock as `10:20`; the app shows `10.20` (the convention), so two tests failed.
+
 ### Changed (evening switch at 18:00)
 - The default `[display] evening_hour` is now 18 instead of 17 everywhere: the today view, timetable, task list,
   overview window, the server's extra run at the switch, the evening push and the kiosk all follow it. An existing

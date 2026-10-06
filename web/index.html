@@ -375,26 +375,12 @@ dialog h3{font:800 1.4rem/1.15 var(--display);margin:0 0 8px}
 dialog button{margin-top:14px;border:0;background:var(--ink);color:var(--paper);font:700 .95rem var(--body);padding:9px 18px;border-radius:999px;cursor:pointer}
 @media (prefers-reduced-motion:no-preference){.pill{transition:transform .12s}.pill:hover{transform:translateY(-1px)}}
 
-/* Kioskvisning: stor tekst, få elementer, ingen knapper – til en tablet på væggen */
-#kioskView{--kfs:clamp(18px,2.75vmin,40px);font-size:var(--kfs)}
-body.kiosk{overflow-x:hidden}
-body.kiosk header,body.kiosk #wxHeadPanel,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #aulaView{display:none!important}
-body.kiosk .wrap{max-width:none;padding:clamp(10px,2vmin,30px);padding-bottom:clamp(10px,2vmin,30px)}
-.k-top{display:flex;align-items:center;gap:2.4vmin;margin-bottom:2vmin;flex-wrap:wrap}
-.k-clock{font:800 3.6em/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.k-day{font:800 1.6em/1.1 var(--display)}
-.k-date{color:var(--muted);font-size:1.15em}
-.k-date .k-day{color:var(--ink)}
-.k-weather{color:var(--ink);font-weight:600;margin-top:2px}
 .story{margin-top:10px;max-width:68ch}
 .story p{margin:0 0 .7em;line-height:1.55}
 .story p:last-child{margin-bottom:0}
-.k-story{list-style:none;padding:0 !important;display:block !important}
-.k-story p{margin:0 0 .55em;line-height:1.4;font-size:.92em}
-.k-weather small{display:block;color:var(--muted);font-weight:400}
 /* Vejret: ét ikon, der folder sig ud til time for time (dagens overskrift og kioskskærmen) */
 .wxchip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:3px 12px 3px 8px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font-weight:700;font-size:.95rem}
-.wxchip:focus-visible,.k-wxbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.wxchip:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
 .wxchip[aria-expanded="true"]{background:var(--today);border-color:var(--accent)}
 .wxchip small{color:var(--muted);font-weight:400}
 .wxi{font-size:1.3em;line-height:1}
@@ -410,33 +396,73 @@ body.mode-mail #wxHeadPanel{display:none}
 .wxh .i{font-size:1.5em;line-height:1.15}
 .wxh .c{font-weight:700;font-variant-numeric:tabular-nums}
 .wxh .r{font-size:.72em;color:var(--accent);min-height:1.2em;white-space:nowrap}
-.k-wxbtn{all:unset;cursor:pointer;display:block;border-radius:8px}
-.k-wxbtn .wxmore{color:var(--accent);font-size:.75em;font-weight:700;margin-left:.4em}
-.k-hours{margin:0 0 2vmin;font-size:.9em}
 .homeinfo{color:var(--muted);margin:8px 0 0}
-.k-status{margin-left:auto;font-size:.8em;color:var(--muted);text-align:right}
-.k-status .bad{color:#C23A15;font-weight:700}
+/* Kioskvisning: én mørk skærm til en iPad på langs – overblikket øverst, skemaet pr. person, husk i siden.
+   Ingen rulning: teksten skrumper til alt er der, og lister, der stadig er for lange, afsluttes med "+N flere". */
+body.kiosk{overflow:hidden;color-scheme:dark;
+  --paper:#0F141D; --surface:#171F2C; --ink:#E8EDF5; --muted:#97A3B6; --line:#263143; --today:#1F2C44; --accent:#8DB2F2}
+body.kiosk header,body.kiosk #wxHeadPanel,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #aulaView{display:none!important}
+body.kiosk .wrap{max-width:none;box-sizing:border-box;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;padding:clamp(10px,1.8vmin,26px)}
+body.kiosk main{flex:1;min-height:0;display:flex;flex-direction:column}
+#kioskView{--kfs:clamp(14px,2.3vmin,32px);font-size:var(--kfs);flex:1;min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:1.3vmin}
+.k-top{display:flex;align-items:center;gap:2.2vmin;min-width:0}
+.k-clock{font:800 3em/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.k-date{line-height:1.2;white-space:nowrap}
+.k-day{font:800 1.35em/1.1 var(--display)}
+#kDate{color:var(--muted)}
+.k-status{margin-left:auto;font-size:.75em;color:var(--muted);text-align:right;white-space:nowrap}
+.k-status .bad{color:#FFA285;font-weight:700}
+.k-weather{min-width:0}
+.k-weather:empty{display:none}
+.k-wx{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:1em;padding:.35em .8em;border-radius:.8em;border:1px solid var(--line);background:var(--surface)}
+.k-wx:focus-visible,.k-brief:focus-visible,.k-row:focus-visible,.k-more:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.k-wxnow{display:flex;align-items:center;gap:.45em}
+.k-wxnow .i{font-size:1.8em;line-height:1}
+.k-wxnow b{font:800 1.6em/1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
+.k-wxnow small{display:block;color:var(--muted);font-size:.72em;line-height:1.3;white-space:nowrap}
+.k-wxstrip{display:flex;gap:.1em;list-style:none;margin:0;padding:0 0 0 .9em;border-left:1px solid var(--line)}
+.k-wxstrip li{display:grid;justify-items:center;min-width:2.4em;font-size:.8em;line-height:1.2}
+.k-wxstrip .t{color:var(--muted);font-variant-numeric:tabular-nums}
+.k-wxstrip .i{font-size:1.25em}
+.k-wxstrip .c{font-weight:700;font-variant-numeric:tabular-nums}
+.k-wxstrip .r{color:var(--accent);font-size:.78em;min-height:1.2em;white-space:nowrap}
 .k-exit{all:unset;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;border:1px solid var(--line);border-radius:999px;padding:.35em 1em;font:700 .8em var(--body);background:var(--surface)}
 body.k-showexit .k-exit{opacity:1;pointer-events:auto}
-.k-body{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:2vmin;align-items:start}
-@media (orientation:portrait){.k-body{grid-template-columns:1fr}}
-.k-kids{display:grid;gap:1.8vmin;grid-template-columns:repeat(auto-fit,minmax(min(100%,13em),1fr))}
-.k-kid{border-radius:1em;background:var(--surface);border:1px solid var(--line);border-top:.38em solid var(--c);padding:.85em .95em}
-.k-kid h3{display:flex;align-items:center;gap:.5em;font:800 1.3em/1.1 var(--display);margin:0 0 .35em}
-.k-kid .pav{width:1.7em;height:1.7em;font-size:1em}
-.k-hours{font-size:1.2em;font-weight:800}
-.k-line{margin-top:.45em;line-height:1.3}
-.k-none{color:var(--muted);font-style:italic}
-.k-now{font-weight:800}
-.k-card{background:var(--surface);border:1px solid var(--line);border-radius:1em;padding:.85em 1em;margin-bottom:1.8vmin}
-.k-card h2{font:800 1.2em/1.1 var(--display);margin:0 0 .5em}
-.k-list{list-style:none;margin:0;padding:0}
-.k-list li{display:flex;gap:.55em;align-items:flex-start;padding:.42em 0;border-top:1px solid var(--line);line-height:1.3}
-.k-list li:first-child{border-top:0}
-.k-list .pav{flex:none;width:1.5em;height:1.5em;font-size:.9em;margin-top:.1em}
-.k-list small{display:block;color:var(--muted);font-size:.72em}
-body.kiosk .tl li{grid-template-columns:5.2em 1fr;font-size:1em}
-body.kiosk .tl .t{font-size:1em}
+.k-brief{all:unset;box-sizing:border-box;cursor:pointer;display:block;background:var(--surface);border:1px solid var(--line);border-radius:.9em;padding:.6em 1em .7em}
+.k-brief h2{font:700 .78em/1.2 var(--body);color:var(--muted);margin:0 0 .2em}
+.k-brieftext{font-size:1.1em;line-height:1.45;max-height:calc(4 * 1.45em);overflow:hidden}
+.k-brieftext.k-clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4}
+.k-brieftext .k-pt{margin-right:1em}
+.k-brieftext .pav{width:1.3em;height:1.3em;font-size:.75em;vertical-align:-.2em;margin-right:.3em}
+.k-body{display:grid;grid-template-columns:minmax(0,3.5fr) minmax(0,1fr);gap:1.3vmin;min-height:0}
+.k-people{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:1vmin;min-height:0}
+.k-person,.k-husk{background:var(--surface);border:1px solid var(--line);border-radius:.9em;overflow:hidden;min-height:0;display:flex;flex-direction:column}
+.k-person{border-top:.3em solid var(--c);padding:.55em .5em .45em}
+.k-husk{padding:.55em .6em .45em}
+.k-person h3,.k-husk h2{display:flex;align-items:center;gap:.4em;font:800 1.1em/1.15 var(--display);margin:0 .2em}
+.k-person .pav{width:1.5em;height:1.5em;font-size:.82em}
+.k-span{color:var(--muted);font-size:.8em;margin:.15em .3em 0;font-variant-numeric:tabular-nums}
+.k-rows{list-style:none;margin:.4em 0 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:.18em}
+.k-row{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:.2em .35em;border-radius:.45em;line-height:1.25}
+.k-row time{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.86em;margin-right:.15em}
+.k-row .ln{display:block;max-height:2.5em;overflow:hidden;overflow-wrap:break-word}
+.k-row.past,.k-row.past time{color:#68758A}
+.k-row.now{background:color-mix(in srgb,var(--c) 30%,transparent);font-weight:700}
+.k-row.now time{color:var(--ink)}
+.k-row.ev{background:var(--paper)}
+.k-row.plan{color:var(--muted);font-size:.9em}
+.k-row .sub{color:#FFB892;font-size:.78em;font-weight:700;margin-left:.3em}
+.k-row .pav{width:1.25em;height:1.25em;font-size:.7em;margin-right:.25em;vertical-align:-.15em}
+.k-hday{font-weight:700;font-size:.82em;color:var(--muted);margin:.55em .3em .1em}
+.k-hday:first-child{margin-top:.2em}
+.k-none{color:var(--muted);font-style:italic;font-size:.9em;padding:.2em .3em}
+.k-more{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.85em;padding:.25em .3em;margin-top:auto}
+.k-more[hidden]{display:none}
+body.kiosk dialog .k-dl{list-style:none;margin:0;padding:0}
+body.kiosk dialog .k-dl li{padding:.35em 0;border-top:1px solid var(--line)}
+body.kiosk dialog .k-dl li:first-child{border-top:0}
+body.kiosk dialog .k-dl time{color:var(--muted);margin-right:.5em;font-variant-numeric:tabular-nums}
+body.kiosk dialog .k-dh{margin:.9em 0 .2em;font-size:.9em;color:var(--muted)}
 
 .sronly{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* I dag / I morgen */
@@ -686,17 +712,15 @@ button,a,.chip,.pill{touch-action:manipulation}
   <section id="kioskView" class="hidden" aria-label="Kioskvisning">
     <div class="k-top">
       <div class="k-clock" id="kClock"></div>
-      <div class="k-date"><div class="k-day" id="kDay"></div><div id="kDate"></div><div class="k-weather" id="kWeather"></div></div>
+      <div class="k-date"><div class="k-day" id="kDay"></div><div id="kDate"></div></div>
       <div class="k-status" id="kStatus"></div>
+      <div class="k-weather" id="kWeather"></div>
       <button type="button" class="k-exit" id="kExit">Afslut kioskvisning</button>
     </div>
-    <div class="wxpanel k-hours" id="kHours" hidden></div>
+    <button type="button" class="k-brief" id="kBrief"><h2 id="kBriefHead">Overblik</h2><div class="k-brieftext" id="kBriefText"></div></button>
     <div class="k-body">
-      <div class="k-kids" id="kKids"></div>
-      <div class="k-side">
-        <section class="k-card"><h2 id="kRememberHead">Husk og lektier</h2><ul class="k-list" id="kRemember"></ul></section>
-        <section class="k-card"><h2 id="kAptTitle">Aftaler</h2><ul class="tl" id="kApts"></ul></section>
-      </div>
+      <div class="k-people" id="kPeople"></div>
+      <section class="k-husk" id="kHusk" aria-labelledby="kRememberHead"><h2 id="kRememberHead">Husk</h2><div id="kRemember"></div><button type="button" class="k-more" hidden></button></section>
     </div>
   </section>
 
@@ -1815,83 +1839,196 @@ document.getElementById("kioskView").addEventListener("pointerdown",()=>{       
   document.body.classList.add("k-showexit"); clearTimeout(kioskExitTimer); kioskExitTimer=setTimeout(()=>document.body.classList.remove("k-showexit"),6000);
 });
 document.getElementById("kExit").onclick=exitKiosk;
-document.addEventListener("keydown",e=>{ if(state.kiosk && e.key==="Escape") exitKiosk(); });
+document.addEventListener("keydown",e=>{ if(state.kiosk && e.key==="Escape" && !document.querySelector("dialog[open]")) exitKiosk(); });   // Escape lukker først detaljerne
 
-const tasksFor=(k,day)=>state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day) && tPeople(t).includes(k.id)).map(t=>t.title);
-function kidCard(k,day,now,isToday){
-  const evs=state.data.events.filter(e=>onDay(e,day)&&e.people.includes(k.id));
-  const ls=evs.flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
-  const other=evs.filter(e=>!lessonsOf(e).length && !isSchoolBlock(e));
-  const nowMin=now.getHours()*60+now.getMinutes();
-  let head=other.length||tasksFor(k,day).length ? "" : `<div class="k-line k-none">Intet på programmet</div>`, nowLine="";
-  if(ls.length){
-    const last=ls.map(lessonEnd).sort().pop();
-    head=`<div class="k-hours">${hhmm(ls[0].start)}–${hhmm(last)}</div>`;
-    if(isToday){
-      const cur=ls.find((l,i)=>{ const s=toMin(l.start), e=toMin(lessonEnd(l)); return nowMin>=s&&nowMin<e; });
-      const nxt=ls.find(l=>toMin(l.start)>nowMin);
-      nowLine = cur ? `<div class="k-line k-now">Nu: ${esc(cur.title)}${cur.location?` · ${esc(cur.location)}`:""}</div>` : nxt ? `<div class="k-line">Næste: ${esc(nxt.title)} kl. ${lessonRange(nxt)}</div>` : `<div class="k-line k-none">Skoledagen er slut</div>`;
-    }
-  }
-  const subs=ls.filter(l=>l.substitute).map(l=>`${esc(l.title)} ${l.start.replace(":",".")}`);
-  const key=ymd(day);
-  const tasks=tasksFor(k,day);
-  const plans=arr("weekplan").filter(w=>w.person===k.id && w.date===key && w.category && !["undervisning","anden_klasse"].includes(w.category) && !hasTasks(w)).map(w=>planSummary(w) && `${esc(w.subject||w.title)}: ${esc(planSummary(w))}`);
-  return `<article class="k-kid" style="--c:${k.color}"><h3>${pav(k)}${esc(k.name)}</h3>${head}${nowLine}
-    ${subs.length?`<div class="k-line">Vikar i ${subs.join(", ")}</div>`:""}
-    ${other.map(e=>`<div class="k-line">${icon("event")} ${esc(e.title)}${e.allDay?"":` · ${evRange(e)}`}</div>`).join("")}
-    ${tasks.map(t=>`<div class="k-line">${icon("task")} ${esc(t)}</div>`).join("")}
-    ${plans.map(t=>`<div class="k-line">${icon("note")} ${t}</div>`).join("")}</article>`;
+// Alt på kioskskærmen kan trykkes på: et tryk åbner detaljerne, som lukker af sig selv efter 10 sekunder
+// eller ved et tryk uden for. Hver gengivelse lægger sine detaljer i kItems (nøgle = data-k på elementet).
+const K_DETAIL_MS=10000; let kDetailTimer=null, kItems=new Map(), kSeq=0;
+const kKey = fn => { const k=String(++kSeq); kItems.set(k,fn); return k; };
+function kDetail(title, html){
+  openDetail(title, html);
+  clearTimeout(kDetailTimer);
+  kDetailTimer=setTimeout(()=>{ const d=document.getElementById("detail"); if(d.open) d.close(); }, K_DETAIL_MS);
 }
-// Timerne på kiosken lukker sig selv efter 30 sekunder, så resten af skærmen får pladsen igen
-const KWX_CLOSE_MS=30000; let kWxTimer=null;
+document.getElementById("detail").addEventListener("click",e=>{ if(state.kiosk && e.target.id==="detail") e.target.close(); });
+document.getElementById("detail").addEventListener("close",()=>clearTimeout(kDetailTimer));
+document.getElementById("kioskView").addEventListener("click",e=>{ const el=e.target.closest("[data-k]"); if(el && kItems.has(el.dataset.k)) kItems.get(el.dataset.k)(); });
+const kCap = s => s ? s[0].toUpperCase()+s.slice(1) : s;
+const kDl = rows => `<ul class="k-dl">${rows.map(r=>`<li>${r.time?`<time>${esc(r.time)}</time>`:""}${esc(r.title)}${r.extra?` <span class="meta">${esc(r.extra)}</span>`:""}</li>`).join("")}</ul>`;
+const kMeta = parts => `<p class="meta">${parts.filter(Boolean).map(esc).join(" · ")}</p>`;
+
+// Detaljerne for en lektion, en aftale, en ting fra ugeplanen og en opgave. Kun det, der allerede står i appen –
+// aldrig beskedtekster (kiosken viser ingen beskeder).
+function kLessonDetail(p,l){
+  const also=(l.alt||[]).map(x=>`Samtidig: ${x.title}${x.teacher?` (${x.teacher})`:""}${x.location?`, ${x.location}`:""}`);
+  kDetail(l.title, kMeta([p.name, lessonRange(l), l.teacher, l.location, l.substitute?(l.substitute!=="vikar"?`vikar: ${l.substitute}`:"vikar"):""])
+    + also.map(a=>`<p>${esc(a)}</p>`).join("") + (l.note?`<p>${esc(unescMd(l.note))}</p>`:""));
+}
+function kEventDetail(e,day){
+  kDetail(e.title, kMeta([`${DAYS[day.getDay()]} ${day.getDate()}. ${MONTHS[day.getMonth()]}`, evRange(e), whoText(e.people), e.location, srcLabel(e.source)]));
+}
+function kTaskDetail(t){
+  const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"}, dd=new Date(t.due+"T12:00");
+  kDetail(t.title, kMeta([whoText(tPeople(t)), kinds[t.kind]||t.kind, t.recurring==="daily"?"hver dag":t.openEnded?"ingen frist":`frist ${DAYS[dd.getDay()]} ${dd.getDate()}. ${MONTHS[dd.getMonth()]}`, `Kilde: ${srcLabel(t.source||"aula")}`]));
+}
+
+// Én kolonne pr. person: børnene først, så de voksne. Lektioner og aftaler i tidsorden, aftaler for hele familien
+// står hos alle. Opgaver står i husk-kolonnen, ikke her (ingen dubletter på skærmen).
+function kPeopleOrder(){ const ps=state.data.people; return [...ps.filter(p=>p.role==="child"), ...ps.filter(p=>p.role==="adult"), ...ps.filter(p=>p.role!=="child"&&p.role!=="adult")]; }
+function kPersonCol(p,day,now,isToday){
+  const evs=state.data.events.filter(e=>onDay(e,day)&&(e.people.includes(p.id)||e.people.includes("family")));
+  const ls=evs.filter(e=>e.people.includes(p.id)).flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
+  const other=evs.filter(e=>!lessonsOf(e).length && !isSchoolBlock(e)).sort(byStart);
+  const nowMin=now.getHours()*60+now.getMinutes(), rows=[], list=[];
+  other.filter(e=>e.allDay).forEach(e=>{ rows.push({at:-1, html:`<button type="button" class="k-row ev allday" data-k="${kKey(()=>kEventDetail(e,day))}"><span class="ln"><span class="tt">${esc(e.title)}</span></span></button>`}); list.push({time:"Hele dagen",title:e.title}); });
+  ls.forEach(l=>{
+    const s=toMin(l.start), e=toMin(lessonEnd(l)), cls=!isToday?"":nowMin>=e?" past":nowMin>=s?" now":"";
+    rows.push({at:s, html:`<button type="button" class="k-row${cls}" data-k="${kKey(()=>kLessonDetail(p,l))}"><span class="ln"><time>${hhmm(l.start)}</time> <span class="tt">${esc(l.title)}</span>${l.substitute?`<span class="sub">vikar</span>`:""}</span></button>`});
+    list.push({at:s, time:lessonRange(l), title:l.title, extra:l.substitute?"vikar":""});
+  });
+  other.filter(e=>!e.allDay).forEach(e=>{
+    const d=new Date(e.start), at=onDay(e,day)&&ymd(d)===ymd(day) ? d.getHours()*60+d.getMinutes() : 0;
+    rows.push({at, html:`<button type="button" class="k-row ev" data-k="${kKey(()=>kEventDetail(e,day))}"><span class="ln"><time>${ymd(d)===ymd(day)?hm(d):"…"}</time> <span class="tt">${esc(e.title)}</span></span></button>`});
+    list.push({at, time:evRange(e), title:e.title});
+  });
+  rows.sort((a,b)=>a.at-b.at); list.sort((a,b)=>(a.at??-1)-(b.at??-1));
+  if(p.role==="child"){
+    arr("weekplan").filter(w=>w.person===p.id && w.date===ymd(day) && w.category && !["undervisning","anden_klasse"].includes(w.category) && !hasTasks(w) && planSummary(w)).forEach(w=>{
+      const title=`${w.subject||w.title}: ${planSummary(w)}`;
+      rows.push({html:`<button type="button" class="k-row plan" data-k="${kKey(()=>kDetail(w.subject||w.title, kMeta([p.name])+`<p>${esc(planSummary(w))}</p>`))}"><span class="ln"><span class="tt">${esc(title)}</span></span></button>`});
+      list.push({title});
+    });
+  }
+  const span = ls.length ? `<div class="k-span">${hhmm(ls[0].start)}–${hhmm(ls.map(lessonEnd).sort().pop())}</div>` : "";
+  const more = kKey(()=>kDetail(`${p.name} ${dayWord()}`, kDl(list)));
+  return `<article class="k-person" style="--c:${p.color}" data-person="${esc(p.id)}"><h3>${pav(p)}${esc(p.name)}</h3>${span}
+    <ul class="k-rows">${rows.map(r=>`<li class="k-trim">${r.html}</li>`).join("") || `<li class="k-none">Intet på programmet</li>`}</ul>
+    <button type="button" class="k-more" data-k="${more}" hidden></button></article>`;
+}
+
+// Husk: fokusdagen og de to næste dage. Samme regel som "Husk og lektier" i I dag – en opgave står kun én gang,
+// på den første dag, den gælder (\"hver dag\", \"snarest\" og perioder altså kun på den første dag).
+function kTaskActive(t,key){
+  return t.recurring==="daily"
+    ? (t.from||t.due)<=key && key<=ymd(addDays(new Date((t.from||t.due)+"T12:00"),6))
+    : t.openEnded
+      ? t.from && t.from<=key && key<=ymd(addDays(new Date(t.from+"T12:00"),7))
+      : t.due===key || (t.from && t.from<=key && t.due>=key);
+}
+function kDayLabel(d){
+  const diff=Math.round((startOfDayMs(d)-startOfDayMs(new Date()))/864e5);
+  return diff===0 ? "I dag" : diff===1 ? "I morgen" : `${kCap(DAYS[d.getDay()])} ${d.getDate()}/${d.getMonth()+1}`;
+}
+function kHusk(day){
+  const seen=new Set(), html=[], all=[];
+  for(const d of [0,1,2].map(i=>addDays(day,i))){
+    const key=ymd(d);
+    const ts=state.data.tasks.filter(t=>!seen.has(t.id) && kTaskActive(t,key))
+      .sort((a,b)=>((b.recurring==="daily")-(a.recurring==="daily")) || String(a.due).localeCompare(String(b.due)));
+    ts.forEach(t=>seen.add(t.id));
+    html.push(`<div class="k-hday k-trim k-head">${esc(kDayLabel(d))}</div>`);
+    all.push(`<h4 class="k-dh">${esc(kDayLabel(d))}</h4>`);
+    if(!ts.length){ html.push(`<div class="k-none k-trim">Intet</div>`); all.push(`<p class="meta">Intet</p>`); continue; }
+    ts.forEach(t=>html.push(`<div class="k-trim"><button type="button" class="k-row task" data-k="${kKey(()=>kTaskDetail(t))}"><span class="ln">${tPeople(t).map(person).filter(Boolean).map(pav).join("")}<span class="tt">${esc(t.title)}</span></span></button></div>`));
+    all.push(kDl(ts.map(t=>({title:t.title, extra:whoText(tPeople(t))}))));
+  }
+  document.getElementById("kRemember").innerHTML=html.join("");
+  const more=document.querySelector("#kHusk .k-more");
+  more.dataset.k=kKey(()=>kDetail("Husk", all.join(""))); more.hidden=true;
+}
+
+// Overblikket: familieassistentens fortælling (eller reglernes punkter) i fuld bredde, højst fire linjer
+function kBrief(day){
+  const b=state.briefing?.day, fresh=b?.period && b.period[0]<=ymd(day) && ymd(day)<=b.period[1];
+  const head="Overblik "+dayWord(), box=document.getElementById("kBriefText"), btn=document.getElementById("kBrief");
+  document.getElementById("kBriefHead").textContent=head;
+  box.classList.remove("k-clamp"); delete box.dataset.full;
+  if(fresh && Array.isArray(b.fortaelling) && b.fortaelling.length){
+    box.textContent=b.fortaelling.join(" "); box.dataset.full=box.textContent;
+    btn.dataset.k=kKey(()=>kDetail(head, `<div class="story">${b.fortaelling.map(p=>`<p>${esc(p)}</p>`).join("")}</div>`));
+    return;
+  }
+  const pts = fresh ? (b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel}))) : [];
+  if(pts.length){
+    box.innerHTML=pts.map(i=>`<span class="k-pt">${i.who.map(pav).join("")}${esc(i.text)}</span>`).join(" ");
+    btn.dataset.k=kKey(()=>kDetail(head, `<ul class="k-dl">${pts.map(i=>`<li>${esc(i.text)}${i.sec?` <span class="meta">${esc(i.sec)}</span>`:""}</li>`).join("")}</ul>`));
+  } else {
+    box.innerHTML=`<span class="k-none">${fresh?`Intet særligt ${dayWord()}`:`Familieassistenten har ikke lavet et overblik for ${dayWord()} endnu`}</span>`;
+    btn.dataset.k=kKey(()=>{});
+  }
+}
+// Fortællingen afkortes ved en sætningsgrænse med "…" – kan ikke engang første sætning være der, klippes efter fire linjer
+function kTrimBrief(){
+  const box=document.getElementById("kBriefText"), full=box.dataset.full;
+  const fits=()=>box.scrollHeight<=box.clientHeight+1;
+  if(!full || fits()) return;
+  const ss=full.split(/(?<=[.!?])\s+(?=[A-ZÆØÅ])/);
+  for(let n=ss.length-1;n>=1;n--){ box.textContent=ss.slice(0,n).join(" ")+" …"; if(fits()) return; }
+  box.textContent=full; box.classList.add("k-clamp");
+}
+
+// Vejret i topbjælken: nu (eller dagen i morgen), dagens laveste/højeste og en stribe med de næste timer
+function kWeather(day,isToday,now){
+  const w=weatherFor(day), el=document.getElementById("kWeather");
+  if(!w){ el.innerHTML=""; return; }
+  const hs=w.timer||[];
+  const cur=isToday ? hs.find(h=>h.kl>=now.getHours()) : null;
+  const strip=(isToday ? hs.filter(h=>h.kl>(cur?cur.kl:now.getHours())) : hs.filter(h=>h.kl>=7 && h.kl%2===1)).slice(0,8);
+  const big = cur ? `<span class="i" aria-hidden="true">${esc(cur.ikon)}</span><b>${cur.temp}°</b>` : `<span class="i" aria-hidden="true">${esc(w.ikon||"")}</span><b>${wxTemp(w)}</b>`;
+  const sub = [cur?`${wxTemp(w)} ${dayWord()}`:w.tekst.replace(/^[-–\d°\s]+,\s*/,""), ...(w.raad||[])].filter(Boolean);
+  el.innerHTML=`<button type="button" class="k-wx" id="kWxBtn" aria-label="Vejret ${dayWord()}: ${esc(w.tekst)}" data-k="${kKey(()=>kDetail(`Vejret ${dayWord()}`, wxHoursHtml(w, day, true)))}">
+    <span class="k-wxnow">${big}<small>${sub.map(esc).join("<br>")}</small></span>
+    ${strip.length?`<ol class="k-wxstrip" aria-hidden="true">${strip.map(h=>`<li><span class="t">${pad(h.kl)}</span><span class="i">${esc(h.ikon)}</span><span class="c">${h.temp}°</span><span class="r">${h.regn>=0.1?`${wxMm(h.regn)} mm`:""}</span></li>`).join("")}</ol>`:""}</button>`;
+}
+
 function renderKiosk(){
-  const now=new Date(), day=focusDay(), off=dayOffset();
+  const now=new Date(), day=focusDay(), off=dayOffset(), isToday=off===0;
+  kItems=new Map();
   document.getElementById("kClock").textContent=`${pad(now.getHours())}.${pad(now.getMinutes())}`;
-  document.getElementById("kDay").textContent=off===0?"I dag":"I morgen";
+  document.getElementById("kDay").textContent=isToday?"I dag":"I morgen";
   document.getElementById("kDate").textContent=`${DAYS[day.getDay()]} ${day.getDate()}. ${MONTHS[day.getMonth()]}`;
   const g=new Date(state.data.generated), old=(now-g)>36e5, sv=state.server, bad=[];
   if(old) bad.push("Data er over en time gamle");
   if(sv && ["login_required","waiting_for_login"].includes(sv.aula)) bad.push("Aula-login er udløbet");
   if(state.data.health?.google?.ok===false) bad.push("Familiekalenderen ikke hentet");
   document.getElementById("kStatus").innerHTML = (bad.length?`<div class="bad">${bad.map(esc).join(" · ")}</div>`:"")+`<div>Opdateret ${hm(g)}</div>`;
-  document.getElementById("kKids").innerHTML = state.data.people.filter(p=>p.role==="child").map(k=>kidCard(k,day,now,off===0)).join("");
-  // Overblikket for dagen, hvis det handler om samme dag – ellers dagens opgaver ("Husk og lektier")
-  const b=state.briefing?.day, fresh=b?.period && b.period[0]<=ymd(day) && ymd(day)<=b.period[1];
-  let items=[];
-  const w=weatherFor(day), kw=document.getElementById("kWeather");
-  const kh=document.getElementById("kHours");
-  if(w){
-    const open=state.wxOpen.kiosk, more=(w.timer||[]).length>0;
-    const inner=`<span aria-hidden="true">${esc(w.ikon||"")}</span> ${esc(w.tekst)}${more?`<span class="wxmore" aria-hidden="true">${open?"skjul timer":"time for time"}</span>`:""}${w.raad?.length?`<small>${esc(w.raad.join(", "))}</small>`:""}`;
-    kw.innerHTML = more ? `<button type="button" class="k-wxbtn" id="kWxBtn" aria-expanded="${open}" aria-controls="kHours">${inner}</button>` : inner;
-    kh.innerHTML = more ? wxHoursHtml(w, day, false) : "";      // teksten og rådene står lige over
-    kh.hidden = !(more && open);
-    const wb=document.getElementById("kWxBtn");
-    if(wb) wb.onclick=()=>{
-      state.wxOpen.kiosk=!state.wxOpen.kiosk; clearTimeout(kWxTimer);
-      if(state.wxOpen.kiosk) kWxTimer=setTimeout(()=>{ state.wxOpen.kiosk=false; if(state.kiosk) renderKiosk(); }, KWX_CLOSE_MS);
-      renderKiosk();
-    };
-  } else { kw.innerHTML=""; kh.innerHTML=""; kh.hidden=true; }
-  if(fresh) items=(b.afsnit||[]).filter(sec=>sec.titel!=="Vejr").flatMap(sec=>(sec.punkter||[]).map(pt=>({who:(pt.hvem||[]).map(personByName).filter(Boolean),text:unescMd(pt.tekst),sec:sec.titel})));
-  else items=state.data.tasks.filter(t=>!t.openEnded && t.due===ymd(day)).map(t=>({who:tPeople(t).map(person).filter(Boolean),text:t.title,sec:""}));
-  const storyOn = fresh && Array.isArray(b.fortaelling);
-  document.getElementById("kRememberHead").textContent = fresh ? "Overblik "+dayWord() : "Husk og lektier";
-  if(storyOn){
-    document.getElementById("kRemember").innerHTML = `<li class="k-story">${b.fortaelling.map(p=>`<p>${esc(p)}</p>`).join("")}</li>`;
-  } else document.getElementById("kRemember").innerHTML = items.slice(0,10).map(i=>`<li>${i.who.map(pav).join("")}<span>${esc(i.text)}${i.sec&&fresh?`<small>${esc(i.sec)}</small>`:""}</span></li>`).join("") || `<li class="k-none">Intet særligt ${dayWord()}</li>`;
-  document.getElementById("kAptTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";
-  document.getElementById("kApts").innerHTML = timelineItems(day);
+  kWeather(day,isToday,now);
+  kBrief(day);
+  const ppl=kPeopleOrder(), box=document.getElementById("kPeople");
+  box.style.setProperty("--n", ppl.length);
+  box.innerHTML=ppl.map(p=>kPersonCol(p,day,now,isToday)).join("");
+  kHusk(day);
   fitKiosk();
 }
-// En vægvisning kan ikke rulles: skrumper teksten, til alt er på skærmen (dog ikke under 14 px)
+// Fylder en kolonne stadig for meget, når teksten er så lille, den må blive, skjules de sidste linjer bag "+N flere"
+function kTrimBox(box){
+  const items=[...box.querySelectorAll(".k-trim")], more=box.querySelector(".k-more");
+  let i=items.length, n=0;
+  const counts = it => !it.classList.contains("k-head") && !it.classList.contains("k-none");
+  while(box.scrollHeight>box.clientHeight+1 && i>0){
+    const it=items[--i]; it.hidden=true; if(counts(it)) n++;
+    more.hidden=false; more.textContent=`+${n} flere`;
+  }
+  // En dagsoverskrift uden noget under sig skjules også
+  while(i>0 && items[i-1].classList.contains("k-head") && n>0){ items[--i].hidden=true; }
+}
+// En vægvisning kan ikke rulles: skrumper teksten lidt, til alt er på skærmen; resten skjules bag "+N flere"
 function fitKiosk(){
   const v=document.getElementById("kioskView"); v.style.fontSize="";
-  let fs=parseFloat(getComputedStyle(v).fontSize);
-  while(document.documentElement.scrollHeight>innerHeight+1 && fs>14){ fs-=1; v.style.fontSize=fs+"px"; }
+  const boxes=[...v.querySelectorAll(".k-person,.k-husk")];
+  const over=()=>document.documentElement.scrollHeight>innerHeight+1 || boxes.some(b=>b.scrollHeight>b.clientHeight+1);
+  // Højst 2 px mindre end normalt – én travl kolonne skal ikke gøre hele skærmen svær at læse (og aldrig under 14 px)
+  const base=parseFloat(getComputedStyle(v).fontSize), min=Math.max(14, base-2);
+  let fs=base;
+  while(over() && fs-1>=min){ fs-=1; v.style.fontSize=fs+"px"; }
+  boxes.forEach(kTrimBox);
+  kTrimBrief();
+  // Er topbjælken for bred, mister timestriben de sidste timer
+  const top=v.querySelector(".k-top"), strip=[...v.querySelectorAll(".k-wxstrip li")];
+  while(top.scrollWidth>top.clientWidth+1 && strip.length) strip.pop().remove();
 }
-window.addEventListener("resize",()=>{ if(state.kiosk) fitKiosk(); });
+let kResize=null;
+window.addEventListener("resize",()=>{ if(state.kiosk){ clearTimeout(kResize); kResize=setTimeout(renderKiosk,150); } });
 
 // ---------- Kalender: forslag og "føj til kalender"
 // Med serveren og en servicekonto oprettes aftalen direkte i familiekalenderen. Uden åbnes Google Kalender med aftalen udfyldt.

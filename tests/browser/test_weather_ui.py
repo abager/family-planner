@@ -20,7 +20,7 @@ def kiosk(make_page, site, weather=None, briefing=None):
 def test_the_kiosk_shows_todays_weather_with_advice(make_page, site):
     page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY]})
     t = page.inner_text("#kWeather")
-    assert "8–11°, regn om eftermiddagen" in t and "regntøj og gummistøvler" in t and "🌧" in t
+    assert "8–11°" in t and "regn om eftermiddagen" in t and "regntøj og gummistøvler" in t and "🌧" in t
     assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1")
 
 
@@ -31,14 +31,14 @@ def test_no_weather_line_without_weather_or_for_another_day(make_page, site):
     assert page.inner_text("#kWeather").strip() == ""
 
 
-def test_the_weather_section_is_not_repeated_in_the_kiosk_remember_list(make_page, site):
+def test_the_weather_section_is_not_repeated_in_the_kiosk_overview(make_page, site):
     b = {"generated": "2026-10-01T07:00:00+02:00", "mode": "day", "method": "offline", "headline_label": "i dag",
          "period": ["2026-10-01", "2026-10-01"],
          "afsnit": [{"titel": "Vejr", "punkter": [{"tekst": "8–11°, regn – regntøj", "hvem": [], "kilder": ["Vejr (DMI)"]}]},
                     {"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}]}
     page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY]}, briefing=b)
-    remember = page.inner_text("#kRemember")
-    assert "Gymnastiktøj" in remember and "regntøj" not in remember
+    overview = page.inner_text("#kBriefText")
+    assert "Gymnastiktøj" in overview and "regntøj" not in overview
 
 
 def open_home(make_page, site, geo=None):
@@ -132,19 +132,36 @@ def test_no_weather_means_no_icon_in_the_heading(make_page, site):
     assert page.locator("#wxHeadBtn").count() == 0 and page.is_hidden("#wxHeadPanel")
 
 
-def test_the_kiosk_folds_out_the_hours_on_touch(make_page, site):
+def test_the_kiosk_shows_the_temperature_now_and_a_strip_of_the_next_hours(make_page, site):
     page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY_H]})
-    assert page.is_hidden("#kHours") and "time for time" in page.inner_text("#kWeather")
-    page.click("#kWxBtn")
-    assert page.is_visible("#kHours") and page.locator("#kHours .wxh li").count() == 14
-    assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1")     # stadig ingen rulning
-    page.click("#kWxBtn")
-    assert page.is_hidden("#kHours")
+    now = page.inner_text("#kWeather .k-wxnow")
+    assert "8°" in now and "8–11° i dag" in now                        # kl. 9.30 i København: timen nu og dagens laveste–højeste
+    hours = page.eval_on_selector_all("#kWeather .k-wxstrip .t", "ts => ts.map(t => t.textContent)")
+    assert 1 <= len(hours) <= 8 and hours[0] == "10"
+    assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1")
 
 
-def test_the_kiosk_without_hours_is_plain_text_as_before(make_page, site):
+def test_a_tap_on_the_weather_shows_every_hour_in_the_details(make_page, site):
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY_H]})
+    page.click("#kWxBtn")
+    assert page.evaluate("detail.open") and page.inner_text("#dTitle") == "Vejret i dag"
+    assert page.locator("#dBody .wxh li").count() == 14                # resten af dagen: kl. 9–22
+
+
+def test_the_kiosk_without_hours_shows_the_day(make_page, site):
     page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY]})
-    assert page.locator("#kWxBtn").count() == 0 and "8–11°" in page.inner_text("#kWeather")
+    assert page.locator("#kWeather .k-wxstrip").count() == 0 and "8–11°" in page.inner_text("#kWeather")
+
+
+def test_after_the_evening_hour_the_kiosk_shows_tomorrows_weather(make_page, site):
+    page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, 19, 0), fixed=True, goto=False)
+    page.goto(site.url + "/index.html")
+    fake.use_demo(page, weather={"kilde": "MET Norway", "dage": [DAY_H, TOMORROW]})
+    page.goto(site.url + "/index.html?kiosk=1")
+    page.wait_for_timeout(600)
+    t = page.inner_text("#kWeather")
+    assert "☀️" in t and "6–13°" in t
+    assert page.eval_on_selector_all("#kWeather .k-wxstrip .t", "ts => ts.map(t => t.textContent)")[0] == "07"
 
 
 def test_the_status_line_warns_when_weather_is_on_but_home_is_missing(make_page, site):
@@ -159,30 +176,23 @@ def test_the_status_line_warns_when_weather_is_on_but_home_is_missing(make_page,
     assert page.locator("#homeWarn").count() == 0
 
 
-def test_the_kiosk_hours_close_by_themselves_after_30_seconds(make_page, site):
+def test_the_details_close_by_themselves_after_10_seconds(make_page, site):
     page, fake, _ = make_page(now=NOW, goto=False)                      # uret kører, så ventetiden kan spoles frem
     page.goto(site.url + "/index.html")
     fake.use_demo(page, weather={"kilde": "MET Norway", "dage": [DAY_H]})
     page.goto(site.url + "/index.html?kiosk=1")
     page.clock.run_for(1000)
     page.click("#kWxBtn")
-    page.clock.run_for(29000)
-    assert page.is_visible("#kHours")
+    page.clock.run_for(9000)
+    assert page.evaluate("detail.open")
     page.clock.run_for(2000)
-    assert page.is_hidden("#kHours") and "time for time" in page.inner_text("#kWeather")
+    assert not page.evaluate("detail.open")
 
 
-def test_closing_by_hand_and_opening_again_restarts_the_30_seconds(make_page, site):
-    page, fake, _ = make_page(now=NOW, goto=False)
-    page.goto(site.url + "/index.html")
-    fake.use_demo(page, weather={"kilde": "MET Norway", "dage": [DAY_H]})
-    page.goto(site.url + "/index.html?kiosk=1")
-    page.clock.run_for(1000)
+def test_a_tap_outside_the_details_closes_them(make_page, site):
+    page, _ = kiosk(make_page, site, weather={"kilde": "MET Norway", "dage": [DAY_H]})
     page.click("#kWxBtn")
-    page.clock.run_for(20000)
-    page.click("#kWxBtn")                                               # luk
-    page.click("#kWxBtn")                                               # åbn igen: nye 30 sekunder
-    page.clock.run_for(20000)
-    assert page.is_visible("#kHours")
-    page.clock.run_for(11000)
-    assert page.is_hidden("#kHours")
+    assert page.evaluate("detail.open")
+    page.mouse.click(5, 5)
+    page.wait_for_timeout(200)
+    assert not page.evaluate("detail.open")

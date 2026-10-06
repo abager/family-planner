@@ -46,7 +46,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 |---|---|---|
 | **Aftale** | A calendar event | aktivitet (in UI text), begivenhed |
 | **Lektie / Husk / Skal gøres** | The three task kinds (`kind`: lektie, husk, handling) | opgave as a kind |
-| **Husk og lektier** | The list of things to do (today view: focus day only, plus daily, open-ended and periods; kiosk fallback) | Husk og frister |
+| **Husk og lektier** | The list of things to do (today view: focus day only, plus daily, open-ended and periods; the kiosk's column is just "Husk") | Husk og frister |
 | **Frist** | Only a due *date* ("frist torsdag"), never a category | |
 | **Praktisk info** | Deviations and practical info: omlagt dag, vikar, lukkedag, skolefoto (briefing section too) | Vigtig info, Særligt |
 | **Feed** | The tab with Aula posts and albums; filters *Alle · Opslag · Billeder* | Alt |
@@ -232,20 +232,45 @@ Planned restructuring (do in small steps, tests green after each):
 - `family.json` → `weather.dage`: coarse per-day summaries (whole degrees, rain class, part of day, wind class,
   frost, advice). Only days whose daytime (07–19) is covered. Coarse on purpose so the briefing fingerprint (and
   the AI quota) doesn't move with tiny forecast changes. The briefing gets them as `vejr` with `V` refs and a
-  "Vejr" section; the kiosk shows `#kWeather` and leaves "Vejr" out of its remember list.
+  "Vejr" section; the kiosk shows `#kWeather` and leaves "Vejr" out of its overview band.
 - Each day also carries `timer`: hours 06–22 (`kl`, `ikon`, `temp`, `regn` mm, `vind` m/s). For display only –
   `briefing.build_digest` picks its weather fields one by one and must never include `timer` (it would change the
   fingerprint every hour). Hour icons use a simple NOAA sun-elevation check (`sun_up`) so night hours get 🌙/☁
   instead of ☀. Emoji carry U+FE0F so Windows/Android draw them in colour.
 - UI: the date heading (`#wxHead`) shows one chip (icon + min–max; tomorrow after the daytime is over) that folds
-  out `#wxHeadPanel` hour by hour; the kiosk's `#kWeather` is a button that folds out `#kHours` (touch screen).
-  Open/closed lives in `state.wxOpen` and survives re-renders. The kiosk panel closes itself after 30 s
-  (`KWX_CLOSE_MS`; opening again restarts the timer) so the rest of the screen gets its space back. The strip scrolls sideways, never the page.
+  out `#wxHeadPanel` hour by hour (open/closed in `state.wxOpen.head`). The kiosk's `#kWeather` shows the hour now,
+  min–max, advice and a strip of the next ≤8 hours (tomorrow: odd hours from 07); a tap opens the full hours in the
+  detail dialog. The strip loses hours from the end if the top bar is too wide. The strip scrolls sideways, never the page.
 - Logging: `for_family` writes exactly one INFO line per run (off / home not set / no usable forecast / "N dage
   fra MET Norway (prognose hentet kl. HH:MM)"). Never coordinates in logs.
 - `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the status line shows
   a warning button ("Hjem for vejret er ikke sat"); the action itself is "Sæt hjem for vejret" in the menu.
 - Weather is an extra: any failure → no weather, never an error banner. Tests use a simulated MET Norway only.
+
+## Kiosk (`?kiosk=1`)
+
+User decisions (Oct 2026): one dark screen designed for an iPad in landscape (portrait just gets the same layout,
+denser – no separate design). Only the kiosk is dark (`body.kiosk` redefines the colour tokens); the rest of the app
+follows the device.
+
+- Layout (`#kioskView`, grid rows): top bar (clock, day, status, weather, exit) → `#kBrief` overview band in full
+  width → `.k-body`: `#kPeople` (one `.k-person` column per person: children, then adults, then anyone else; ~78 %
+  of the width) + `#kHusk` (narrow).
+- Columns: all-day events, then lessons and timed events in time order; family events (`people: ["family"]`) in every
+  column; week-plan info (not lessons, not plans that produced tasks) for children. Tasks are only in `#kHusk`
+  (no duplicates). The current lesson is `.now`, finished ones `.past`.
+- `#kHusk`: focus day + 2 days. A task is listed once, on the first day `kTaskActive` (same rule as the today
+  view's "Husk og lektier") says it applies.
+- Overview: `fortaelling` joined into one text, max 4 lines; `kTrimBrief` cuts at a sentence boundary (split before
+  an upper-case letter, so "kl. 17" is safe) with " …", or CSS line-clamps if even one sentence is too long. Without
+  AI the rule points flow inline; without a fresh briefing it says so.
+- Everything switches with `evening_hour` (focus day), incl. weather and the husk window.
+- Fit: `fitKiosk` shrinks the font at most 2 px below the base (never under 14 px), then `kTrimBox` hides trailing
+  rows behind "+N flere" (headings without rows are hidden too; headings and "Intet" don't count). Re-rendering on
+  resize re-does the trimming.
+- Taps: every tappable element has `data-k`; `kItems` maps it to a function that opens the `#detail` dialog via
+  `kDetail` (closes after `K_DETAIL_MS` = 10 s or on a backdrop tap). Details only show what's already in the app –
+  never a task's message text. `Esc` closes an open dialog first, then leaves the kiosk.
 
 ## Calendar and time conventions
 
