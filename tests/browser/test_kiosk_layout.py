@@ -63,16 +63,16 @@ def test_after_the_evening_hour_the_remember_column_starts_tomorrow(make_page):
 
 
 def test_too_much_ends_with_more_and_the_full_list_on_a_tap(make_page):
-    page = open_kiosk(make_page, add="""for(let i=0;i<18;i++){ state.data.events.push(E('s'+i,'Ekstra aftale '+i,at(15,i*3),at(16),['hugo']));
+    page = open_kiosk(make_page, add="""for(let i=0;i<30;i++){ state.data.events.push(E('s'+i,'Ekstra aftale '+i,at(15,i),at(16),['hugo']));
         state.data.tasks.push(T('t'+i,'Ekstra ting '+i,k,'carla')); }""")
     assert page.evaluate("document.documentElement.scrollHeight<=innerHeight+1")
     assert page.evaluate("[...document.querySelectorAll('.k-person,.k-husk')].every(b=>b.scrollHeight<=b.clientHeight+1)")
     more = page.locator(".k-person[data-person=hugo] .k-more")
     assert more.is_visible() and more.inner_text().startswith("+")
     assert page.locator("#kHusk .k-more").is_visible()
-    assert page.evaluate("parseFloat(getComputedStyle(kioskView).fontSize)") >= 14
+    assert page.evaluate("parseFloat(getComputedStyle(kioskView).fontSize)") >= 12
     more.click()
-    assert page.evaluate("detail.open") and page.locator("#dBody li", has_text="Ekstra aftale 17").count() == 1
+    assert page.evaluate("detail.open") and page.locator("#dBody li", has_text="Ekstra aftale 29").count() == 1
 
 
 def test_a_task_detail_never_shows_message_text(make_page):
@@ -93,9 +93,66 @@ def test_escape_closes_the_details_first_and_then_the_kiosk(make_page):
     assert not page.evaluate("state.kiosk")
 
 
-def test_the_kiosk_is_dark_even_when_the_device_is_light(make_page):
+WX = "state.data.weather={kilde:'MET Norway',dage:[{dato:k,min:8,max:11,ikon:%r,tekst:'8–11°',raad:[],timer:[]}]}"
+
+
+def sky(page):
+    return page.evaluate("document.body.dataset.kwx || null")
+
+
+def test_by_day_the_kiosk_is_light_and_the_background_is_the_days_weather(make_page):
+    for icon, want in (("☀️", "sol"), ("⛅", "skyet"), ("☁️", "overskyet"), ("🌧️", "regn"), ("❄️", "frost"), ("⛈️", "regn")):
+        page = open_kiosk(make_page, add=WX % icon)
+        assert sky(page) == want, icon
+        assert page.evaluate("document.body.classList.contains('k-night')") is False
+        assert "gradient" in page.evaluate("getComputedStyle(document.body).backgroundImage")
+        page.close()
+
+
+def test_without_weather_the_day_background_is_sage(make_page):
+    page = open_kiosk(make_page, add="state.data.weather=null")
+    assert sky(page) is None
+    assert page.evaluate("getComputedStyle(document.body).getPropertyValue('--sky1').trim()").upper() == "#DCE5D3"
+
+
+def test_the_background_follows_the_focus_day_after_the_evening_hour(make_page):
+    page = open_kiosk(make_page, now=at(18, 30), add="""state.data.weather={kilde:'MET Norway',dage:[
+        {dato:k,min:8,max:11,ikon:'☀️',tekst:'sol',raad:[],timer:[]},{dato:k1,min:6,max:9,ikon:'🌧️',tekst:'regn',raad:[],timer:[]}]}""")
+    assert sky(page) == "regn"                                              # efter kl. 18 handler skærmen om i morgen
+
+
+def test_from_21_to_6_the_kiosk_is_dark(make_page):
+    for h, night in ((20, False), (21, True), (23, True), (5, True), (6, False)):
+        page = open_kiosk(make_page, now=at(h, 30), add=WX % "☀️")
+        assert page.evaluate("document.body.classList.contains('k-night')") is night, h
+        bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+        assert (bg == "rgb(15, 20, 29)") is night, h
+        page.close()
+
+
+def _lum(c):
+    c = [int(c[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def _contrast(a, b):
+    a, b = _lum(a), _lum(b)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
+def test_text_keeps_wcag_aa_contrast_on_every_sky(make_page):
     page = open_kiosk(make_page)
-    assert page.evaluate("matchMedia('(prefers-color-scheme: dark)').matches") is False
-    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(15, 20, 29)"
+    for w in (None, "sol", "skyet", "overskyet", "regn", "frost"):
+        v = page.evaluate("""(w)=>{ if(w) document.body.dataset.kwx=w; else delete document.body.dataset.kwx;
+            const cs=getComputedStyle(document.body), g=n=>cs.getPropertyValue(n).trim();
+            return {ink:g('--ink'), muted:g('--muted'), sky1:g('--sky1'), sky3:g('--sky3')}; }""", w)
+        for bg in (v["sky1"], v["sky3"]):
+            assert _contrast(v["ink"], bg) >= 7, (w, v)
+            assert _contrast(v["muted"], bg) >= 4.5, (w, v)
+
+
+def test_leaving_the_kiosk_drops_its_theme(make_page):
+    page = open_kiosk(make_page, now=at(22), add=WX % "🌧️")
     page.keyboard.press("Escape")
-    assert page.evaluate("getComputedStyle(document.body).backgroundColor") != "rgb(15, 20, 29)"   # resten af appen følger enheden
+    assert sky(page) is None and page.evaluate("document.body.classList.contains('k-night')") is False

@@ -249,9 +249,16 @@ Planned restructuring (do in small steps, tests green after each):
 
 ## Kiosk (`?kiosk=1`)
 
-User decisions (Oct 2026): one dark screen designed for an iPad in landscape (portrait just gets the same layout,
-denser – no separate design). Only the kiosk is dark (`body.kiosk` redefines the colour tokens); the rest of the app
-follows the device.
+User decisions (Oct 2026): one screen designed for an iPad in landscape (portrait just gets the same layout,
+denser – no separate design). Small, light type (people stand close to it), thin rules instead of filled cards, the
+system font (San Francisco on iPad; nothing to load, so the shared font `<link>` is untouched).
+
+- Theme (`kTheme`, every render): by day the kiosk is light and `body[data-kwx]` is the sky of the focus day's
+  weather – mapped from the day icon (`K_SKY`: sol, skyet, overskyet, regn, frost; thunder → regn, snow → frost,
+  fog → overskyet), fixed all day, follows the focus day (so tomorrow's after `evening_hour`). No weather: sage.
+  `K_NIGHT_FROM`–`K_NIGHT_TO` (21–06) adds `body.k-night`: the dark kiosk colours, no sky. Only the kiosk changes
+  colours (`body.kiosk` tokens); the rest of the app follows the device. Every sky keeps `--ink` ≥ 7:1 and
+  `--muted` ≥ 4.5:1 against its darkest and lightest point (tested).
 
 - Layout (`#kioskView`, grid rows): top bar (clock, day, status, weather, exit) → `#kBrief` overview band in full
   width → `.k-body`: `#kPeople` (one `.k-person` column per person: children, then adults, then anyone else; ~78 %

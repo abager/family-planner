@@ -291,7 +291,7 @@ Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 18 om i 
 
 ## Kioskvisning
 
-En rolig vægvisning i mørkt tema til en iPad på langs i køkkenet. Start den med **Kioskvisning** under **tandhjulet** (Indstillinger) øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
+En rolig, lys vægvisning til en iPad på langs i køkkenet. Baggrunden er himlen for dagens vejr (sol, let skyet, overskyet, regn eller frost; salviegrøn uden vejr), og kl. 21–06 bliver skærmen mørk, så den ikke blænder. Skriften er iPad'ens egen systemskrift. Start den med **Kioskvisning** under **tandhjulet** (Indstillinger) øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
 
 - **Øverst:** ur, dato og I dag / I morgen, eventuelle advarsler og vejret: temperaturen nu, dagens laveste–højeste, råd og de næste timer.
 - **Overblikket** i fuld bredde: familieassistentens fortælling, højst fire linjer. Er den længere, afkortes den ved en sætning med "…".

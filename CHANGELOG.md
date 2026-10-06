@@ -13,7 +13,9 @@ All notable changes to this project. Versions are git tags. The format is loosel
   side cards ("Overblik"/"Husk og lektier" and "Dagens aftaler") and the fold-out weather hours.
 - Tapping a lesson, event, task, the weather or the overview opens details that close after 10 seconds or on a tap
   outside. Columns that don't fit end with "+N flere" (the font shrinks at most 2 px first).
-- Only the kiosk is dark; the rest of the app is unchanged.
+- Kiosk look: light by day with a background that is the sky of the day's weather (sun, partly cloudy, overcast,
+  rain, frost; sage without weather), dark 21–06 so it doesn't glare. Smaller, lighter type in the iPad's system
+  font; thin rules instead of filled cards. Text keeps WCAG AA contrast on every sky. The rest of the app is unchanged.
 
 ### Fixed (kiosk)
 - Kiosk tests expected the clock as `10:20`; the app shows `10.20` (the convention), so two tests failed.

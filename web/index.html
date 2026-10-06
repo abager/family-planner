@@ -398,66 +398,97 @@ body.mode-mail #wxHeadPanel{display:none}
 .wxh .r{font-size:.72em;color:var(--accent);min-height:1.2em;white-space:nowrap}
 .homeinfo{color:var(--muted);margin:8px 0 0}
 /* Kioskvisning: én mørk skærm til en iPad på langs – overblikket øverst, skemaet pr. person, husk i siden.
-   Ingen rulning: teksten skrumper til alt er der, og lister, der stadig er for lange, afsluttes med "+N flere". */
+   Let og luftigt: lille skrift (man står tæt på), tynde vægte, ingen fyldte kort – kun tynde skillelinjer.
+   Ingen rulning: teksten skrumper lidt, og lister, der stadig er for lange, afsluttes med "+N flere". */
 body.kiosk{overflow:hidden;color-scheme:dark;
-  --paper:#0F141D; --surface:#171F2C; --ink:#E8EDF5; --muted:#97A3B6; --line:#263143; --today:#1F2C44; --accent:#8DB2F2}
+  --paper:#0F141D; --surface:#141B27; --ink:#E3E8F0; --muted:#8B97AA; --line:#222C3B; --today:#1F2C44; --accent:#8DB2F2}
 body.kiosk header,body.kiosk #wxHeadPanel,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #aulaView{display:none!important}
-body.kiosk .wrap{max-width:none;box-sizing:border-box;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;padding:clamp(10px,1.8vmin,26px)}
+body.kiosk .wrap{max-width:none;box-sizing:border-box;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;padding:clamp(12px,2.2vmin,32px) clamp(14px,2.6vmin,40px)}
 body.kiosk main{flex:1;min-height:0;display:flex;flex-direction:column}
-#kioskView{--kfs:clamp(14px,2.3vmin,32px);font-size:var(--kfs);flex:1;min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:1.3vmin}
-.k-top{display:flex;align-items:center;gap:2.2vmin;min-width:0}
-.k-clock{font:800 3em/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.k-date{line-height:1.2;white-space:nowrap}
-.k-day{font:800 1.35em/1.1 var(--display)}
+body.kiosk .aibanner{background:none;border:0;border-left:2px solid #B8892E;border-radius:0;color:#D9C89A;font-size:13px;padding:2px 0 2px 10px;margin:0 0 10px}
+body.kiosk .aibanner b{font-weight:400;color:#EBD9A8}
+#kioskView{--kfs:clamp(12px,1.75vmin,24px);font-size:var(--kfs);flex:1;min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:2vmin;font-weight:400}
+.k-top{display:flex;align-items:center;gap:2.6vmin;min-width:0}
+.k-clock{font:500 3.2em/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.k-date{line-height:1.25;white-space:nowrap}
+.k-day{font:500 1.25em/1.15 var(--display)}
 #kDate{color:var(--muted)}
-.k-status{margin-left:auto;font-size:.75em;color:var(--muted);text-align:right;white-space:nowrap}
-.k-status .bad{color:#FFA285;font-weight:700}
+.k-status{margin-left:auto;font-size:.8em;color:var(--muted);text-align:right;white-space:nowrap}
+.k-status .bad{color:#F2A08A}
 .k-weather{min-width:0}
 .k-weather:empty{display:none}
-.k-wx{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:1em;padding:.35em .8em;border-radius:.8em;border:1px solid var(--line);background:var(--surface)}
-.k-wx:focus-visible,.k-brief:focus-visible,.k-row:focus-visible,.k-more:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
-.k-wxnow{display:flex;align-items:center;gap:.45em}
-.k-wxnow .i{font-size:1.8em;line-height:1}
-.k-wxnow b{font:800 1.6em/1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
-.k-wxnow small{display:block;color:var(--muted);font-size:.72em;line-height:1.3;white-space:nowrap}
-.k-wxstrip{display:flex;gap:.1em;list-style:none;margin:0;padding:0 0 0 .9em;border-left:1px solid var(--line)}
-.k-wxstrip li{display:grid;justify-items:center;min-width:2.4em;font-size:.8em;line-height:1.2}
+.k-wx{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:1.2em;padding:.2em 0}
+.k-wx:focus-visible,.k-brief:focus-visible,.k-row:focus-visible,.k-more:focus-visible{outline:2px solid #6F9BE8;outline-offset:2px;border-radius:4px}
+.k-wxnow{display:flex;align-items:center;gap:.5em}
+.k-wxnow .i{font-size:1.9em;line-height:1}
+.k-wxnow b{font:500 2em/1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
+.k-wxnow small{display:block;color:var(--muted);font-size:.85em;line-height:1.35;white-space:nowrap}
+.k-wxstrip{display:flex;gap:.2em;list-style:none;margin:0;padding:0 0 0 1.1em;border-left:1px solid var(--line)}
+.k-wxstrip li{display:grid;justify-items:center;min-width:2.5em;font-size:.85em;line-height:1.3}
 .k-wxstrip .t{color:var(--muted);font-variant-numeric:tabular-nums}
-.k-wxstrip .i{font-size:1.25em}
-.k-wxstrip .c{font-weight:700;font-variant-numeric:tabular-nums}
-.k-wxstrip .r{color:var(--accent);font-size:.78em;min-height:1.2em;white-space:nowrap}
-.k-exit{all:unset;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;border:1px solid var(--line);border-radius:999px;padding:.35em 1em;font:700 .8em var(--body);background:var(--surface)}
+.k-wxstrip .i{font-size:1.2em}
+.k-wxstrip .c{font-variant-numeric:tabular-nums}
+.k-wxstrip .r{color:var(--accent);font-size:.8em;min-height:1.2em;white-space:nowrap}
+.k-exit{all:unset;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;border:1px solid var(--line);border-radius:999px;padding:.35em 1em;font:400 .85em var(--body)}
 body.k-showexit .k-exit{opacity:1;pointer-events:auto}
-.k-brief{all:unset;box-sizing:border-box;cursor:pointer;display:block;background:var(--surface);border:1px solid var(--line);border-radius:.9em;padding:.6em 1em .7em}
-.k-brief h2{font:700 .78em/1.2 var(--body);color:var(--muted);margin:0 0 .2em}
-.k-brieftext{font-size:1.1em;line-height:1.45;max-height:calc(4 * 1.45em);overflow:hidden}
+.k-brief{all:unset;box-sizing:border-box;cursor:pointer;display:block;padding:0 0 1.6vmin;border-bottom:1px solid var(--line)}
+.k-brief h2{font:400 .85em/1.2 var(--body);color:var(--muted);margin:0 0 .35em}
+.k-brieftext{font-size:1.15em;line-height:1.5;max-height:calc(4 * 1.5em);overflow:hidden;max-width:none;color:var(--ink)}
 .k-brieftext.k-clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4}
-.k-brieftext .k-pt{margin-right:1em}
-.k-brieftext .pav{width:1.3em;height:1.3em;font-size:.75em;vertical-align:-.2em;margin-right:.3em}
-.k-body{display:grid;grid-template-columns:minmax(0,3.5fr) minmax(0,1fr);gap:1.3vmin;min-height:0}
-.k-people{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:1vmin;min-height:0}
-.k-person,.k-husk{background:var(--surface);border:1px solid var(--line);border-radius:.9em;overflow:hidden;min-height:0;display:flex;flex-direction:column}
-.k-person{border-top:.3em solid var(--c);padding:.55em .5em .45em}
-.k-husk{padding:.55em .6em .45em}
-.k-person h3,.k-husk h2{display:flex;align-items:center;gap:.4em;font:800 1.1em/1.15 var(--display);margin:0 .2em}
-.k-person .pav{width:1.5em;height:1.5em;font-size:.82em}
-.k-span{color:var(--muted);font-size:.8em;margin:.15em .3em 0;font-variant-numeric:tabular-nums}
-.k-rows{list-style:none;margin:.4em 0 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:.18em}
-.k-row{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:.2em .35em;border-radius:.45em;line-height:1.25}
-.k-row time{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.86em;margin-right:.15em}
-.k-row .ln{display:block;max-height:2.5em;overflow:hidden;overflow-wrap:break-word}
-.k-row.past,.k-row.past time{color:#68758A}
-.k-row.now{background:color-mix(in srgb,var(--c) 30%,transparent);font-weight:700}
+.k-brieftext .k-pt{margin-right:1.2em}
+.k-brieftext .pav{width:1.2em;height:1.2em;font-size:.7em;vertical-align:-.15em;margin-right:.35em}
+.k-body{display:grid;grid-template-columns:minmax(0,3.6fr) minmax(0,1fr);gap:0;min-height:0}
+.k-people{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:0;min-height:0}
+.k-person,.k-husk{overflow:hidden;min-height:0;display:flex;flex-direction:column;padding:0 1.1em;border-left:1px solid var(--line)}
+.k-person:first-child{padding-left:0;border-left:0}
+.k-husk{padding-right:0}
+.k-person h3,.k-husk h2{display:flex;align-items:center;gap:.45em;font:500 1.15em/1.2 var(--display);margin:0}
+.k-person h3{color:color-mix(in srgb,var(--c) 55%,var(--ink))}
+.k-person .pav{width:1.35em;height:1.35em;font-size:.8em}
+.k-span{color:var(--muted);font-size:.85em;margin:.2em 0 0;font-variant-numeric:tabular-nums}
+.k-rows{list-style:none;margin:.9em 0 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:.05em}
+.k-row{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:.28em 0 .28em .55em;border-left:2px solid transparent;line-height:1.35}
+.k-row time{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:.2em}
+.k-row .ln{display:block;max-height:2.7em;overflow:hidden;overflow-wrap:break-word}
+.k-row.past,.k-row.past time{color:var(--muted)}
+.k-row.now{border-left-color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
 .k-row.now time{color:var(--ink)}
-.k-row.ev{background:var(--paper)}
-.k-row.plan{color:var(--muted);font-size:.9em}
-.k-row .sub{color:#FFB892;font-size:.78em;font-weight:700;margin-left:.3em}
-.k-row .pav{width:1.25em;height:1.25em;font-size:.7em;margin-right:.25em;vertical-align:-.15em}
-.k-hday{font-weight:700;font-size:.82em;color:var(--muted);margin:.55em .3em .1em}
-.k-hday:first-child{margin-top:.2em}
-.k-none{color:var(--muted);font-style:italic;font-size:.9em;padding:.2em .3em}
-.k-more{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.85em;padding:.25em .3em;margin-top:auto}
+.k-row.ev{border-left-color:color-mix(in srgb,var(--c) 60%,transparent)}
+.k-row.plan{color:var(--muted);font-size:.92em}
+.k-row .sub{color:#F2B08E;font-size:.85em;margin-left:.35em}
+.k-row .pav{width:1.15em;height:1.15em;font-size:.65em;margin-right:.35em;vertical-align:-.12em}
+.k-husk .k-row{padding-left:0}
+.k-hday{font-size:.85em;color:var(--muted);margin:1em 0 .15em}
+.k-hday:first-child{margin-top:.9em}
+.k-none{color:var(--muted);font-size:.92em;padding:.28em 0 .28em .55em}
+.k-husk .k-none{padding-left:0}
+.k-more{all:unset;cursor:pointer;color:var(--accent);font-size:.88em;padding:.4em 0 0 .55em;margin-top:auto}
 .k-more[hidden]{display:none}
+/* Kioskens skrift: iPad'ens egen systemskrift (San Francisco) – skal ikke hentes, virker offline */
+#kioskView,#kioskView .k-clock,#kioskView .k-day,#kioskView .k-person h3,#kioskView .k-husk h2,#kioskView .k-wxnow b{font-family:-apple-system,"SF Pro Text",system-ui,"Segoe UI",sans-serif}
+#kioskView .k-clock{font-weight:300;font-size:3.5em}
+#kioskView .k-day,#kioskView .k-person h3,#kioskView .k-husk h2{font-weight:600}
+#kioskView .k-person h3,#kioskView .k-husk h2{font-size:1.05em}
+.k-brieftext{font-size:1.2em;line-height:1.5;max-height:calc(4 * 1.5em)}
+.k-row.now{font-weight:600}
+/* Dagtema (kl. 6–21): lyst, og baggrunden er himlen for fokusdagens vejr (body[data-kwx], sat i renderKiosk).
+   Uden vejr: salviegrøn. Tekstfarverne holder mindst 4,5:1 (WCAG AA) også øverst, hvor himlen er mørkest.
+   Om natten (body.k-night) gælder kioskens mørke farver ovenfor. */
+body.kiosk:not(.k-night){color-scheme:light;min-height:100dvh;
+  --sky1:#DCE5D3; --sky2:#DCE5D3; --sky3:#DCE5D3; --ink:#1F2B22; --muted:#566558; --line:#C3CFB8;
+  --paper:var(--sky2); --surface:#EEF2E8; --accent:#2E5A3A; --know:rgba(255,255,255,.72); --warn:#8E3519; --rain:#2F5E8C;
+  background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 60%,var(--sky3) 100%)}
+body.kiosk[data-kwx="sol"]:not(.k-night){--sky1:#F6E3A8;--sky2:#FAF0D2;--sky3:#FCF7EA;--ink:#2B2416;--muted:#706144;--line:#E3D3A6}
+body.kiosk[data-kwx="skyet"]:not(.k-night){--sky1:#CFE1EE;--sky2:#E6EFF1;--sky3:#F1F4F1;--ink:#1D2A33;--muted:#51616E;--line:#C3D3DD}
+body.kiosk[data-kwx="overskyet"]:not(.k-night){--sky1:#D3D7DB;--sky2:#E3E5E7;--sky3:#ECEDEE;--ink:#23272B;--muted:#565B60;--line:#C7CBCF}
+body.kiosk[data-kwx="regn"]:not(.k-night){--sky1:#AFC0CE;--sky2:#CCD7E0;--sky3:#DDE4EA;--ink:#152230;--muted:#3D4C5A;--line:#A5B5C3;--rain:#1F4E7A}
+body.kiosk[data-kwx="frost"]:not(.k-night){--sky1:#DCE6F5;--sky2:#ECF1F9;--sky3:#F6F8FC;--ink:#1B2341;--muted:#596381;--line:#CFD8E8}
+body.kiosk:not(.k-night) .aibanner{color:#5A4300;border-left-color:#B8892E}
+body.kiosk:not(.k-night) .aibanner b{color:#5A4300}
+body.kiosk:not(.k-night) .k-person h3{color:var(--ink)}
+body.kiosk:not(.k-night) .k-row.now{background:var(--know)}
+body.kiosk:not(.k-night) .k-row .sub,body.kiosk:not(.k-night) .k-status .bad{color:var(--warn)}
+body.kiosk:not(.k-night) .k-wxstrip .r{color:var(--rain)}
 body.kiosk dialog .k-dl{list-style:none;margin:0;padding:0}
 body.kiosk dialog .k-dl li{padding:.35em 0;border-top:1px solid var(--line)}
 body.kiosk dialog .k-dl li:first-child{border-top:0}
@@ -1829,7 +1860,7 @@ function enterKiosk(){
   render();
 }
 function exitKiosk(){
-  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit");
+  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit","k-night"); delete document.body.dataset.kwx;
   try{ history.replaceState(null,"",location.pathname); }catch{}
   clearInterval(kioskTick); clearInterval(kioskLoad); try{ wakeLock?.release(); }catch{} wakeLock=null;
   render();
@@ -1981,9 +2012,19 @@ function kWeather(day,isToday,now){
     ${strip.length?`<ol class="k-wxstrip" aria-hidden="true">${strip.map(h=>`<li><span class="t">${pad(h.kl)}</span><span class="i">${esc(h.ikon)}</span><span class="c">${h.temp}°</span><span class="r">${h.regn>=0.1?`${wxMm(h.regn)} mm`:""}</span></li>`).join("")}</ol>`:""}</button>`;
 }
 
+// Baggrunden: himlen for fokusdagens samlede vejr (dagsikonet fra MET Norway; fast hele dagen). Mørkt kl. 21–06.
+const K_NIGHT_FROM=21, K_NIGHT_TO=6;
+const K_SKY={"☀":"sol","🌤":"sol","⛅":"skyet","☁":"overskyet","🌫":"overskyet","🌧":"regn","⛈":"regn","❄":"frost","🌨":"frost"};
+function kTheme(now,day){
+  const h=now.getHours(), b=document.body;
+  b.classList.toggle("k-night", h>=K_NIGHT_FROM || h<K_NIGHT_TO);
+  const sky=K_SKY[String(weatherFor(day)?.ikon||"").replace(/\uFE0F/g,"")];
+  if(sky) b.dataset.kwx=sky; else delete b.dataset.kwx;
+}
 function renderKiosk(){
   const now=new Date(), day=focusDay(), off=dayOffset(), isToday=off===0;
   kItems=new Map();
+  kTheme(now,day);
   document.getElementById("kClock").textContent=`${pad(now.getHours())}.${pad(now.getMinutes())}`;
   document.getElementById("kDay").textContent=isToday?"I dag":"I morgen";
   document.getElementById("kDate").textContent=`${DAYS[day.getDay()]} ${day.getDate()}. ${MONTHS[day.getMonth()]}`;
@@ -2017,8 +2058,8 @@ function fitKiosk(){
   const v=document.getElementById("kioskView"); v.style.fontSize="";
   const boxes=[...v.querySelectorAll(".k-person,.k-husk")];
   const over=()=>document.documentElement.scrollHeight>innerHeight+1 || boxes.some(b=>b.scrollHeight>b.clientHeight+1);
-  // Højst 2 px mindre end normalt – én travl kolonne skal ikke gøre hele skærmen svær at læse (og aldrig under 14 px)
-  const base=parseFloat(getComputedStyle(v).fontSize), min=Math.max(14, base-2);
+  // Højst 2 px mindre end normalt – én travl kolonne skal ikke gøre hele skærmen svær at læse (og aldrig under 12 px)
+  const base=parseFloat(getComputedStyle(v).fontSize), min=Math.max(12, base-2);
   let fs=base;
   while(over() && fs-1>=min){ fs-=1; v.style.fontSize=fs+"px"; }
   boxes.forEach(kTrimBox);

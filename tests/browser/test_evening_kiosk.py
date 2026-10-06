@@ -98,7 +98,7 @@ def test_kiosk_button_starts_a_clean_full_screen_view(make_page):
     k = kiosk(page)
     assert k["on"] and k["url"] == "?kiosk=1" and k["hdr"] == "none" and k["shown"] and k["people"] == 5
     assert k["clock"] == "10.20" and k["day"] == "I dag" and k["date"] == "torsdag 1. oktober" and k["brief"] == "Overblik i dag"
-    assert k["ox"] == 0 and k["oy"] == 0 and k["fs"] >= 16
+    assert k["ox"] == 0 and k["oy"] == 0 and k["fs"] >= 12
     assert page.locator("#v-today:visible").count() == 0                         # ingen menu, ingen knapper at komme til at trykke på
 
 
