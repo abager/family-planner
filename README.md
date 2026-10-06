@@ -64,7 +64,7 @@ Meebook-ugeplanen analyseres sætning for sætning og hvert punkt får en katego
 
 "I dag" viser børnenes skema for dagen øverst. Lektionerne kommer fra Aulas skemabegivenheder, og hvis skolen i stedet skriver skemaet som tekst i en aftale ("08.00-08.45 Dansk"), hentes aftalens beskrivelse og skemaet læses ud af den. Hver lektion vises med start og slut (fx 08.00–08.45). Nuværende lektion markeres, overståede får et ✓, og vikarer vises.
 
-"Husk og lektier" i "I dag" viser kun det, der har frist på dagen (efter kl. 17: i morgen, ligesom skemaet). Ting med frist senere på ugen står i "Ugen" på fristdagen. Undtagelser, der bliver stående: "hver dag"-opgaver, opgaver uden frist ("snarest", en uge fra beskeden) og opgaver med en periode (fx "Afleveres uge 43"), som står hver dag fra startdatoen til fristen. "Kommende frister" i overblikket øverst nævner stadig de kommende frister.
+"Husk og lektier" i "I dag" viser kun det, der har frist på dagen (efter kl. 18: i morgen, ligesom skemaet). Ting med frist senere på ugen står i "Ugen" på fristdagen. Undtagelser, der bliver stående: "hver dag"-opgaver, opgaver uden frist ("snarest", en uge fra beskeden) og opgaver med en periode (fx "Afleveres uge 43"), som står hver dag fra startdatoen til fristen. "Kommende frister" i overblikket øverst nævner stadig de kommende frister.
 
 **Tider.** Overalt i appen vises en aftale med både start- og sluttid, når den har en sluttid. Mangler sluttiden (fx en Google-aftale uden sluttid, eller en aktivitet i en besked, hvor kun starttidspunktet er nævnt), vises kun starttidspunktet med "sluttid ukendt" – appen finder ikke selv på en sluttid. En lektion uden sluttid varer 45 minutter (`lesson_minutes` under `[aula]`), og det samme gælder forslag om test og prøver eller aktiviteter "i 3. lektion", hvor kun starttidspunktet står.
 
@@ -283,9 +283,9 @@ Afprøvet i Chromium med emulerede iPad- og iPhone-størrelser og berøringsgest
 
 ## Aftenvisning og aftenpush
 
-Efter kl. 17 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, skema, aftaler, vigtig info og opgaver. Skiftet sker af sig selv kl. 17 og tilbage ved midnat; der er ingen knap til at skifte. Resten af dagen i dag kan ses under **Ugen**. Serveren laver overblikket for i morgen præcis kl. 17, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
+Efter kl. 18 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, skema, aftaler, vigtig info og opgaver. Skiftet sker af sig selv kl. 18 og tilbage ved midnat; der er ingen knap til at skifte. Resten af dagen i dag kan ses under **Ugen**. Serveren laver overblikket for i morgen præcis kl. 18, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
 
-Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 17 om i morgen, kun hvis der er noget at huske, gøre eller noget særligt (`evening_push_only_if_content = false` sender altid). Pushet sendes højst én gang pr. dag, også efter en genstart.
+Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 18 om i morgen, kun hvis der er noget at huske, gøre eller noget særligt (`evening_push_only_if_content = false` sender altid). Pushet sendes højst én gang pr. dag, også efter en genstart.
 
 > **Privatliv:** på den offentlige `ntfy.sh` kan alle, der kender emnets navn, læse beskederne. Derfor indeholder beskeden som standard kun tal ("2 at huske · 1 skal gøres · 1 særligt") og ingen navne. `push_details = "full"` tager punkterne i klar tekst med – brug det kun på din egen ntfy-server.
 
@@ -358,7 +358,7 @@ Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, de
 | Fil | Dækker |
 |---|---|
 | `test_activities.py` | genkendelse af aktiviteter; aflysning, udsættelse, flytning |
-| `test_pipeline.py` | hele hentningen: Google-udfald, private tråde, ændringer mod rigtige aftaler, overblik efter kl. 17 |
+| `test_pipeline.py` | hele hentningen: Google-udfald, private tråde, ændringer mod rigtige aftaler, overblik efter kl. 18 |
 | `test_ops.py` | planlægger, aftenpush, tilsyn, push-beskeder |
 | `test_gcal.py` | oprettelse, flytning, sletning i Google Kalender; valg af skrivekalender |
 | `test_google_api_read.py` | familiekalenderen læst via Google API, sider, reserve til iCal |

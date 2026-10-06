@@ -1221,7 +1221,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         "suggestions": suggestions_list,
         "health": health,
         "weather": weather_data,
-        "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 17)),
+        "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 18)),
                      "lessonMinutes": lesson_minutes(cfg)},
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)

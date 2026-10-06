@@ -222,7 +222,7 @@ def _special(out: "_Out", digest: dict, today: dt.date | None) -> tuple[list[dic
 
 
 def day_briefing(digest: dict, today: dt.date, real_today: dt.date | None = None) -> dict:
-    """today = dagen overblikket handler om (efter kl. 17: i morgen). real_today = dagens rigtige dato, som frister måles mod."""
+    """today = dagen overblikket handler om (efter kl. 18: i morgen). real_today = dagens rigtige dato, som frister måles mod."""
     real = real_today or today
     out = _Out(digest, DAY_CAPS)
     tasks = _classify_tasks(digest.get("opgaver", []), today)

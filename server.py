@@ -83,7 +83,7 @@ class Settings:
         self.public_url = str(s.get("public_url", "")).rstrip("/")
         self.mark_read = bool(s.get("mark_read_in_aula", True))     # skriv "læst" tilbage til Aula, når en besked åbnes i appen
         d = cfg.get("display", {})
-        self.evening_hour = int(d.get("evening_hour", 17))          # efter dette klokkeslæt handler "I dag" om i morgen
+        self.evening_hour = int(d.get("evening_hour", 18))          # efter dette klokkeslæt handler "I dag" om i morgen
         self.evening_push = bool(s.get("evening_push", True))       # kræver notify_ntfy
         self.push_details = str(s.get("push_details", "summary"))   # "summary" = kun tal · "full" = indhold (kun egen ntfy-server)
         self.push_only_if_content = bool(s.get("evening_push_only_if_content", True))

@@ -190,11 +190,11 @@ def test_a_cancellation_with_nothing_to_cancel_produces_nothing(cfg, fake_aula):
 # ---------------------------------------------------------------- overblikket skifter til i morgen
 def test_the_day_window_switches_to_tomorrow_after_the_evening_hour():
     tz = B.TZ
-    assert B.target_window("day", dt.datetime(2026, 10, 1, 16, 59, tzinfo=tz))[2] == "i dag, torsdag 1/10"
-    s, e, label = B.target_window("day", dt.datetime(2026, 10, 1, 17, 0, tzinfo=tz))
+    assert B.target_window("day", dt.datetime(2026, 10, 1, 17, 59, tzinfo=tz))[2] == "i dag, torsdag 1/10"
+    s, e, label = B.target_window("day", dt.datetime(2026, 10, 1, 18, 0, tzinfo=tz))
     assert (s, e, label) == (dt.date(2026, 10, 2), dt.date(2026, 10, 2), "i morgen, fredag 2/10")
     assert B.target_window("day", dt.datetime(2026, 10, 1, 15, tzinfo=tz), evening_hour=14)[2].startswith("i morgen")
-    assert B.target_window("day", dt.datetime(2026, 10, 2, 18, tzinfo=tz))[2] == "i morgen, lørdag 3/10"        # fredag aften: lørdag
+    assert B.target_window("day", dt.datetime(2026, 10, 2, 19, tzinfo=tz))[2] == "i morgen, lørdag 3/10"        # fredag aften: lørdag
 
 
 def test_make_briefing_follows_the_clock(cfg):

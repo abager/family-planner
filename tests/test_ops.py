@@ -67,7 +67,7 @@ def test_push_has_nothing_to_say_when_only_deadlines():
 
 
 # ---------------------------------------------------------------- planlæggeren
-@pytest.mark.parametrize("now,expected", [(at(10), 900), (at(16, 59), 65), (at(17, 0, 3), 5), (at(17, 20), 900), (at(23, 59, 50), 15), (at(3), 7200)])
+@pytest.mark.parametrize("now,expected", [(at(10), 900), (at(17, 59), 65), (at(18, 0, 3), 5), (at(18, 20), 900), (at(23, 59, 50), 15), (at(3), 7200)])
 def test_scheduler_wakes_exactly_when_the_view_switches_and_at_midnight(cfg, now, expected):
     runner, *_ = mk(cfg)
     assert runner.wait_seconds(now) == expected
@@ -137,14 +137,14 @@ def write_briefing(cfg, day, sections=SECTIONS):
 def test_evening_push_is_sent_once_a_day_after_the_hour_and_survives_a_restart(cfg, ntfy):
     runner, *_ = mk(cfg)
     write_briefing(cfg, "2026-10-02")
-    assert asyncio.run(runner.maybe_evening_push(at(16, 59))) == "ikke endnu"
-    assert asyncio.run(runner.maybe_evening_push(at(17, 5))) == "sendt"
-    assert asyncio.run(runner.maybe_evening_push(at(17, 20))) == "allerede sendt"
-    assert asyncio.run(mk(cfg)[0].maybe_evening_push(at(17, 30))) == "allerede sendt"        # ny Runner = genstart
+    assert asyncio.run(runner.maybe_evening_push(at(17, 59))) == "ikke endnu"
+    assert asyncio.run(runner.maybe_evening_push(at(18, 5))) == "sendt"
+    assert asyncio.run(runner.maybe_evening_push(at(18, 20))) == "allerede sendt"
+    assert asyncio.run(mk(cfg)[0].maybe_evening_push(at(18, 30))) == "allerede sendt"        # ny Runner = genstart
     assert len(ntfy.msgs) == 1
     m = ntfy.msgs[0]
     assert m["title"] == "I morgen, fredag" and m["click"] == "https://familieplan.example.dk/" and "Hugo" not in m["message"]
-    assert asyncio.run(runner.maybe_evening_push(at(17, 5, day=2))) == "overblikket handler ikke om i morgen endnu"      # næste dag, overblikket er fra i går
+    assert asyncio.run(runner.maybe_evening_push(at(18, 5, day=2))) == "overblikket handler ikke om i morgen endnu"      # næste dag, overblikket er fra i går
 
 
 def test_evening_push_skips_a_briefing_about_the_wrong_day(cfg, ntfy):

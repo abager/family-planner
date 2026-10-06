@@ -49,7 +49,7 @@ def _date(s: str | None) -> dt.date | None:
         return None
 
 
-def target_window(mode: str, now: dt.datetime, evening_hour: int = 17) -> tuple[dt.date, dt.date, str]:
+def target_window(mode: str, now: dt.datetime, evening_hour: int = 18) -> tuple[dt.date, dt.date, str]:
     """(første dag, sidste dag, overskrift). Dagsoverblikket handler om i dag – men efter kl. `evening_hour` om i morgen."""
     if mode == "week":
         start = now.date() if now.weekday() < 5 or now.hour < 16 else now.date() + dt.timedelta(days=1)
@@ -320,7 +320,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
     if provider == "off":
         return None
     now = now or dt.datetime.now(TZ)
-    start, end, headline = target_window(mode, now, int(cfg.get("display", {}).get("evening_hour", 17)))
+    start, end, headline = target_window(mode, now, int(cfg.get("display", {}).get("evening_hour", 18)))
     period = [start.isoformat(), end.isoformat()]
     digest = build_digest(data, start, end, now)
     out_path = Path(cfg.get("output", "web/family.json")).with_name(f"briefing{'_uge' if mode == 'week' else ''}.json")

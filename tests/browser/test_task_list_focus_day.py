@@ -1,4 +1,4 @@
-"""Husk og lektier" i dagsoverblikket viser kun fokusdagen (i dag, efter kl. 17 i morgen).
+"""Husk og lektier" i dagsoverblikket viser kun fokusdagen (i dag, efter kl. 18 i morgen).
 
 Undtagelser: "hver dag", "snarest" og perioder (startdato → frist). Ting med frist senere på ugen står kun i "Ugen".
 Torsdag 1. oktober 2026 er "i dag" i alle tests.

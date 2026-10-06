@@ -135,7 +135,7 @@ mark_read_in_aula = true        # åbner du en besked i appen, markeres den ogs�
 # trust_proxy = true            # sæt når en reverse proxy (fx Caddy) står foran
 # public_url = "https://familieplan.eksempel.dk"
 # notify_ntfy = "https://ntfy.sh/dit-hemmelige-emne"   # push-besked, når Aula-loginet udløber (ingen data i beskeden)
-# evening_push = true                  # ntfy: én besked efter kl. 17 om i morgen (kun hvis der er noget særligt)
+# evening_push = true                  # ntfy: én besked efter kl. 18 om i morgen (kun hvis der er noget særligt)
 # evening_push_only_if_content = true  # false = send også, når der intet er
 # push_details = "summary"             # "summary" = kun tal, ingen navne · "full" = indhold i klar tekst (KUN på din egen ntfy-server)
 # stale_alert_hours = 4                # ntfy-alarm, hvis data er ældre end dette (tavs om natten). 0 = slå fra
@@ -159,7 +159,7 @@ read_via_api = true             # læs skrivekalenderen via Googles API i stedet
 
 # Dagsvisningen skifter til næste dag efter dette klokkeslæt (gælder overblik, skema, aftaler, vigtig info, kiosk og aftenpush)
 [display]
-evening_hour = 17
+evening_hour = 18
 
 # Private samtaler: indholdet tages ud af family.json og udleveres kun mod koden FAMILIEPLAN_PRIVATE_CODE.
 # Sæt protect = false KUN hvis du bruger appen uden serveren (så kan intet beskyttes alligevel).

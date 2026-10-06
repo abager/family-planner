@@ -782,7 +782,7 @@ button,a,.chip,.pill{touch-action:manipulation}
                 "people":["p3"] | ["family"], "source":"aula|google", "location":"…", "notes":"…",
                 "endInferred":true (valgfri: sluttiden er tænkt – vis kun start), "appCreated":true (valgfri: oprettet af appen),
                 "lessons":[{ "start":"HH:MM", "end":"HH:MM", "title":"…", "endInferred":true (valgfri) }] (skoledage) }],
-  "settings":{ "eveningHour":17, "lessonMinutes":45, "hidePrivate":true },
+  "settings":{ "eveningHour":18, "lessonMinutes":45, "hidePrivate":true },
   "tasks":   [{ "id":"t1", "title":"…", "due":"YYYY-MM-DD", "person":"p3", "kind":"lektie|husk|besked", "source":"aula" }],
   "weekplan":[{ "id":"w1", "person":"p3", "date":"YYYY-MM-DD"|null, "dayLabel":"…", "title":"…", "label":"…", "text":"…", "source":"meebook" }],
   "posts":   [{ "id":"po1", "title":"…", "author":"…", "timestamp":"ISO", "important":false, "text":"…", "people":["p3"] }],
@@ -1199,10 +1199,10 @@ function lessonsOf(ev){
   }
   return out.length>=2 ? out : [];
 }
-// Fanen "I dag" handler om i dag – men efter kl. 17 (indstilles i config) om i morgen. Man kan selv skifte; valget gælder, til det automatiske skifter igen.
-const eveningHour=()=>state.data?.settings?.eveningHour ?? 17;
+// Fanen "I dag" handler om i dag – men efter kl. 18 (indstilles i config) om i morgen. Man kan selv skifte; valget gælder, til det automatiske skifter igen.
+const eveningHour=()=>state.data?.settings?.eveningHour ?? 18;
 const autoOffset=()=>new Date().getHours()>=eveningHour()?1:0;
-const dayOffset=autoOffset;                       // efter kl. 17 (evening_hour) handler "I dag" om i morgen – ingen manuel vælger
+const dayOffset=autoOffset;                       // efter kl. 18 (evening_hour) handler "I dag" om i morgen – ingen manuel vælger
 function focusDay(){ const d=new Date(); d.setDate(d.getDate()+dayOffset()); d.setHours(12,0,0,0); return d; }
 const dayWord=()=>dayOffset()===1?"i morgen":"i dag";
 let lastAutoOffset=null;
@@ -1287,7 +1287,7 @@ function renderToday(){
   const realToday=ymd(new Date()), realTomorrow=ymd(addDays(new Date(),1));
   const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"};
   const todayKey=ymd(fday);
-  // Kun det, der gælder fokusdagen (i dag, efter kl. 17 i morgen – samme regel som skemaet). Ting med frist senere
+  // Kun det, der gælder fokusdagen (i dag, efter kl. 18 i morgen – samme regel som skemaet). Ting med frist senere
   // på ugen står i "Ugen" på fristdagen. Undtagelser: "hver dag", "snarest" og perioder (startdato → frist).
   const active = t => t.recurring==="daily"
       ? (t.from||t.due)<=todayKey && todayKey<=ymd(addDays(new Date((t.from||t.due)+"T12:00"),6))

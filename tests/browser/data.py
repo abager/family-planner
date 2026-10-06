@@ -25,6 +25,6 @@ def message(i: int, *, unread=False, private=False, redacted=False, subject=None
 
 def family(messages=None, **over) -> dict:
     d = {"generated": dt.datetime.now().astimezone().isoformat(), "people": PEOPLE, "events": [], "tasks": [], "weekplan": [], "posts": [], "albums": [],
-         "messages": messages or [], "suggestions": [], "settings": {"hidePrivate": True, "eveningHour": 17}, "demo": False}
+         "messages": messages or [], "suggestions": [], "settings": {"hidePrivate": True, "eveningHour": 18}, "demo": False}
     d.update(over)
     return d

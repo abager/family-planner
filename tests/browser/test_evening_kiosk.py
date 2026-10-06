@@ -1,4 +1,4 @@
-"""Efter kl. 17 handler I dag-fanen om i morgen. Kioskvisningen er en stor vægvisning, der følger samme regel."""
+"""Efter kl. 18 handler I dag-fanen om i morgen. Kioskvisningen er en stor vægvisning, der følger samme regel."""
 import datetime as dt
 from zoneinfo import ZoneInfo
 
@@ -33,15 +33,15 @@ def test_before_the_evening_hour_the_view_is_today(make_page):
 
 
 def test_after_the_evening_hour_the_view_is_tomorrow(make_page):
-    page, *_ = make_page(now=at(17, 30), fixed=True)
+    page, *_ = make_page(now=at(18, 30), fixed=True)
     s = state(page)
     assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (1, "2026-10-02", "Skema i morgen", "Aftaler i morgen", "Praktisk info i morgen")
 
 
 def test_the_switch_happens_by_itself_while_the_page_is_open_and_back_at_midnight(make_page):
-    page, *_ = make_page(now=at(16, 50))
+    page, *_ = make_page(now=at(17, 50))
     assert state(page)["off"] == 0
-    page.clock.run_for(11 * 60 * 1000)                                  # → 17.01
+    page.clock.run_for(11 * 60 * 1000)                                  # → 18.01
     page.wait_for_timeout(300)
     s = state(page)
     assert (s["off"], s["focus"], s["skema"]) == (1, "2026-10-02", "Skema i morgen")
@@ -52,11 +52,11 @@ def test_the_switch_happens_by_itself_while_the_page_is_open_and_back_at_midnigh
 
 
 def test_the_evening_hour_comes_from_the_data(make_page):
-    page, fake, _ = make_page(now=at(18), fixed=True)
+    page, fake, _ = make_page(now=at(19), fixed=True)
     fake.use_demo(page, settings={"hidePrivate": True, "eveningHour": 20})
     page.reload()
     page.wait_for_timeout(500)
-    assert state(page)["off"] == 0                                      # kl. 18 er stadig før kl. 20
+    assert state(page)["off"] == 0                                      # kl. 19 er stadig før kl. 20
 
 
 def test_the_overview_follows_the_day_and_is_hidden_when_it_is_about_another_day(make_page):
@@ -143,12 +143,12 @@ def test_a_link_with_kiosk_in_it_starts_in_kiosk(make_page):
 
 
 def test_the_kiosk_switches_to_tomorrow_by_itself_in_the_evening(make_page):
-    page, *_ = make_page(now=at(16, 59), url="/index.html?kiosk=1")
+    page, *_ = make_page(now=at(17, 59), url="/index.html?kiosk=1")
     assert kiosk(page)["day"] == "I dag"
     page.clock.run_for(2 * 60 * 1000)
     page.wait_for_timeout(300)
     k = kiosk(page)
-    assert (k["day"], k["date"], k["apt"], k["clock"]) == ("I morgen", "fredag 2. oktober", "Aftaler i morgen", "17:01")
+    assert (k["day"], k["date"], k["apt"], k["clock"]) == ("I morgen", "fredag 2. oktober", "Aftaler i morgen", "18:01")
 
 
 def test_the_kiosk_never_shows_messages_and_refreshes_its_data(make_page):

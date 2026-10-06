@@ -5,6 +5,11 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (evening switch at 18:00)
+- The default `[display] evening_hour` is now 18 instead of 17 everywhere: the today view, timetable, task list,
+  overview window, the server's extra run at the switch, the evening push and the kiosk all follow it. An existing
+  `config.toml` that sets `evening_hour = 17` keeps 17 – change it there.
+
 ### Changed (Husk og lektier)
 - The today view's "Husk og lektier" only lists what is due on the focus day (today; after 17:00 tomorrow, like the
   timetable) instead of everything due in the next 7 days. Still listed: daily tasks, open-ended tasks ("snarest",
