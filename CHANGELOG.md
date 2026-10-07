@@ -5,6 +5,28 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (desktop, tablet and phone)
+- The whole app now has the kiosk's look: the background is the sky of the focus day's weather (sun, partly cloudy,
+  overcast, rain, frost; sage without weather), and 21–06 everything is dark. After 18:00 it is tomorrow's sky, like
+  the rest of "I dag". The device's light/dark setting is no longer used, and a week without forecast keeps today's
+  sky. The status bar colour follows the top of the screen everywhere. The system font replaces the two Google fonts
+  (nothing to load, works offline); headings are lighter. Dialogs and menus keep a solid background over the sky.
+- "I dag" is a shared time axis with one lane per person (children first, then adults): lessons and institution
+  faint, events in the person's colour, family events as one block across all lanes (one per lane when something
+  overlaps them), overlapping things for one person side by side. The axis is 07–21 and stretches when something lies
+  outside it; hourly weather sits at the hours; a red line shows the time (today only); finished things are dimmed and
+  the current lesson is marked. All-day events and the week plan's practical info are in a row at the top. Tapping a
+  block opens its details. Under 700 px the day is one list in time order (an event for several people once, with
+  their icons; school as one line per child). Replaces "Skema", "Dagens aftaler" and "Praktisk info".
+- The overview in "I dag" is at most four lines; "Vis hele overblikket" unfolds it.
+- "Husk og lektier" in "I dag" shows the focus day and the next two days, each on its own (same rule as the kiosk's
+  "Husk"), instead of the focus day only.
+- "Ugen": the day's weather in each day header, past days dimmed, a person with nothing all week is one line.
+- Feed and Beskeder: only the new colours, surfaces and font.
+
+### Fixed
+- Week board: a pill's title could run out of the pill (no break between the time and the title).
+
 ### Changed (kiosk)
 - New kiosk layout: one dark screen for an iPad in landscape. Top bar with clock, day, status and weather (hour now,
   min–max, advice, a strip of the next hours); the overview in full width (max 4 lines, cut at a sentence with "…");

@@ -62,9 +62,9 @@ Meebook-ugeplanen analyseres sætning for sætning og hvert punkt får en katego
 
 ## Skema
 
-"I dag" viser børnenes skema for dagen øverst. Lektionerne kommer fra Aulas skemabegivenheder, og hvis skolen i stedet skriver skemaet som tekst i en aftale ("08.00-08.45 Dansk"), hentes aftalens beskrivelse og skemaet læses ud af den. Hver lektion vises med start og slut (fx 08.00–08.45). Nuværende lektion markeres, overståede får et ✓, og vikarer vises.
+"I dag" viser børnenes lektioner på dagens tidsakse (se "I dag" nedenfor). Lektionerne kommer fra Aulas skemabegivenheder, og hvis skolen i stedet skriver skemaet som tekst i en aftale ("08.00-08.45 Dansk"), hentes aftalens beskrivelse og skemaet læses ud af den. Hver lektion står på sin plads i tiden; et tryk viser start og slut (fx 08.00–08.45), lærer, lokale og skolens note. Den nuværende lektion markeres, overståede nedtones, og vikarer vises.
 
-"Husk og lektier" i "I dag" viser kun det, der har frist på dagen (efter kl. 18: i morgen, ligesom skemaet). Ting med frist senere på ugen står i "Ugen" på fristdagen. Undtagelser, der bliver stående: "hver dag"-opgaver, opgaver uden frist ("snarest", en uge fra beskeden) og opgaver med en periode (fx "Afleveres uge 43"), som står hver dag fra startdatoen til fristen. "Kommende frister" i overblikket øverst nævner stadig de kommende frister.
+"Husk og lektier" i "I dag" viser dagen (efter kl. 18: i morgen) og de to næste dage, hver dag for sig – som kioskens "Husk". En opgave står kun én gang, på den første dag den gælder: "hver dag"-opgaver, opgaver uden frist ("snarest", en uge fra beskeden) og opgaver med en periode (fx "Afleveres uge 43") altså på dagen øverst. Ting med frist længere ude står i "Ugen" på fristdagen. "Kommende frister" i overblikket øverst nævner stadig de kommende frister.
 
 **Tider.** Overalt i appen vises en aftale med både start- og sluttid, når den har en sluttid. Mangler sluttiden (fx en Google-aftale uden sluttid, eller en aktivitet i en besked, hvor kun starttidspunktet er nævnt), vises kun starttidspunktet med "sluttid ukendt" – appen finder ikke selv på en sluttid. En lektion uden sluttid varer 45 minutter (`lesson_minutes` under `[aula]`), og det samme gælder forslag om test og prøver eller aktiviteter "i 3. lektion", hvor kun starttidspunktet står.
 
@@ -137,7 +137,7 @@ Overblikket får et afsnit **Vejr** med kort prognose og praktiske råd ("8–11
 ## Udseende
 
 - Titlen er "Familieplan". Ikonet i browserfanen (en proppet kalender i børnenes farver) ligger som `web/favicon.svg` med PNG-udgaver (`favicon-32.png`, `apple-touch-icon.png` til hjemmeskærmen på iPad/iPhone). Læg dine egne filer med samme navne i `web/` for at skifte det.
-- "Dagens aftaler" viser ikke skoledagens blokke fra Aula, fordi skemaet allerede står øverst. Egentlige Aula-aftaler (fx forældremøde) vises stadig.
+- Skoledagens blokke fra Aula ("Skole", "Skole + SFO") står ikke som aftaler i "I dag", fordi lektionerne allerede står på tidsaksen. Egentlige Aula-aftaler (fx forældremøde) vises stadig.
 - Tekst fra Aula (beskeder, ugeplan) ryddes op: markdown-rester fjernes, hårde linjeskift samles til afsnit, og lister vises som lister.
 
 ## Kør som server (server.py)
@@ -255,9 +255,9 @@ Layoutet tilpasser sig skærmen:
 
 | Skærm | Opbygning |
 |---|---|
-| Computer og iPad liggende | Ugen som tavle med en kolonne pr. dag. Beskeder med liste og læserude ved siden af hinanden. Feedet i én kolonne, bredere på store skærme (560 → 720 → 860 px). |
-| iPad stående | Ugen som dagkort i to spor, med i dag først. Beskeder stadig med to ruder. |
-| Telefon | Menuen ligger i bunden som i en app. Personfiltrene står på én række. Beskeder viser én rude ad gangen, og læsevisningen fylder hele skærmen. |
+| Computer og iPad liggende | I dag som tidsakse med en bane pr. person og "Husk og lektier" i siden. Ugen som tavle med en kolonne pr. dag. Beskeder med liste og læserude ved siden af hinanden. Feedet i én kolonne, bredere på store skærme (560 → 720 → 860 px). |
+| iPad stående | I dag med smallere baner og "Husk og lektier" nedenunder. Ugen som dagkort i to spor, med i dag først. Beskeder stadig med to ruder. |
+| Telefon | Menuen ligger i bunden som i en app. Personfiltrene står på én række. I dag som én liste i tidsorden. Beskeder viser én rude ad gangen, og læsevisningen fylder hele skærmen. |
 
 Alt, der kan trykkes på, er mindst 44 px på berøringsskærme. Layoutet respekterer iPhones og iPads sikre områder (hak og hjemmelinje), og appen henter frisk data, når tabletten vågner af dvale.
 
@@ -283,15 +283,30 @@ Afprøvet i Chromium med emulerede iPad- og iPhone-størrelser og berøringsgest
 
 ## Aftenvisning og aftenpush
 
-Efter kl. 18 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, skema, aftaler, vigtig info og opgaver. Skiftet sker af sig selv kl. 18 og tilbage ved midnat; der er ingen knap til at skifte. Resten af dagen i dag kan ses under **Ugen**. Serveren laver overblikket for i morgen præcis kl. 18, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
+Efter kl. 18 (`[display] evening_hour`) handler fanen **I dag** om i morgen: overblik, baner, vejr og husk og lektier – og baggrundens himmel er morgendagens vejr. Skiftet sker af sig selv kl. 18 og tilbage ved midnat; der er ingen knap til at skifte. Resten af dagen i dag kan ses under **Ugen**. Serveren laver overblikket for i morgen præcis kl. 18, ikke først ved næste kvarter, og frister måles stadig mod den rigtige dato ("senest i morgen", ikke "i dag").
 
 Med `notify_ntfy` sat sender serveren **én besked om dagen** efter kl. 18 om i morgen, kun hvis der er noget at huske, gøre eller noget særligt (`evening_push_only_if_content = false` sender altid). Pushet sendes højst én gang pr. dag, også efter en genstart.
 
 > **Privatliv:** på den offentlige `ntfy.sh` kan alle, der kender emnets navn, læse beskederne. Derfor indeholder beskeden som standard kun tal ("2 at huske · 1 skal gøres · 1 særligt") og ingen navne. `push_details = "full"` tager punkterne i klar tekst med – brug det kun på din egen ntfy-server.
 
+## I dag
+
+- **Overblikket** øverst, højst fire linjer – "Vis hele overblikket" folder det ud.
+- **Én fælles tidsakse** fra 07 til 21 (længere, hvis noget ligger uden for) med **en bane pr. person**, børnene først og så de voksne. Vejret time for time står ved klokkeslættene.
+- Lektioner og institution står svagt, aftaler i personens farve. En aftale for **hele familien** er én blok på tværs af alle baner; står den oven i noget for en af jer, får hver bane sin egen. Overlapper to ting for samme person, står de **side om side** i banen.
+- Øverst i banerne står det, der gælder hele dagen: heldagsaftaler og praktisk info fra ugeplanen.
+- En rød linje viser, hvad klokken er (kun i dag). Overståede ting nedtones, og den nuværende lektion markeres.
+- Et tryk på en blok viser detaljerne. Personfiltrene øverst fjerner baner.
+- **Husk og lektier** til højre (under på smallere skærme): dagen og de to næste dage.
+- På en telefon (under 700 px) er dagen én liste i tidsorden: samme aftale for flere står én gang med deres ikoner, og skolen er én linje pr. barn.
+
+## Udseende og tema
+
+Hele appen har kioskens udseende: baggrunden er himlen for dagens vejr (sol, let skyet, overskyet, regn eller frost; salviegrøn uden vejr), og kl. 21–06 bliver alt mørkt, så det ikke blænder. Efter kl. 18 er det morgendagens vejr, ligesom resten af "I dag". Enhedens lyse/mørke tilstand bruges ikke. Når man bladrer til en uge uden prognose, beholder baggrunden dagens himmel. Skriften er enhedens egen systemskrift (San Francisco på iPad/iPhone, Segoe UI på Windows) – den skal ikke hentes og virker uden net. I "Ugen" står dagens vejr i dagens overskrift, overståede dage er nedtonede, og en person uden noget hele ugen fylder kun én linje.
+
 ## Kioskvisning
 
-En rolig, lys vægvisning til en iPad på langs i køkkenet. Baggrunden er himlen for dagens vejr (sol, let skyet, overskyet, regn eller frost; salviegrøn uden vejr), og kl. 21–06 bliver skærmen mørk, så den ikke blænder. Skriften er iPad'ens egen systemskrift. Start den med **Kioskvisning** under **tandhjulet** (Indstillinger) øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
+En rolig, lys vægvisning til en iPad på langs i køkkenet, med samme tema som resten af appen (se ovenfor). Start den med **Kioskvisning** under **tandhjulet** (Indstillinger) øverst til højre, eller åbn adressen med `?kiosk=1` (fx som genvej på hjemmeskærmen, så starter den direkte).
 
 - **Øverst:** ur, dato og I dag / I morgen, eventuelle advarsler og vejret: temperaturen nu, dagens laveste–højeste, råd og de næste timer.
 - **Overblikket** i fuld bredde: familieassistentens fortælling, højst fire linjer. Er den længere, afkortes den ved en sætning med "…".
@@ -371,7 +386,7 @@ Testene bruger **opfundne data og simulerede tjenester** (en Google Kalender, de
 | `test_times.py` | sluttider: rigtige, tænkte (`endInferred`) og 45-minutters lektioner |
 | `test_server.py` | adgang, CSRF, spærring, private tråde og billeder, aflys/flyt |
 | `test_selftest.py` | selvtesten mod sunde og ødelagte opsætninger |
-| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til familiekalenderen" (tilføjelse, fortryd, modtager), ensartede termer og menuen, aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk (layout, husk for tre dage, "+N flere", detaljer ved tryk, mørkt tema), tilgængelighed |
+| `browser/` | datovælger, layout, beskeder (læst, stryg, private), "Føj til familiekalenderen" (tilføjelse, fortryd, modtager), ensartede termer og menuen, aflysninger på beskeden, søgning i feedet, tider i alle visninger, aften og kiosk (layout, husk for tre dage, "+N flere", detaljer ved tryk), dagens baner (overlap side om side, hele familien på tværs, aksen, telefonlisten), temaet (vejr, nat 21–06, statusbjælken), tilgængelighed |
 
 `homework_test.py` og `messages_test.py` i roden er ældre hjælpescripts, der kører genkendelsen mod **dine egne filer** (`python homework_test.py weekplan.json`, `python messages_test.py aula_feed.json`) og indgår ikke i `pytest`.
 

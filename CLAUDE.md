@@ -46,9 +46,9 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 |---|---|---|
 | **Aftale** | A calendar event | aktivitet (in UI text), begivenhed |
 | **Lektie / Husk / Skal gøres** | The three task kinds (`kind`: lektie, husk, handling) | opgave as a kind |
-| **Husk og lektier** | The list of things to do (today view: focus day only, plus daily, open-ended and periods; the kiosk's column is just "Husk") | Husk og frister |
+| **Husk og lektier** | The list of things to do (today view: focus day + 2 days, grouped by day, each task once on the first day `kTaskActive` says it applies – same as the kiosk, whose column is just "Husk") | Husk og frister |
 | **Frist** | Only a due *date* ("frist torsdag"), never a category | |
-| **Praktisk info** | Deviations and practical info: omlagt dag, vikar, lukkedag, skolefoto (briefing section too) | Vigtig info, Særligt |
+| **Praktisk info** | Deviations and practical info: omlagt dag, vikar, lukkedag, skolefoto (briefing section too; in the today view a chip in the lanes' "Hele dagen" row) | Vigtig info, Særligt |
 | **Feed** | The tab with Aula posts and albums; filters *Alle · Opslag · Billeder* | Alt |
 | **Beskeder** / **Private samtaler** | Messages / the locked private threads | |
 | **Familiekalenderen** | The family's Google calendar, everywhere in UI text (fixed word, not the configured name). Only a link that opens Google's site says "Åbn i Google Kalender" | Google Kalender (as name), kalenderen |
@@ -162,6 +162,9 @@ history.
 
 Version: **v0.7.0** (first version in git; previously developed as zip files).
 
+- `test_calendar_ui.py` has 5 failures that predate the Oct 2026 desktop revamp: the tests still expect the configured
+  calendar name ("Oprettes i Familiekalender") where the app shows the fixed term "familiekalenderen".
+
 Known gaps and open work:
 
 - **Weather has only been tested against a simulated MET Norway.** DMI was dropped 2026-10-03 (HTTP 400 on a wrong
@@ -253,14 +256,8 @@ User decisions (Oct 2026): one screen designed for an iPad in landscape (portrai
 denser – no separate design). Small, light type (people stand close to it), thin rules instead of filled cards, the
 system font (San Francisco on iPad; nothing to load, so the shared font `<link>` is untouched).
 
-- Theme (`kTheme`, every render): by day the kiosk is light and `body[data-kwx]` is the sky of the focus day's
-  weather – mapped from the day icon (`K_SKY`: sol, skyet, overskyet, regn, frost; thunder → regn, snow → frost,
-  fog → overskyet), fixed all day, follows the focus day (so tomorrow's after `evening_hour`). No weather: sage.
-  `K_NIGHT_FROM`–`K_NIGHT_TO` (21–06) adds `body.k-night`: the dark kiosk colours, no sky. Only the kiosk changes
-  colours (`body.kiosk` tokens); the rest of the app follows the device. Every sky keeps `--ink` ≥ 7:1 and
-  `--muted` ≥ 4.5:1 against its darkest and lightest point (tested).
-  Both `theme-color` metas follow the top of the screen (`--sky1`, or `--paper` at night) so the iPad's status bar
-  matches; `exitKiosk` restores the app's values.
+- Theme: the app-wide theme (see "Theme" below); the kiosk only adds its own details (`body.kiosk:not(.night)` for
+  the banner, the current row and the warning colours).
 
 - Layout (`#kioskView`, grid rows): top bar (clock, day, status, weather, exit) → `#kBrief` overview band in full
   width → `.k-body`: `#kPeople` (one `.k-person` column per person: children, then adults, then anyone else; ~78 %
@@ -280,6 +277,46 @@ system font (San Francisco on iPad; nothing to load, so the shared font `<link>`
 - Taps: every tappable element has `data-k`; `kItems` maps it to a function that opens the `#detail` dialog via
   `kDetail` (closes after `K_DETAIL_MS` = 10 s or on a backdrop tap). Details only show what's already in the app –
   never a task's message text. `Esc` closes an open dialog first, then leaves the kiosk.
+
+## Theme (whole app, Oct 2026)
+
+User decisions: the kiosk's weather themes for every non-kiosk device too (desktop, tablet, phone); dark 21–06 like
+the kiosk (the switch to tomorrow stays at `evening_hour`); the weather theme replaces the device's light/dark
+setting entirely (no `prefers-color-scheme`, no `data-theme`); a week without forecast keeps today's sky; feed and
+messages get styling only.
+
+- `applyTheme(now, day)` runs at the start of every `render()` and every 20 s (the auto-offset interval). `body[data-sky]`
+  is the sky of the focus day's weather, mapped from the day icon (`SKY`: sol, skyet, overskyet, regn, frost; thunder →
+  regn, snow → frost, fog → overskyet), fixed all day. No weather: sage (the `body` defaults). `NIGHT_FROM`–`NIGHT_TO`
+  (21–06) adds `body.night`: dark tokens, no sky. `data-sky` is kept at night.
+- Tokens live on `body`: `--sky1..3`, `--ink`, `--muted`, `--line`, `--accent`, `--paper` (= `--sky2`), `--surface`
+  (translucent white over the sky), `--solid` (dialogs, menus, the date picker – never translucent), `--today`,
+  `--know`, `--warn`, `--rain`. Every sky keeps `--ink` ≥ 7:1 and `--muted`, `--accent`, `--warn`, `--rain` ≥ 4.5:1
+  against its darkest and lightest point (tested in `test_kiosk_layout.py`).
+- The single `theme-color` meta follows the top of the screen (`--sky1`, or `--paper` at night) in and out of the kiosk.
+- Font: the system font everywhere (`--display`/`--body`); no web fonts are loaded by `index.html` (the login and
+  `/auth` pages in `server.py` still name Atkinson/Bricolage with system fallbacks).
+
+## I dag (today view, Oct 2026)
+
+User decisions: a shared time axis with one lane per person, 07–21 that extends when needed, overlapping things for
+one person split the lane side by side, iPad portrait keeps (narrower) lanes, phones get a list.
+
+- `renderToday` → `renderBrief` (clamped to 4 lines by `clampBrief`, "Vis hele overblikket" toggles `state.briefOpen`),
+  `renderDayLanes`, `renderDayHusk`. Lanes in `kPeopleOrder()` minus hidden people.
+- `dayLane(p, day)`: lessons (`lessonsOf`) as `kind:"lesson"`; school blocks without lessons as `"school"`; family events
+  (`people: ["family"]`) as `"fam"` in every lane; other events `"ev"`; events covering the whole day and
+  `allDay` events plus `dayPlans()` (same filter as the old Praktisk info) in the "Hele dagen" row. `endInferred`
+  events are points (start only, `NO_END` in the label).
+- `layoutLane`: overlap groups → columns (`col`/`ncol`), using a visual minimum of `BLK_MIN` (25 min). A family
+  event is drawn once across all lanes (`.dspan`) only if it has `ncol === 1` in every lane, otherwise per lane.
+- Positions are percentages of the axis (`--hours` × `--hh`). The now line (`.dnow`) only when the focus day is today;
+  a 60 s interval redraws the lanes (not the brief/husk), skipped while a dialog is open.
+- Taps go through `dItems` (`data-d` keys, delegated click on `#todayView`): `showEvent`, `showPlan`, or `openDetail`
+  with `lessonDetailHtml` (shared with the kiosk's lesson detail).
+- `< 700 px`: `.dgrid` hidden, `.dlist` shown (rendered together; CSS decides). One row per event (people merged),
+  school as one row per child, a "Nu" marker.
+- `renderDayHusk`: `.hgroup[data-day]` per day, tasks are `[data-task]` buttons → `showTask`.
 
 ## Calendar and time conventions
 
