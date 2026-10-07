@@ -18,7 +18,8 @@ All notable changes to this project. Versions are git tags. The format is loosel
   the current lesson is marked. All-day events and the week plan's practical info are in a row at the top. Tapping a
   block opens its details. Under 700 px the day is one list in time order (an event for several people once, with
   their icons; school as one line per child). Replaces "Skema", "Dagens aftaler" and "Praktisk info".
-- The overview in "I dag" is at most four lines; "Vis hele overblikket" unfolds it.
+- The overview in "I dag" is at most four lines; "Vis hele overblikket" unfolds it. The overview in "I dag" and
+  "Ugen" uses the panel's full width (it was capped at 68 characters, so text was cut although there was room).
 - "Husk og lektier" in "I dag" shows the focus day and the next two days, each on its own (same rule as the kiosk's
   "Husk"), instead of the focus day only.
 - "Ugen": the day's weather in each day header, past days dimmed, a person with nothing all week is one line.
