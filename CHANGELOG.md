@@ -18,6 +18,8 @@ All notable changes to this project. Versions are git tags. The format is loosel
   font; thin rules instead of filled cards. Text keeps WCAG AA contrast on every sky. The rest of the app is unchanged.
 
 ### Fixed (kiosk)
+- The iPad's status bar stayed the app's dark colour above the light kiosk: the kiosk now sets `theme-color` to the
+  top of its sky (dark at night) and restores the app's own values when it closes.
 - Kiosk tests expected the clock as `10:20`; the app shows `10.20` (the convention), so two tests failed.
 
 ### Changed (evening switch at 18:00)

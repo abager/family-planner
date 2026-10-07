@@ -259,6 +259,8 @@ system font (San Francisco on iPad; nothing to load, so the shared font `<link>`
   `K_NIGHT_FROM`–`K_NIGHT_TO` (21–06) adds `body.k-night`: the dark kiosk colours, no sky. Only the kiosk changes
   colours (`body.kiosk` tokens); the rest of the app follows the device. Every sky keeps `--ink` ≥ 7:1 and
   `--muted` ≥ 4.5:1 against its darkest and lightest point (tested).
+  Both `theme-color` metas follow the top of the screen (`--sky1`, or `--paper` at night) so the iPad's status bar
+  matches; `exitKiosk` restores the app's values.
 
 - Layout (`#kioskView`, grid rows): top bar (clock, day, status, weather, exit) → `#kBrief` overview band in full
   width → `.k-body`: `#kPeople` (one `.k-person` column per person: children, then adults, then anyone else; ~78 %

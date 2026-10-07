@@ -156,3 +156,17 @@ def test_leaving_the_kiosk_drops_its_theme(make_page):
     page = open_kiosk(make_page, now=at(22), add=WX % "🌧️")
     page.keyboard.press("Escape")
     assert sky(page) is None and page.evaluate("document.body.classList.contains('k-night')") is False
+
+
+def theme_colors(page):
+    return page.eval_on_selector_all('meta[name="theme-color"]', "ms => ms.map(m => m.content.toUpperCase())")
+
+
+def test_the_status_bar_colour_follows_the_kiosk_and_is_restored_afterwards(make_page):
+    page = open_kiosk(make_page, add=WX % "☁️")
+    assert theme_colors(page) == ["#D3D7DB", "#D3D7DB"]                     # overskyet: toppen af himlen, også i mørk tilstand
+    page.close()
+    page = open_kiosk(make_page, now=at(22), add=WX % "☁️")
+    assert theme_colors(page) == ["#0F141D", "#0F141D"]                     # om natten: kioskens mørke farve
+    page.keyboard.press("Escape")
+    assert theme_colors(page) == ["#F2F5F9", "#121824"]                     # appens egne værdier igen

@@ -1860,7 +1860,7 @@ function enterKiosk(){
   render();
 }
 function exitKiosk(){
-  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit","k-night"); delete document.body.dataset.kwx;
+  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit","k-night"); delete document.body.dataset.kwx; kThemeColor(null);
   try{ history.replaceState(null,"",location.pathname); }catch{}
   clearInterval(kioskTick); clearInterval(kioskLoad); try{ wakeLock?.release(); }catch{} wakeLock=null;
   render();
@@ -2020,7 +2020,13 @@ function kTheme(now,day){
   b.classList.toggle("k-night", h>=K_NIGHT_FROM || h<K_NIGHT_TO);
   const sky=K_SKY[String(weatherFor(day)?.ikon||"").replace(/\uFE0F/g,"")];
   if(sky) b.dataset.kwx=sky; else delete b.dataset.kwx;
+  // Statusbjælken (iPad/iPhone) og browserens værktøjslinje følger theme-color: samme farve som toppen af skærmen
+  const top=getComputedStyle(b).getPropertyValue(b.classList.contains("k-night")?"--paper":"--sky1").trim();
+  kThemeColor(top);
 }
+// theme-color findes to gange (lyst og mørkt tema på enheden); kiosken sætter begge og lægger appens egne tilbage bagefter
+const kMetaThemes=[...document.querySelectorAll('meta[name="theme-color"]')].map(m=>[m,m.content]);
+const kThemeColor = c => kMetaThemes.forEach(([m,orig])=>{ m.content = c || orig; });
 function renderKiosk(){
   const now=new Date(), day=focusDay(), off=dayOffset(), isToday=off===0;
   kItems=new Map();
