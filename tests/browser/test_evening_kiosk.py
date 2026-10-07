@@ -15,7 +15,8 @@ def at(h, m=0, day=1):
 
 
 def state(page):
-    return page.evaluate("""({off:dayOffset(),focus:ymd(focusDay()),skema:skemaTitle.textContent,apt:dayTitle.textContent,info:infoTitle.textContent,
+    return page.evaluate("""({off:dayOffset(),focus:ymd(focusDay()),day:dayTitle.textContent,husk:document.querySelector('#taskList .hday').textContent,
+        lanes:[...document.querySelectorAll('#dayLanes .dlane')].length,
         brief:(document.querySelector('#briefDay h2')||{}).textContent||null,toggle:!!document.getElementById('dayToggle')})""")
 
 
@@ -28,14 +29,15 @@ def brief_for(day):
 def test_before_the_evening_hour_the_view_is_today(make_page):
     page, *_ = make_page(now=at(10), fixed=True)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (0, "2026-10-01", "Skema i dag", "Dagens aftaler", "Praktisk info i dag")
+    assert (s["off"], s["focus"], s["day"], s["husk"]) == (0, "2026-10-01", "I dag", "I dag")
+    assert s["lanes"] == 5
     assert s["toggle"] is False                                         # ingen I dag/I morgen-vælger – skiftet sker kun automatisk
 
 
 def test_after_the_evening_hour_the_view_is_tomorrow(make_page):
     page, *_ = make_page(now=at(18, 30), fixed=True)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"], s["apt"], s["info"]) == (1, "2026-10-02", "Skema i morgen", "Aftaler i morgen", "Praktisk info i morgen")
+    assert (s["off"], s["focus"], s["day"], s["husk"]) == (1, "2026-10-02", "I morgen", "I morgen")
 
 
 def test_the_switch_happens_by_itself_while_the_page_is_open_and_back_at_midnight(make_page):
@@ -44,7 +46,7 @@ def test_the_switch_happens_by_itself_while_the_page_is_open_and_back_at_midnigh
     page.clock.run_for(11 * 60 * 1000)                                  # → 18.01
     page.wait_for_timeout(300)
     s = state(page)
-    assert (s["off"], s["focus"], s["skema"]) == (1, "2026-10-02", "Skema i morgen")
+    assert (s["off"], s["focus"], s["day"]) == (1, "2026-10-02", "I morgen")
     page.clock.run_for(7 * 3600 * 1000)                                 # → efter midnat
     page.wait_for_timeout(300)
     s = state(page)
@@ -80,7 +82,7 @@ def test_deadlines_in_the_task_list_say_tomorrow_when_it_is(make_page):
     fake.use_demo(page, tasks=[{"id": "t1", "title": "Aflever blanket", "due": "2026-10-02", "kind": "handling", "people": ["hugo"], "person": "hugo", "confidence": "høj"}])
     page.reload()
     page.wait_for_timeout(500)
-    assert "i morgen" in page.inner_text("#taskList") and "Aflever blanket" in page.inner_text("#taskList")
+    assert "i morgen" in page.inner_text("#taskList").lower() and "Aflever blanket" in page.inner_text("#taskList")   # dagsoverskriften står med versaler
 
 
 # ---------------------------------------------------------------- kioskvisning

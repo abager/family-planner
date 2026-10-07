@@ -1,4 +1,6 @@
-"""Layout: feedet er én kolonne uanset skærm, Praktisk info har ingen skjul/vis-knap, intet løber ud over siden."""
+"""Layout: feedet er én kolonne uanset skærm, Praktisk info har ingen skjul/vis-knap, intet løber ud over siden.
+
+Dagens baner: på iPad på højkant (og bredere) en bane pr. person, under 700 px én liste i tidsorden."""
 import datetime as dt
 
 import pytest
@@ -22,8 +24,9 @@ def test_feed_is_one_column_and_wider_on_big_screens(make_page, w, h, expected):
 
 def test_important_info_has_no_show_hide_button_for_regular_lessons(make_page):
     page, *_ = make_page(now=NOW, fixed=True)
-    assert page.locator("#planMore").count() == 0 and page.locator("#planToday .more").count() == 0
-    assert "almindelig undervisning" not in page.inner_text("#planToday").lower()
+    assert page.locator("#planMore").count() == 0 and page.locator("#dayLanes .more").count() == 0
+    assert page.locator('#dayLanes [data-plan]').count() >= 1                       # Praktisk info står i "Hele dagen"-rækken
+    assert "almindelig undervisning" not in page.inner_text("#dayLanes").lower()
     assert page.evaluate("typeof state.showAllPlan") == "undefined"
 
 

@@ -8,12 +8,12 @@ NOW = dt.datetime(2026, 10, 1, 10, 0, tzinfo=TZ)
 
 def test_practical_info_skips_weekplan_items_that_became_tasks(make_page):
     page, *_ = make_page(now=NOW, fixed=True)
-    before = page.locator('#planToday [data-plan="w6"]').count()
+    before = page.locator('#dayLanes .dgrid [data-plan="w6"]').count()
     # Backend laver opgaver med id "<ugeplanpunkt>:<n>" – så står punktet kun under "Husk og lektier"
     page.evaluate("""state.data.tasks.push({id:'w6:0',title:'Matematik: passer',due:ymd(focusDay()),person:'hugo',kind:'husk',source:'meebook'}); render()""")
-    assert before == 1 and page.locator('#planToday [data-plan="w6"]').count() == 0
+    assert before == 1 and page.locator('#dayLanes [data-plan="w6"]').count() == 0
     assert "Matematik: passer" in page.inner_text("#taskList")
-    assert page.inner_text("#infoTitle") == "Praktisk info i dag"
+    assert page.inner_text("#huskHead") == "Husk og lektier"
 
 
 def test_actions_live_in_the_menu_and_the_status_line_only_shows_status(make_page):

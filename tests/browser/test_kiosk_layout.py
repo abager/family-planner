@@ -97,14 +97,14 @@ WX = "state.data.weather={kilde:'MET Norway',dage:[{dato:k,min:8,max:11,ikon:%r,
 
 
 def sky(page):
-    return page.evaluate("document.body.dataset.kwx || null")
+    return page.evaluate("document.body.dataset.sky || null")
 
 
 def test_by_day_the_kiosk_is_light_and_the_background_is_the_days_weather(make_page):
     for icon, want in (("☀️", "sol"), ("⛅", "skyet"), ("☁️", "overskyet"), ("🌧️", "regn"), ("❄️", "frost"), ("⛈️", "regn")):
         page = open_kiosk(make_page, add=WX % icon)
         assert sky(page) == want, icon
-        assert page.evaluate("document.body.classList.contains('k-night')") is False
+        assert page.evaluate("document.body.classList.contains('night')") is False
         assert "gradient" in page.evaluate("getComputedStyle(document.body).backgroundImage")
         page.close()
 
@@ -124,7 +124,7 @@ def test_the_background_follows_the_focus_day_after_the_evening_hour(make_page):
 def test_from_21_to_6_the_kiosk_is_dark(make_page):
     for h, night in ((20, False), (21, True), (23, True), (5, True), (6, False)):
         page = open_kiosk(make_page, now=at(h, 30), add=WX % "☀️")
-        assert page.evaluate("document.body.classList.contains('k-night')") is night, h
+        assert page.evaluate("document.body.classList.contains('night')") is night, h
         bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
         assert (bg == "rgb(15, 20, 29)") is night, h
         page.close()
@@ -144,29 +144,32 @@ def _contrast(a, b):
 def test_text_keeps_wcag_aa_contrast_on_every_sky(make_page):
     page = open_kiosk(make_page)
     for w in (None, "sol", "skyet", "overskyet", "regn", "frost"):
-        v = page.evaluate("""(w)=>{ if(w) document.body.dataset.kwx=w; else delete document.body.dataset.kwx;
+        v = page.evaluate("""(w)=>{ if(w) document.body.dataset.sky=w; else delete document.body.dataset.sky;
             const cs=getComputedStyle(document.body), g=n=>cs.getPropertyValue(n).trim();
-            return {ink:g('--ink'), muted:g('--muted'), sky1:g('--sky1'), sky3:g('--sky3')}; }""", w)
+            return {ink:g('--ink'), muted:g('--muted'), accent:g('--accent'), warn:g('--warn'), rain:g('--rain'), sky1:g('--sky1'), sky3:g('--sky3')}; }""", w)
         for bg in (v["sky1"], v["sky3"]):
             assert _contrast(v["ink"], bg) >= 7, (w, v)
-            assert _contrast(v["muted"], bg) >= 4.5, (w, v)
+            for k in ("muted", "accent", "warn", "rain"):
+                assert _contrast(v[k], bg) >= 4.5, (w, k, v)
 
 
-def test_leaving_the_kiosk_drops_its_theme(make_page):
-    page = open_kiosk(make_page, now=at(22), add=WX % "🌧️")
+def test_leaving_the_kiosk_keeps_the_theme_because_the_whole_app_has_it(make_page):
+    page = open_kiosk(make_page, now=at(22), add=(WX % "🌧️").replace("dato:k,", "dato:k1,"))   # efter kl. 18: morgendagens vejr
+    assert sky(page) == "regn"
     page.keyboard.press("Escape")
-    assert sky(page) is None and page.evaluate("document.body.classList.contains('k-night')") is False
+    assert not page.evaluate("state.kiosk")
+    assert sky(page) == "regn" and page.evaluate("document.body.classList.contains('night')") is True
 
 
 def theme_colors(page):
     return page.eval_on_selector_all('meta[name="theme-color"]', "ms => ms.map(m => m.content.toUpperCase())")
 
 
-def test_the_status_bar_colour_follows_the_kiosk_and_is_restored_afterwards(make_page):
+def test_the_status_bar_colour_follows_the_top_of_the_screen_in_and_out_of_the_kiosk(make_page):
     page = open_kiosk(make_page, add=WX % "☁️")
-    assert theme_colors(page) == ["#D3D7DB", "#D3D7DB"]                     # overskyet: toppen af himlen, også i mørk tilstand
+    assert theme_colors(page) == ["#D3D7DB"]                                # overskyet: toppen af himlen
     page.close()
     page = open_kiosk(make_page, now=at(22), add=WX % "☁️")
-    assert theme_colors(page) == ["#0F141D", "#0F141D"]                     # om natten: kioskens mørke farve
+    assert theme_colors(page) == ["#0F141D"]                                # om natten: den mørke farve
     page.keyboard.press("Escape")
-    assert theme_colors(page) == ["#F2F5F9", "#121824"]                     # appens egne værdier igen
+    assert theme_colors(page) == ["#0F141D"]                                # appen har samme tema

@@ -1,6 +1,6 @@
 """Tilgængelighed med axe-core. Valgfri: kør `npm install axe-core` og sæt AXE_JS=sti/til/node_modules/axe-core/axe.min.js.
 
-Ingen kendte fund er tilladt længere (KNOWN er tom). Testen kører i lyst og mørkt tema.
+Ingen kendte fund er tilladt længere (KNOWN er tom). Testen kører i dagtemaet (med vejr) og i nattemaet (kl. 22).
 """
 import datetime as dt
 import os
@@ -14,16 +14,19 @@ KNOWN: set[str] = set()      # tilføj kun midlertidigt og med en forklaring
 VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-aula", "Feed")]
 
 
-@pytest.mark.parametrize("scheme", ["light", "dark"])
-def test_no_new_accessibility_violations(make_page, site, scheme):
-    page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, 10, 0), fixed=True, goto=False)
+@pytest.mark.parametrize("hour", [10, 22])
+def test_no_new_accessibility_violations(make_page, site, hour):
+    page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, hour, 0), fixed=True, goto=False)
+    day = "2026-10-02" if hour >= 18 else "2026-10-01"                   # efter kl. 18 handler I dag om i morgen
     # Med et overblik lavet af reserven, så banneret "Familieassistenten er ikke tilgængelig" også kontrastprøves
     fake.briefing = {"generated": "2026-10-01T08:00:00+02:00", "mode": "day", "method": "offline", "headline_label": "i dag",
-                     "period": ["2026-10-01", "2026-10-01"], "ai_fallback": {"reason": "kvote", "since": "2026-10-01T08:00"},
+                     "period": [day, day], "ai_fallback": {"reason": "kvote", "since": "2026-10-01T08:00"},
                      "afsnit": [{"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}]}
-    page.emulate_media(color_scheme=scheme)
     page.goto(site.url + "/index.html")
     page.wait_for_timeout(500)
+    # Med vejr, så himlen (regn: den mørkeste) også kontrastprøves
+    page.evaluate("state.data.weather={kilde:'MET Norway',dage:[0,1].map(i=>({dato:ymd(addDays(new Date(),i)),min:8,max:11,ikon:'🌧️',tekst:'regn',raad:[],"
+                  "timer:[10,11,12].map(kl=>({kl,ikon:'🌧️',temp:9,regn:1.2,vind:4}))}))}; render()")
     assert page.evaluate("!document.getElementById('aiBanner').classList.contains('hidden')")
     page.add_script_tag(content=Path(AXE).read_text())
     found = {}
