@@ -7,34 +7,39 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#F2F5F9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121824" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#DCE5D3">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Familieplan">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
-  --paper:#F2F5F9; --surface:#FFFFFF; --ink:#1B2638; --muted:#5F6B7D; --line:#D9E0EA; --today:#E6EEFB;
-  --accent:#2560D0;                 /* blå tekst/links: mindst 4,5:1 mod alle baggrunde (WCAG AA) */
-  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  /* Systemskriften (San Francisco på iPad/iPhone, Segoe UI på Windows) – som kiosken; skal ikke hentes, virker offline */
+  --display:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  --body:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --paper:#121824; --surface:#1B2331; --ink:#E8EDF5; --muted:#9AA6B8; --line:#2C3748; --today:#1F2C44; --accent:#7FA8F0;
-  }
-}
-:root[data-theme="dark"]{
-  --paper:#121824; --surface:#1B2331; --ink:#E8EDF5; --muted:#9AA6B8; --line:#2C3748; --today:#1F2C44; --accent:#7FA8F0;
-}
+/* Tema for hele appen (også kiosken): om dagen lyst, og baggrunden er himlen for fokusdagens vejr (body[data-sky],
+   sat af applyTheme; fast hele dagen, følger fokusdagen – efter evening_hour altså i morgen). Uden vejr: salviegrøn.
+   Kl. 21–06 (body.night) er alt mørkt. Enhedens lyse/mørke tilstand bruges ikke.
+   Tekstfarverne holder mindst 7:1 (--ink) og 4,5:1 (--muted, --accent) mod himlens mørkeste og lyseste punkt (testet). */
+body{color-scheme:light;min-height:100dvh;
+  --sky1:#DCE5D3; --sky2:#DCE5D3; --sky3:#DCE5D3; --ink:#1F2B22; --muted:#566558; --line:#C3CFB8; --accent:#2E5A3A;
+  --paper:var(--sky2); --surface:rgba(255,255,255,.6); --solid:#FBFCFA; --today:rgba(255,255,255,.8); --know:rgba(255,255,255,.72);
+  --warn:#8E3519; --rain:#2F5E8C;
+  background:linear-gradient(180deg,var(--sky1) 0,var(--sky2) 70vh,var(--sky3) 100%)}
+body[data-sky="sol"]{--sky1:#F6E3A8;--sky2:#FAF0D2;--sky3:#FCF7EA;--ink:#2B2416;--muted:#706144;--line:#E3D3A6;--accent:#6E4B00}
+body[data-sky="skyet"]{--sky1:#CFE1EE;--sky2:#E6EFF1;--sky3:#F1F4F1;--ink:#1D2A33;--muted:#51616E;--line:#C3D3DD;--accent:#1F4F78}
+body[data-sky="overskyet"]{--sky1:#D3D7DB;--sky2:#E3E5E7;--sky3:#ECEDEE;--ink:#23272B;--muted:#565B60;--line:#C7CBCF;--accent:#2D4A6B}
+body[data-sky="regn"]{--sky1:#AFC0CE;--sky2:#CCD7E0;--sky3:#DDE4EA;--ink:#152230;--muted:#3D4C5A;--line:#A5B5C3;--accent:#123A61;--rain:#1F4E7A;--warn:#74270F}
+body[data-sky="frost"]{--sky1:#DCE6F5;--sky2:#ECF1F9;--sky3:#F6F8FC;--ink:#1B2341;--muted:#596381;--line:#CFD8E8;--accent:#2A3F86}
+body.night{color-scheme:dark;
+  --paper:#0F141D; --surface:#141B27; --solid:#161E2B; --ink:#E3E8F0; --muted:#8B97AA; --line:#222C3B; --today:#1F2C44; --accent:#8DB2F2;
+  --know:rgba(141,178,242,.14); --warn:#F2A08A; --rain:#8DB2F2;
+  background:var(--paper)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 /* Rolige scrollbars: tynde og i temaets farver */
 :root{--sb:color-mix(in srgb,var(--ink) 22%,transparent)}
@@ -54,13 +59,13 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 .rich .lbl{font-weight:700;margin:.1em 0 .25em}
 .rich a{color:var(--accent)}
 *,*::before,*::after{box-sizing:inherit}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--body)}
+body{margin:0;color:var(--ink);font:16px/1.5 var(--body)}
 .wrap{max-width:1280px;margin:0 auto;padding:20px 16px 48px}
 header{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main gear" "main status";column-gap:16px;row-gap:6px;margin-bottom:20px}
 header > .hmain{grid-area:main}
 .hdrgear{grid-area:gear;align-self:start;justify-self:end}
 .status{grid-area:status;align-self:end;justify-self:end}
-h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02em}
+h1{font:600 clamp(1.6rem,4vw,2.4rem)/1.05 var(--display);margin:0;letter-spacing:-.01em}
 .sub{color:var(--muted);margin:6px 0 0}
 .status{font-size:.85rem;color:var(--muted)}
 .status b{color:var(--ink)}
@@ -69,8 +74,7 @@ h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02
 /* "AI ikke tilgængelig": rolig, men tydelig – også på kioskskærmen. Farverne holder mindst 4,5:1 (WCAG AA) */
 .aibanner{background:#FFF3D6;color:#4A3300;border:1px solid #E0A82E;border-radius:12px;padding:8px 14px;margin:0 0 12px;font-size:.95rem;line-height:1.35}
 .aibanner b{font-weight:700}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .aibanner{background:#3A2E12;color:#FBE7B5;border-color:#8A6A1F}}
-:root[data-theme="dark"] .aibanner{background:#3A2E12;color:#FBE7B5;border-color:#8A6A1F}
+body.night .aibanner{background:#3A2E12;color:#FBE7B5;border-color:#8A6A1F}
 .srvbtn{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.85rem}
 .actmenu{position:relative;display:inline-block}
 .srvbtn.gear{display:inline-flex;align-items:center;justify-content:center;color:var(--muted);border-radius:8px;padding:4px}
@@ -81,7 +85,7 @@ h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02
 @keyframes fp-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:no-preference){.spin .ic{animation:fp-spin 1s linear infinite}}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;min-width:220px;display:flex;flex-direction:column;gap:2px;padding:6px;
-  background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+  background:var(--solid);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
 .menu[hidden]{display:none}
 .menu button{all:unset;box-sizing:border-box;cursor:pointer;padding:10px 12px;border-radius:8px;color:var(--ink);font-size:.95rem;text-align:left}
 .menu button:hover{background:var(--today)}
@@ -97,7 +101,7 @@ h1{font:800 clamp(2rem,5vw,3.4rem)/1 var(--display);margin:0;letter-spacing:-.02
 .people{display:flex;flex-wrap:wrap;gap:8px}
 .chip{display:inline-flex;align-items:center;gap:8px;border:2px solid var(--c);background:var(--surface);color:var(--ink);
   font:700 .95rem var(--body);padding:4px 14px 4px 4px;border-radius:999px;cursor:pointer}
-.chip .av{width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font:800 .85rem var(--display)}
+.chip .av{width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font:700 .85rem var(--display)}
 .chip[aria-pressed="false"]{opacity:.4;border-style:dashed}
 button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
 .weeknav{display:flex;gap:6px;align-items:center;margin-left:auto}
@@ -108,7 +112,7 @@ button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offse
 .boardwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:18px}
 .board{display:grid;grid-template-columns:104px repeat(7,minmax(118px,1fr));min-width:930px}
 .board .dh{padding:12px 10px 10px;border-bottom:1px solid var(--line);font:700 .9rem var(--body);color:var(--muted)}
-.board .dh strong{display:block;font:800 1.5rem/1 var(--display);color:var(--ink)}
+.board .dh strong{display:block;font:600 1.4rem/1 var(--display);color:var(--ink)}
 .board .dh.is-today{background:var(--today)}
 .board .dh.is-today strong{color:var(--accent)}
 .lane{display:contents}
@@ -116,21 +120,127 @@ button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offse
 .lane .who small{font:400 .78rem var(--body);color:var(--muted)}
 .cell{border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:6px;min-height:74px;display:flex;flex-direction:column;gap:4px}
 .cell.is-today{background:var(--today)}
+.board .dh .dwx{display:block;margin-top:4px;font:400 .8rem var(--body);color:var(--muted);white-space:nowrap}
+/* Overståede dage: dæmpet tekst og farver – ikke opacity, så kontrasten holder (også om natten) */
+.board .dh.past,.board .dh.past strong{color:var(--muted)}
+.cell.past .pill{filter:saturate(.35)}
+.cell.span{grid-column:span 7;min-height:0;justify-content:center;color:var(--muted);font-size:.85rem;padding:8px 12px}
+.lane.empty .who{padding-top:6px;padding-bottom:6px}
+.acard h3 .dwx{margin-left:auto;font:400 .85rem var(--body);color:var(--muted);white-space:nowrap}
 .lane:last-child .who,.lane:last-child .cell{border-bottom:0}
 .pill{all:unset;cursor:pointer;display:block;border-radius:8px;padding:4px 7px;font-size:.8rem;line-height:1.3;
   background:color-mix(in srgb,var(--c) 16%,var(--surface));border-left:4px solid var(--c)}
-.pill time{font-weight:700;margin-right:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill time{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pill.task{background:none;border:1.5px dashed var(--c);border-left-width:4px;border-left-style:solid}
 .src{font-size:.7rem;color:var(--muted)}
 
 /* Today view */
-.today{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px}
-@media (max-width:700px){.today{grid-template-columns:1fr}}
+/* I dag: fælles tidsakse – en bane pr. person, husk og lektier i siden (under på smallere skærme) */
+.today{display:block}
+.dayhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.dayhead h2{font:600 1.7rem/1.1 var(--display);margin:0}
+.dayhead .dsub{color:var(--muted)}
+#todayView .brief{margin-bottom:14px}
+.brief.clamp .story,.brief.clamp .bsecs{max-height:calc(4 * 1.5em);overflow:hidden;-webkit-mask-image:linear-gradient(#000 65%,transparent);mask-image:linear-gradient(#000 65%,transparent)}
+.brief.clamp .story p{display:inline;margin:0}
+.brief.clamp .story p+p::before{content:" "}
+.brief.clamp .bsecs{display:block}
+.bmore{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.9rem;margin-top:6px;display:inline-block}
+.bmore:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:4px}
+.dboard{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+@media (max-width:1099px){.dboard{grid-template-columns:minmax(0,1fr)}}
+.dlanes{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:12px 12px 16px 6px;--hh:46px;min-width:0}
+.dgrid{display:grid;grid-template-columns:64px minmax(0,1fr)}
+.dheads,.dads,.dcols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+.dheads .dh{display:flex;align-items:center;gap:8px;padding:2px 8px 10px;font:600 1rem var(--display);min-width:0}
+.dheads .dh span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dheads .pav{width:1.7em;height:1.7em;font-size:.8rem;flex:none}
+.dax{font-size:.72rem;color:var(--muted)}
+.dallh{display:flex;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding-left:4px}
+.dallday{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px 0}
+.dfam{padding:0 6px 6px;display:flex;flex-wrap:wrap;gap:6px}
+.dad{display:flex;flex-direction:column;gap:4px;padding:0 6px;min-width:0}
+.dchip{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:flex-start;gap:6px;max-width:100%;padding:4px 8px;border-radius:8px;font-size:.8rem;line-height:1.3;
+  background:color-mix(in srgb,var(--c,var(--muted)) 14%,var(--solid));color:var(--ink)}
+.dchip .ic{margin-top:.15em;color:var(--c,var(--muted))}
+.dchip small{color:var(--muted)}
+.dchip .pav{width:1.5em;height:1.5em;font-size:.68rem;flex:none}
+.dchip.plan{background:#FFF3D6;color:#4A3300}
+.dchip.plan small,.dchip.plan .ic{color:#6B4D00}
+body.night .dchip.plan{background:#3A2E12;color:#FBE7B5}
+body.night .dchip.plan small,body.night .dchip.plan .ic{color:#E9D29A}
+.dchip.fam{--c:var(--ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 25%,transparent)}
+.daxis{position:relative;height:calc(var(--hours) * var(--hh));margin-top:8px}
+.daxis .hl{position:absolute;left:4px;right:6px;transform:translateY(-.6em);display:flex;flex-direction:column;line-height:1.2;font-variant-numeric:tabular-nums}
+.daxis .hl time{color:var(--muted)}
+.daxis .hw{color:var(--ink);white-space:nowrap}
+.daxis .hr{color:var(--rain);font-size:.92em}
+.dbody{position:relative;height:calc(var(--hours) * var(--hh));margin-top:8px}
+.hline{position:absolute;left:0;right:0;border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.dcols{position:absolute;inset:0}
+.dlane{position:relative;border-left:1px solid var(--line);min-width:0}
+.dspan{position:absolute;inset:0;pointer-events:none}
+.dspan .blk{pointer-events:auto;left:6px!important;width:calc(100% - 12px)!important;text-align:center}
+.blk{all:unset;box-sizing:border-box;position:absolute;padding:3px 7px;border:solid transparent;border-width:1px 3px;background-clip:padding-box;overflow:hidden;cursor:pointer;
+  border-radius:8px;font-size:.78rem;line-height:1.25;color:var(--ink);
+  background:color-mix(in srgb,var(--c) 20%,var(--solid));box-shadow:inset 3px 0 0 var(--c)}
+.blk .bt{display:block;font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.blk.short .bt{white-space:nowrap}
+.blk .bm{display:block;color:color-mix(in srgb,var(--ink) 55%,var(--muted));font-size:.92em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk time{font-variant-numeric:tabular-nums;font-weight:400;color:color-mix(in srgb,var(--ink) 55%,var(--muted))}
+.blk.lesson,.blk.school{background:color-mix(in srgb,var(--c) 9%,transparent);box-shadow:inset 2px 0 0 color-mix(in srgb,var(--c) 50%,transparent)}
+.blk.lesson .bt,.blk.school .bt{font-weight:400;white-space:nowrap}
+.blk.school .bt{font-weight:600}
+.blk.lesson .sub{font-size:.85em;font-weight:700;padding:0 5px;border-radius:999px;background:#FDE2D9;color:#9C2F12}
+.blk.lesson .ic{color:var(--accent)}
+.blk.fam{--c:var(--ink);background:color-mix(in srgb,var(--ink) 9%,var(--solid));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 28%,transparent)}
+.blk.point{box-shadow:inset 3px 0 0 var(--c);background:color-mix(in srgb,var(--c) 12%,var(--solid))}
+.blk.narrow{padding:2px 4px}
+.blk.narrow .bt{font-size:.92em;overflow-wrap:anywhere;hyphens:auto;text-overflow:clip}
+.blk.narrow .bm{display:none}
+.blk.past{filter:saturate(.3);color:var(--muted)}
+.blk.past time,.blk.past .bm{color:var(--muted)}
+.blk.now{outline:2px solid var(--c);outline-offset:-2px}
+.blk.school.now{outline:0}
+.blk.lesson.now{background:var(--today)}
+.blk:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px;z-index:2}
+.dnow{position:absolute;left:-10px;right:0;border-top:2px solid var(--warn);pointer-events:none;z-index:3}
+.dnow::before{content:"";position:absolute;left:-4px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--warn)}
+.dnow span{position:absolute;right:4px;top:-1.35em;font-size:.7rem;font-weight:700;color:var(--warn);background:var(--solid);padding:0 4px;border-radius:4px}
+.dnone{padding:6px 12px 0}
+.dlist{display:none}
+.lchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.lrows{list-style:none;margin:0;padding:0}
+.lrows li{border-top:1px solid var(--line)}
+.lrows li:first-child{border-top:0}
+.lrow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:3.3em minmax(0,1fr) auto;gap:10px;width:100%;padding:10px 4px;min-height:44px;align-items:start}
+.lrow time{color:var(--muted);font-variant-numeric:tabular-nums;padding-top:1px}
+.lrow .lt{font-weight:700}
+.lrow small{display:block;font-weight:400;color:var(--muted);font-size:.85rem}
+.lrow .lw{display:flex;gap:2px}
+.lrow .lw .pav{width:1.6em;height:1.6em;font-size:.72rem}
+.lrow.past,.lrow.past .lt{color:var(--muted)}
+.lrow.past .lw{filter:saturate(.3)}
+.lrow:focus-visible{outline:3px solid #2F6FDE;outline-offset:-3px;border-radius:8px}
+.lnow{display:flex;align-items:center;gap:8px;color:var(--warn);font-size:.78rem;font-weight:700;border-top:2px solid var(--warn)!important;padding:2px 0 4px}
+@media (max-width:699px){.dlanes{padding:10px 12px}.dlanes .dgrid{display:none}.dlist{display:block}}
+.dhusk h2{font-size:1.15rem}
+.hday{font:700 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 2px}
+.hgroup:first-child .hday{margin-top:0}
+.hlist{list-style:none;margin:0;padding:0}
+.hlist li{border-top:1px solid var(--line)}
+.hlist li:first-child{border-top:0}
+.hrow{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:8px;align-items:flex-start;width:100%;padding:8px 0;min-height:40px;font-size:.92rem;line-height:1.35}
+.hrow .pav{width:1.6em;height:1.6em;font-size:.72rem;flex:none}
+.hrow .ht{font-weight:700}
+.hrow small{display:block;color:var(--muted);font-size:.8rem}
+.hrow:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:6px}
+.hnone{margin:4px 0;font-size:.9rem}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px}
-.brief{grid-column:1 / -1;border-color:color-mix(in srgb,#2F6FDE 35%,var(--line));background:linear-gradient(180deg,color-mix(in srgb,#2F6FDE 7%,var(--surface)),var(--surface) 60%)}
+.brief{grid-column:1 / -1}
 .brief .bhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brief .blabel{font:700 .82rem var(--body);color:var(--accent);margin:0 0 4px}
-.brief h2{font:800 1.4rem/1.1 var(--display);margin:0;flex:1;min-width:200px}
+.panel.brief h2{font:600 .85rem/1.2 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0;flex:1;min-width:200px}
 .bsecs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 22px;margin-top:12px}
 .bsec h3{font:700 .95rem var(--display);margin:0 0 4px}
 .bsec ul{list-style:none;margin:0;padding:0}
@@ -139,34 +249,7 @@ button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offse
 .bsec li .pav{width:22px;height:22px;font-size:.72rem;border-width:1.5px;flex:none}
 .bsec li .src{display:block;font-size:.74rem;color:var(--muted)}
 .bfoot{margin-top:10px;font-size:.78rem;color:var(--muted)}
-.skemapanel{grid-column:1 / -1}
-.skema{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
-.scard{border:1px solid var(--line);border-top:4px solid var(--c);border-radius:14px;padding:10px 12px}
-.scard .shead{display:flex;align-items:center;gap:8px;margin-bottom:6px;font:700 1rem var(--display)}
-.scard .shead small{margin-left:auto;font:400 .8rem var(--body);color:var(--muted)}
-.lessons{list-style:none;margin:0;padding:0}
-.lessons li{display:grid;grid-template-columns:8.6em 1fr;gap:8px;padding:4px 6px;border-radius:8px;font-size:.92rem}
-.lessons li time{font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted)}
-.lessons li .who{font-size:.76rem;color:var(--muted)}
-.lessons li .also{font-style:italic}
-.lessons li .lnote{margin-top:3px;font-size:.8rem;padding:4px 8px;border-radius:8px;background:color-mix(in srgb,#2F6FDE 9%,var(--surface));white-space:pre-line}
-.lessons li .lnote .ic{color:var(--accent)}
-.lessons li.past, .lessons li.past :is(time, span, .who, .lnote){color:var(--muted)}
-.lessons li.past{opacity:1}
-.lessons time{white-space:nowrap;font-variant-numeric:tabular-nums}
-.lessons li.past time::before{content:"✓ ";font-weight:400}            /* overstået: ikke kun vist med farve */
-.lessons li.now{background:color-mix(in srgb,var(--c) 16%,transparent);box-shadow:inset 3px 0 0 var(--c)}
-.lessons li.now time{color:var(--ink)}
-.lessons .sub{font-size:.72rem;font-weight:700;padding:0 6px;border-radius:999px;background:#FDE2D9;color:#9C2F12;margin-left:6px}
-.panel h2{font:800 1.4rem/1.1 var(--display);margin:0 0 12px}
-.tl{list-style:none;margin:0;padding:0}
-.tl li{display:grid;grid-template-columns:108px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
-.tl li:first-child{border-top:0}
-.tl .t{font:700 1.05rem var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
-.tl .t .tend{font-weight:500;color:var(--muted)}
-.tl .t .dur{display:block;font:400 .74rem var(--body);color:var(--muted);margin-top:1px}
-.tl .t.allday{font-size:.8rem;color:var(--muted);padding-top:3px}
-.tl .title{font-weight:700}
+.panel h2{font:600 1.3rem/1.1 var(--display);margin:0 0 12px}
 .dots{display:inline-flex;gap:4px;margin-right:6px;vertical-align:middle}
 .dot{width:12px;height:12px;border-radius:50%;background:var(--c)}
 .meta{font-size:.85rem;color:var(--muted)}
@@ -196,10 +279,9 @@ button:focus-visible,.pill:focus-visible{outline:3px solid #2F6FDE;outline-offse
 dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .ic{width:1em;height:1em;flex:none;vertical-align:-.14em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .pill .ic{margin-right:4px;color:var(--c)}
-.tl .title .ic,.tasks .ic,.plans .ic{color:var(--c,var(--muted));margin-right:6px}
 .legend{display:flex;flex-wrap:wrap;gap:16px;margin:0 0 12px;font-size:.85rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
-.pav{display:inline-grid;place-items:center;width:1.9em;height:1.9em;border-radius:50%;background:color-mix(in srgb,var(--c) 22%,var(--surface));border:2px solid var(--c);font:800 .85rem/1 var(--display);color:var(--ink)}
+.pav{display:inline-grid;place-items:center;width:1.9em;height:1.9em;border-radius:50%;background:color-mix(in srgb,var(--c) 22%,var(--surface));border:2px solid var(--c);font:700 .85rem/1 var(--display);color:var(--ink)}
 .chip .av{background:color-mix(in srgb,var(--c) 22%,var(--surface));color:var(--ink);border:2px solid var(--c)}
 .lane .who .pav{margin-bottom:4px}
 /* Feed */
@@ -265,7 +347,7 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 #lb .cdots{bottom:calc(14px + env(safe-area-inset-bottom,0px))}
 @media (hover:none){#lb .arr{width:44px;height:44px;background:rgba(15,20,30,.3)}}
 .cbody{padding:10px 14px 14px}
-.cbody h3{font:800 1.15rem/1.25 var(--display);margin:0 0 4px}
+.cbody h3{font:700 1.15rem/1.25 var(--display);margin:0 0 4px}
 .cbody .txt{white-space:pre-line;margin:0}
 .cbody .txt.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .more{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.9rem;margin-top:4px;display:inline-block}
@@ -341,7 +423,7 @@ mark{background:#FFE27A;color:#1B2638;border-radius:3px;padding:0 1px}
 .reader{overflow-y:auto;min-height:0;padding:18px clamp(16px,3vw,40px) 30px}
 .reader .back{display:none}
 .rhead{max-width:78ch}
-.rhead h2{font:800 clamp(1.3rem,2.4vw,1.8rem)/1.2 var(--display);margin:0 0 8px}
+.rhead h2{font:700 clamp(1.3rem,2.4vw,1.8rem)/1.2 var(--display);margin:0 0 8px}
 .rmeta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:.88rem;color:var(--muted)}
 .rmeta .pav{width:26px;height:26px;font-size:.8rem}
 .rmeta .people{display:inline-flex;gap:4px;align-items:center}
@@ -369,9 +451,9 @@ mark{background:#FFE27A;color:#1B2638;border-radius:3px;padding:0 1px}
   .reader .back{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:var(--accent);font:700 .95rem var(--body);padding:0 0 10px;cursor:pointer}
 }
 dialog img{max-width:100%;border-radius:12px;display:block}
-dialog{border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--ink);max-width:560px;width:calc(100% - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px}
+dialog{border:1px solid var(--line);border-radius:18px;background:var(--solid);color:var(--ink);max-width:560px;width:calc(100% - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px}
 dialog::backdrop{background:rgba(10,15,25,.45)}
-dialog h3{font:800 1.4rem/1.15 var(--display);margin:0 0 8px}
+dialog h3{font:700 1.4rem/1.15 var(--display);margin:0 0 8px}
 dialog button{margin-top:14px;border:0;background:var(--ink);color:var(--paper);font:700 .95rem var(--body);padding:9px 18px;border-radius:999px;cursor:pointer}
 @media (prefers-reduced-motion:no-preference){.pill{transition:transform .12s}.pill:hover{transform:translateY(-1px)}}
 
@@ -400,8 +482,7 @@ body.mode-mail #wxHeadPanel{display:none}
 /* Kioskvisning: én mørk skærm til en iPad på langs – overblikket øverst, skemaet pr. person, husk i siden.
    Let og luftigt: lille skrift (man står tæt på), tynde vægte, ingen fyldte kort – kun tynde skillelinjer.
    Ingen rulning: teksten skrumper lidt, og lister, der stadig er for lange, afsluttes med "+N flere". */
-body.kiosk{overflow:hidden;color-scheme:dark;
-  --paper:#0F141D; --surface:#141B27; --ink:#E3E8F0; --muted:#8B97AA; --line:#222C3B; --today:#1F2C44; --accent:#8DB2F2}
+body.kiosk{overflow:hidden}
 body.kiosk header,body.kiosk #wxHeadPanel,body.kiosk .controls,body.kiosk .seg,body.kiosk #todayView,body.kiosk #weekView,body.kiosk #mailView,body.kiosk #aulaView{display:none!important}
 body.kiosk .wrap{max-width:none;box-sizing:border-box;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;padding:clamp(12px,2.2vmin,32px) clamp(14px,2.6vmin,40px)}
 body.kiosk main{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -471,24 +552,13 @@ body.k-showexit .k-exit{opacity:1;pointer-events:auto}
 #kioskView .k-person h3,#kioskView .k-husk h2{font-size:1.05em}
 .k-brieftext{font-size:1.2em;line-height:1.5;max-height:calc(4 * 1.5em)}
 .k-row.now{font-weight:600}
-/* Dagtema (kl. 6–21): lyst, og baggrunden er himlen for fokusdagens vejr (body[data-kwx], sat i renderKiosk).
-   Uden vejr: salviegrøn. Tekstfarverne holder mindst 4,5:1 (WCAG AA) også øverst, hvor himlen er mørkest.
-   Om natten (body.k-night) gælder kioskens mørke farver ovenfor. */
-body.kiosk:not(.k-night){color-scheme:light;min-height:100dvh;
-  --sky1:#DCE5D3; --sky2:#DCE5D3; --sky3:#DCE5D3; --ink:#1F2B22; --muted:#566558; --line:#C3CFB8;
-  --paper:var(--sky2); --surface:#EEF2E8; --accent:#2E5A3A; --know:rgba(255,255,255,.72); --warn:#8E3519; --rain:#2F5E8C;
-  background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 60%,var(--sky3) 100%)}
-body.kiosk[data-kwx="sol"]:not(.k-night){--sky1:#F6E3A8;--sky2:#FAF0D2;--sky3:#FCF7EA;--ink:#2B2416;--muted:#706144;--line:#E3D3A6}
-body.kiosk[data-kwx="skyet"]:not(.k-night){--sky1:#CFE1EE;--sky2:#E6EFF1;--sky3:#F1F4F1;--ink:#1D2A33;--muted:#51616E;--line:#C3D3DD}
-body.kiosk[data-kwx="overskyet"]:not(.k-night){--sky1:#D3D7DB;--sky2:#E3E5E7;--sky3:#ECEDEE;--ink:#23272B;--muted:#565B60;--line:#C7CBCF}
-body.kiosk[data-kwx="regn"]:not(.k-night){--sky1:#AFC0CE;--sky2:#CCD7E0;--sky3:#DDE4EA;--ink:#152230;--muted:#3D4C5A;--line:#A5B5C3;--rain:#1F4E7A}
-body.kiosk[data-kwx="frost"]:not(.k-night){--sky1:#DCE6F5;--sky2:#ECF1F9;--sky3:#F6F8FC;--ink:#1B2341;--muted:#596381;--line:#CFD8E8}
-body.kiosk:not(.k-night) .aibanner{color:#5A4300;border-left-color:#B8892E}
-body.kiosk:not(.k-night) .aibanner b{color:#5A4300}
-body.kiosk:not(.k-night) .k-person h3{color:var(--ink)}
-body.kiosk:not(.k-night) .k-row.now{background:var(--know)}
-body.kiosk:not(.k-night) .k-row .sub,body.kiosk:not(.k-night) .k-status .bad{color:var(--warn)}
-body.kiosk:not(.k-night) .k-wxstrip .r{color:var(--rain)}
+/* Kioskens dagtema (se temaet øverst): dæmpet banner, "nu" som en lys flade */
+body.kiosk:not(.night) .aibanner{color:#5A4300;border-left-color:#B8892E}
+body.kiosk:not(.night) .aibanner b{color:#5A4300}
+body.kiosk:not(.night) .k-person h3{color:var(--ink)}
+body.kiosk:not(.night) .k-row.now{background:var(--know)}
+body.kiosk:not(.night) .k-row .sub,body.kiosk:not(.night) .k-status .bad{color:var(--warn)}
+body.kiosk:not(.night) .k-wxstrip .r{color:var(--rain)}
 body.kiosk dialog .k-dl{list-style:none;margin:0;padding:0}
 body.kiosk dialog .k-dl li{padding:.35em 0;border-top:1px solid var(--line)}
 body.kiosk dialog .k-dl li:first-child{border-top:0}
@@ -506,7 +576,7 @@ body.kiosk dialog .k-dh{margin:.9em 0 .2em;font-size:.9em;color:var(--muted)}
 .btn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
 .btn[disabled]{opacity:.55;pointer-events:none}
 .calopts{max-width:78ch;margin:14px 0 4px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:color-mix(in srgb,var(--ink) 3%,var(--surface))}
-.calopts h3{margin:0 0 6px;font:800 .95rem var(--display);display:flex;align-items:center;gap:6px}
+.calopts h3{margin:0 0 6px;font:700 .95rem var(--display);display:flex;align-items:center;gap:6px}
 .calopt{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
 .calopt:first-of-type{border-top:0}
 .calopt .meta{display:block}
@@ -533,9 +603,9 @@ body.kiosk dialog .k-dh{margin:.9em 0 .2em;font-size:.9em;color:var(--muted)}
 .dphint{min-height:1.35em;margin-top:4px;font-size:.8rem;color:var(--muted);text-transform:none;font-weight:400}
 .dphint.bad{color:#C23A15;font-weight:700}
 #evDlg .dpin[aria-invalid="true"]{border-color:#C23A15}
-.dpcal{margin:0 0 12px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.dpcal{margin:0 0 12px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--solid);box-shadow:0 8px 24px rgba(0,0,0,.08)}
 .dphead{display:flex;align-items:center;gap:2px;margin-bottom:6px}
-.dphead .dptitle{flex:1;text-align:center;font:800 1rem var(--display);text-transform:capitalize}
+.dphead .dptitle{flex:1;text-align:center;font:700 1rem var(--display);text-transform:capitalize}
 .dphead button,.dpfoot button{all:unset;box-sizing:border-box;cursor:pointer;min-width:40px;min-height:40px;display:grid;place-items:center;border-radius:10px;font-weight:700;padding:0 8px}
 .dphead button:hover,.dpfoot button:hover{background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .dphead button:focus-visible,.dpfoot button:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px}
@@ -558,7 +628,7 @@ body.kiosk dialog .k-dh{margin:.9em 0 .2em;font-size:.9em;color:var(--muted)}
 .evtarget{margin:0 0 10px;font-size:.88rem}
 .evtarget b{font-weight:700}
 .everr{margin:0 0 8px;color:#C23A15;font-weight:700;min-height:1.2em}
-.evbtns{display:flex;gap:10px;flex-wrap:wrap;position:sticky;bottom:-22px;background:var(--surface);padding:12px 0 2px;margin-top:8px;border-top:1px solid var(--line)}
+.evbtns{display:flex;gap:10px;flex-wrap:wrap;position:sticky;bottom:-22px;background:var(--solid);padding:12px 0 2px;margin-top:8px;border-top:1px solid var(--line)}
 #evDlg .evbtns button{margin:0}
 @media (max-width:560px){#evDlg .row2{grid-template-columns:1fr}}
 
@@ -571,7 +641,7 @@ button,a,.chip,.pill{touch-action:manipulation}
 .agenda{display:none}
 .acard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;scroll-margin-top:12px}
 .acard.is-today{border-color:#2F6FDE;box-shadow:0 0 0 2px color-mix(in srgb,#2F6FDE 22%,transparent)}
-.acard h3{font:800 1.12rem/1.1 var(--display);margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.acard h3{font:700 1.12rem/1.1 var(--display);margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .acard h3 small{font:400 .8rem var(--body);color:var(--muted)}
 .alane{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;padding:7px 0;border-top:1px solid var(--line)}
 .alane .pav{width:26px;height:26px;font-size:.8rem}
@@ -700,12 +770,12 @@ button,a,.chip,.pill{touch-action:manipulation}
 
   <main id="main">
   <section id="todayView" class="today">
+    <div class="dayhead"><h2 id="dayTitle">I dag</h2><span class="dsub" id="daySub"></span></div>
     <div class="panel brief hidden" id="briefDay"></div>
-    <div class="panel skemapanel hidden" id="skemaPanel"><h2 id="skemaTitle">Skema i dag</h2><div class="skema" id="skema"></div></div>
-
-    <div class="panel"><h2 id="dayTitle">Dagens aftaler</h2><ul class="tl" id="timeline"></ul></div>
-    <div class="panel"><h2 id="infoTitle">Praktisk info i dag</h2><ul class="plans" id="planToday"></ul>
-      <h2 style="margin-top:22px">Husk og lektier</h2><ul class="tasks" id="taskList"></ul></div>
+    <div class="dboard">
+      <div class="dlanes" id="dayLanes" aria-labelledby="dayTitle"></div>
+      <aside class="panel dhusk" aria-labelledby="huskHead"><h2 id="huskHead">Husk og lektier</h2><div id="taskList"></div></aside>
+    </div>
   </section>
 
   <section id="weekView" class="hidden">
@@ -1230,18 +1300,6 @@ function duration(ev){
 }
 // Skoledagens blokke fra Aula ("Skole", "Skole + SFO" …) står allerede i skemaet og hører ikke hjemme blandt dagens aftaler
 const isSchoolBlock = ev => (ev.lessons && ev.lessons.length) || ev.type==="lesson" || !!ev.schoolDay;
-function timelineItems(day){
-  return state.data.events.filter(e=>onDay(e,day)&&visible(e)&&!isSchoolBlock(e)).sort(byStart).map(ev=>{
-    const who = ev.people.includes("family") ? "Hele familien" : ev.people.map(id=>person(id)?.name).join(", ");
-    const dots = colorsFor(ev).map(c=>`<span class="dot" style="--c:${c}"></span>`).join("");
-    const time = ev.allDay ? `<div class="t allday">Hele dagen</div>`
-      : ev.endInferred ? `<div class="t">${hm(new Date(ev.start))}<span class="dur">${NO_END}</span></div>`
-      : `<div class="t">${hm(new Date(ev.start))}<span class="tend">–${hm(new Date(ev.end))}</span><span class="dur">${duration(ev)}</span></div>`;
-    return `<li>${time}<div><span class="dots">${dots}</span><span class="title">${icon("event")}${esc(ev.title)}</span>
-      <div class="meta">${esc(who)}${ev.location?` · ${esc(ev.location)}`:""} · ${srcLabel(ev.source)}</div></div></li>`;
-  }).join("") || `<li style="display:block"><div class="empty">Ingen aftaler ${dayWord()}</div></li>`;
-}
-
 // ---------- Skema
 // Lektioner kommer enten struktureret fra backenden (lessons) eller – i ældre data – som tekstlinjer "08.00 Dansk" i notes
 function lessonsOf(ev){
@@ -1261,44 +1319,13 @@ const dayOffset=autoOffset;                       // efter kl. 18 (evening_hour)
 function focusDay(){ const d=new Date(); d.setDate(d.getDate()+dayOffset()); d.setHours(12,0,0,0); return d; }
 const dayWord=()=>dayOffset()===1?"i morgen":"i dag";
 let lastAutoOffset=null;
-setInterval(()=>{ const a=autoOffset(); if(lastAutoOffset!==null && a!==lastAutoOffset && state.data){ if(state.view==="today"||state.kiosk) render(); } lastAutoOffset=a; },20000);
+setInterval(()=>{ const a=autoOffset(); if(lastAutoOffset!==null && a!==lastAutoOffset && state.data && (state.view==="today"||state.kiosk)) render(); else if(state.data) applyTheme(); lastAutoOffset=a; },20000);   // også temaet: nat kl. 21, dag kl. 6
 function relDay(day){
   const t=new Date(); t.setHours(12,0,0,0); const diff=Math.round((startOfDayMs(day)-startOfDayMs(t))/864e5);
   const date=`${day.getDate()}/${day.getMonth()+1}`;
   if(diff===0) return `i dag, ${DAYS[day.getDay()]} ${date}`;
   if(diff===1) return `i morgen, ${DAYS[day.getDay()]} ${date}`;
   return `${DAYS[day.getDay()]} ${date}`;
-}
-function scheduleDay(){
-  // Kun dagens skema. Er der ingen skole i dag, skjules sektionen.
-  const day=focusDay();
-  return state.data.events.some(e=>onDay(e,day)&&lessonsOf(e).length) ? day : null;
-}
-function renderSkema(){
-  const panel=document.getElementById("skemaPanel"), day=scheduleDay();
-  const kids=state.data.people.filter(p=>p.role==="child" && !state.hidden.has(p.id));
-  const now=new Date(), isToday = day && ymd(day)===ymd(now);
-  const cards = !day ? [] : kids.map(k=>{
-    const evs=state.data.events.filter(e=>onDay(e,day)&&e.people.includes(k.id));
-    const ls=evs.flatMap(lessonsOf).sort((a,b)=>a.start.localeCompare(b.start));
-    if(!ls.length) return "";
-    const nowMin=now.getHours()*60+now.getMinutes();
-    const first=ls[0].start, last=ls.map(lessonEnd).sort().pop();
-    return `<div class="scard" style="--c:${k.color}"><div class="shead">${pav(k)}${esc(k.name)}<small>${first.replace(":",".")}–${last.replace(":",".")}</small></div>
-      <ul class="lessons">${ls.map((l,i)=>{
-        const s=toMin(l.start), e=toMin(lessonEnd(l));
-        const cls = !isToday ? "" : nowMin>=e ? "past" : (nowMin>=s ? "now" : "");
-        const extra=[l.teacher,l.location].filter(Boolean).join(" · ");
-        const also=[...(l.alt||[]).map(x=>`samtidig: ${x.title}${x.teacher?` (${x.teacher})`:""}${x.location?`, ${x.location}`:""}`)];
-        return `<li class="${cls}"><time${l.endInferred?` title="${NO_END} – regnet som ${lessonMinutes()} min"`:""}>${lessonRange(l)}</time><span>${esc(l.title)}${l.substitute?`<span class="sub">vikar${l.substitute&&l.substitute!=="vikar"?`: ${esc(l.substitute)}`:""}</span>`:""}
-          ${extra?`<div class="who">${esc(extra)}</div>`:""}${also.length?`<div class="who also">${esc(also.join(" · "))}</div>`:""}
-          ${l.note?`<div class="lnote">${icon("note")} ${esc(unescMd(l.note))}</div>`:""}</span></li>`;
-      }).join("")}</ul></div>`;
-  }).filter(Boolean);
-  panel.classList.toggle("hidden", !cards.length);
-  if(!cards.length) return;
-  document.getElementById("skemaTitle").textContent = "Skema "+dayWord();
-  document.getElementById("skema").innerHTML = cards.join("");
 }
 // ---------- Familieassistentens overblik
 function personByName(n){ return state.data.people.find(p=>p.name.toLowerCase()===String(n).toLowerCase()); }
@@ -1322,44 +1349,175 @@ function renderBrief(kind, elId){
     ${story ? `<div class="story">${story}</div>` : secs ? `<div class="bsecs">${secs}</div>` : `<p class="empty" style="margin:10px 0 0">${empty}</p>`}
     <div class="bfoot">${b.method&&b.method!=="offline"?"Skrevet af familieassistenten":"Samlet af familieassistenten ud fra faste regler"} ${hm(g)}${b.demo?" (demo)":""} ud fra Aula, familiekalenderen${state.data?.weather?" og vejrdata fra MET Norway":""} – private samtaler indgår ikke. Tjek altid detaljer i kilden.</div>`;
 }
-function renderToday(){
-  renderBrief("day","briefDay");
-  renderSkema();
-  const fday=focusDay(), off=dayOffset();
-  document.getElementById("dayTitle").textContent = off===0 ? "Dagens aftaler" : "Aftaler i morgen";
-  document.getElementById("timeline").innerHTML = timelineItems(fday);
-  // Praktisk info: info og kommentarer fra ugeplanen for fokusdagen. Lektier og husk står under "Husk og lektier",
-  // almindelig undervisning i skemaet.
-  document.getElementById("infoTitle").textContent = "Praktisk info "+dayWord();
-  const dayPlans = arr("weekplan").filter(w=>w.date===ymd(fday) && w.category!=="anden_klasse" && !state.hidden.has(w.person));
-  const plans = dayPlans.filter(w=>(!w.category || w.category!=="undervisning") && !hasTasks(w))
-    .sort((a,b)=>(isTaskPlan(b)-isTaskPlan(a)) || ((b.category==="info")-(a.category==="info")));
-  const planBox=document.getElementById("planToday");
-  planBox.innerHTML = plans.map(w=>{ const p=person(w.person);
-    return `<li style="--c:${p.color}"><button class="item" data-plan="${esc(w.id)}"><div class="head"><span class="subj">${icon(planIcon(w))}${esc(w.subject||w.title)}</span>${w.category&&w.category!=="undervisning"?`<span class="flag">${CAT[w.category]||""}</span>`:w.label?`<span class="flag">${esc(w.label)}</span>`:""}</div>
-      <div class="snip">${esc(p.name)} · ${esc(planSummary(w))}</div></button></li>`; }).join("") || `<li class="empty">Ingen praktisk info</li>`;
-  planBox.querySelectorAll("[data-plan]").forEach(b=>b.onclick=()=>showPlan(b.dataset.plan));
-  const realToday=ymd(new Date()), realTomorrow=ymd(addDays(new Date(),1));
-  const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"};
-  const todayKey=ymd(fday);
-  // Kun det, der gælder fokusdagen (i dag, efter kl. 18 i morgen – samme regel som skemaet). Ting med frist senere
-  // på ugen står i "Ugen" på fristdagen. Undtagelser: "hver dag", "snarest" og perioder (startdato → frist).
-  const active = t => t.recurring==="daily"
-      ? (t.from||t.due)<=todayKey && todayKey<=ymd(addDays(new Date((t.from||t.due)+"T12:00"),6))
-      : t.openEnded
-        ? t.from && t.from<=todayKey && todayKey<=ymd(addDays(new Date(t.from+"T12:00"),7))   // uden frist: vis en uge fra beskeden
-        : t.due===todayKey || (t.from && t.from<=todayKey && t.due>=todayKey);
-  const list = state.data.tasks.filter(t=>active(t)&&personVisible(tPeople(t)))
-    .sort((a,b)=>((b.recurring==="daily")-(a.recurring==="daily")) || a.due.localeCompare(b.due));
-  document.getElementById("taskList").innerHTML = list.map(t=>{
-    const d=new Date(t.due+"T12:00");
-    const whenTxt = t.recurring==="daily" ? "hver dag" : t.openEnded ? "snarest" : (t.due===realToday ? "i dag" : t.due===realTomorrow ? "i morgen" : `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`);
-    return `<li style="--c:${tColor(t)}"><button class="item" data-task="${esc(t.id)}" style="padding:0"><strong>${icon("task")}${esc(t.title)}</strong>${t.confidence==="middel"?`<span class="flag">Muligvis</span>`:""}
-      <div class="meta">${esc(whoText(tPeople(t)))} · ${kinds[t.kind]||t.kind} · ${whenTxt}</div></button></li>`;
-  }).join("") || `<li class="empty" style="border:0;background:none">Intet ${dayWord()}</li>`;
-  document.querySelectorAll("#taskList [data-task]").forEach(b=>b.onclick=()=>showTask(b.dataset.task));
-
+// ---------- I dag: én fælles tidsakse med en bane pr. person
+// Børnene først, så de voksne (som kiosken). Lektioner og institution står svagt, aftaler i personens farve, aftaler for
+// hele familien som én blok på tværs af alle baner (står de oven i noget, får hver bane sin egen). Overlapper to ting
+// for samme person, deles banen i kolonner side om side. Aksen går 07–21 og strækkes, hvis noget ligger uden for.
+// Hele-dagen-ting (og Praktisk info fra ugeplanen) står i en række øverst. Smal skærm (< 700 px): én liste i tidsorden.
+const DAY_FROM=7, DAY_TO=21, BLK_MIN=25;               // en blok tegnes mindst 25 minutter høj, så den kan læses
+let dItems=new Map(), dSeq=0;
+const dKey = fn => { const k="d"+(++dSeq); dItems.set(k,fn); return k; };
+document.getElementById("todayView").addEventListener("click",e=>{ const el=e.target.closest("[data-d]"); if(el && dItems.has(el.dataset.d)) dItems.get(el.dataset.d)(); });
+function lessonDetailHtml(p,l){
+  const also=(l.alt||[]).map(x=>`Samtidig: ${x.title}${x.teacher?` (${x.teacher})`:""}${x.location?`, ${x.location}`:""}`);
+  return kMeta([p.name, lessonRange(l), l.teacher, l.location, l.substitute?(l.substitute!=="vikar"?`vikar: ${l.substitute}`:"vikar"):""])
+    + also.map(a=>`<p>${esc(a)}</p>`).join("") + (l.note?`<p>${esc(unescMd(l.note))}</p>`:"");
 }
+const lessonsDetailHtml = (p,ls) => kDl(ls.map(l=>({time:lessonRange(l), title:l.title, extra:[l.substitute?"vikar":"", l.note?unescMd(l.note):""].filter(Boolean).join(" · ")})));
+const dayPeople = () => kPeopleOrder().filter(p=>!state.hidden.has(p.id));
+const minOfDay = (iso,day,end) => { const d=new Date(iso); return ymd(d)===ymd(day) ? d.getHours()*60+d.getMinutes() : (end ? 24*60 : 0); };
+function dayPlans(day){
+  return arr("weekplan").filter(w=>w.date===ymd(day) && w.category!=="anden_klasse" && (!w.category || w.category!=="undervisning") && !hasTasks(w) && !state.hidden.has(w.person))
+    .sort((a,b)=>(isTaskPlan(b)-isTaskPlan(a)) || ((b.category==="info")-(a.category==="info")));
+}
+// Alt for én person på dagen: {allDay:[…], timed:[{s,e,kind,…}]}
+function dayLane(p,day){
+  const evs=state.data.events.filter(e=>onDay(e,day)&&(e.people.includes(p.id)||e.people.includes("family")));
+  const allDay=[], timed=[];
+  for(const e of evs){
+    const fam=e.people.includes("family"), ls=e.people.includes(p.id)?lessonsOf(e):[];
+    if(ls.length){ ls.forEach(l=>timed.push({kind:"lesson", s:toMin(l.start), e:toMin(lessonEnd(l)), l, p})); continue; }
+    if(lessonsOf(e).length) continue;                                   // et andet barns skoledag med lektioner
+    const s=minOfDay(e.start,day,false), en=minOfDay(e.end,day,true);
+    if(e.allDay || (s===0 && en>=24*60-1)){ allDay.push({kind:fam?"fam":"ev", ev:e}); continue; }
+    timed.push({kind:isSchoolBlock(e)?"school":(fam?"fam":"ev"), s, e:e.endInferred?s:Math.max(en,s), ev:e, point:!!e.endInferred});
+  }
+  dayPlans(day).filter(w=>w.person===p.id).forEach(w=>allDay.push({kind:"plan", w}));
+  return {p, allDay, timed};
+}
+// Kolonner i en bane: ting, der overlapper (også visuelt, pga. mindstehøjden), står side om side
+function layoutLane(items){
+  items.sort((a,b)=>a.s-b.s || b.e-a.e);
+  let group=[], end=-1;
+  const flush=()=>{ const cols=[]; group.forEach(it=>{ let c=cols.findIndex(x=>x<=it.s); if(c<0){ c=cols.length; cols.push(0); } cols[c]=Math.max(it.e,it.s+BLK_MIN); it.col=c; }); group.forEach(it=>it.ncol=cols.length); group=[]; };
+  for(const it of items){ if(group.length && it.s>=end) flush(); group.push(it); end=Math.max(end,it.e,it.s+BLK_MIN); }
+  flush();
+  return items;
+}
+function dayBlock(it, from, span, nowMin, isToday){
+  const top=(it.s-from*60)/span*100, h=Math.max(it.e-it.s,BLK_MIN)/span*100;
+  const pos=`top:${top.toFixed(3)}%;height:${h.toFixed(3)}%;left:calc(${it.col} * 100% / ${it.ncol});width:calc(100% / ${it.ncol})`;
+  const past = isToday && nowMin>=Math.max(it.e,it.s+1), now = isToday && !past && nowMin>=it.s;
+  const st = `${past?" past":""}${now?" now":""}${it.e-it.s<40?" short":""}${it.ncol>1?" narrow":""}`;
+  if(it.kind==="lesson"){
+    const l=it.l, k=dKey(()=>openDetail(l.title, lessonDetailHtml(it.p,l)));
+    // Synlig tekst først, resten kun til skærmlæsere (navnet skal begynde med det, der står på knappen – WCAG 2.5.3)
+    return `<button type="button" class="blk lesson${st}" style="${pos}" data-d="${k}"><span class="bt"><time>${hhmm(l.start)}</time> ${esc(l.title)}${l.substitute?` <span class="sub">vikar</span>`:""}${l.note?` ${icon("note")}`:""}</span><span class="sronly">, ${esc(it.p.name)}, ${lessonRange(l)}</span></button>`;
+  }
+  const e=it.ev, k=dKey(()=>showEvent(e.id)), who=e.people.includes("family")?"Hele familien":(it.p?.name||"");
+  const when = it.point ? hm(new Date(e.start)) : evRange(e);
+  const inline = it.point || it.e-it.s<40;
+  return `<button type="button" class="blk ${it.kind}${it.point?" point":""}${st}" style="${pos}" data-d="${k}">`
+    + `<span class="bt">${inline?`<time>${when}</time> `:""}${esc(e.title)}</span>${inline?"":`<span class="bm"><time>${when}</time>${e.location?` · ${esc(e.location)}`:""}</span>`}`
+    + `<span class="sronly">, ${esc(who)}${it.point?` (${NO_END})`:""}${inline&&e.location?`, ${esc(e.location)}`:""}</span></button>`;
+}
+function dayChip(it, withWho=false){
+  if(it.kind==="plan"){ const w=it.w, p=person(w.person); return `<button type="button" class="dchip plan" style="--c:${p?.color||"var(--muted)"}" data-plan="${esc(w.id)}" data-d="${dKey(()=>showPlan(w.id))}">${withWho&&p?pav(p):icon(planIcon(w))}<span>${esc(w.subject||w.title)}${w.category&&w.category!=="undervisning"?` <small>${CAT[w.category]||""}</small>`:w.label?` <small>${esc(w.label)}</small>`:""}</span></button>`; }
+  const e=it.ev, who=withWho&&it.kind!=="fam"?e.people.map(person).filter(Boolean).map(pav).join(""):"";
+  return `<button type="button" class="dchip ${it.kind}" data-d="${dKey(()=>showEvent(e.id))}">${who||icon("event")}<span>${esc(e.title)}</span></button>`;
+}
+function renderDayLanes(day, isToday, now){
+  const box=document.getElementById("dayLanes"), ppl=dayPeople();
+  if(!ppl.length){ box.innerHTML=`<p class="empty dnone">Vælg mindst én person ovenfor</p>`; return; }
+  const lanes=ppl.map(p=>dayLane(p,day)), all=lanes.flatMap(l=>l.timed);
+  const from=Math.max(0,Math.min(DAY_FROM, ...all.map(i=>Math.floor(i.s/60))));
+  const to=Math.min(24,Math.max(DAY_TO, ...all.map(i=>Math.ceil(Math.max(i.e,i.s+BLK_MIN)/60))));
+  const span=(to-from)*60, nowMin=now.getHours()*60+now.getMinutes();
+  lanes.forEach(l=>layoutLane(l.timed));
+  // Hele familien: én blok på tværs, når den står alene i alle baner – ellers får hver bane sin egen
+  const famIds=[...new Set(all.filter(i=>i.kind==="fam").map(i=>i.ev.id))];
+  const spanning=new Set(famIds.filter(id=>lanes.every(l=>l.timed.filter(i=>i.ev?.id===id).every(i=>i.ncol===1))));
+  const famAllDay=[...new Map(lanes.flatMap(l=>l.allDay).filter(i=>i.kind==="fam").map(i=>[i.ev.id,i])).values()];
+  const w=weatherFor(day), wh=new Map((w?.timer||[]).map(h=>[h.kl,h]));
+  const hours=[...Array(to-from+1)].map((_,i)=>from+i);
+  const axis=hours.slice(0,-1).map(hh=>{ const x=wh.get(hh);
+    return `<div class="hl" style="top:${((hh-from)*60/span*100).toFixed(3)}%"><time>${pad(hh)}</time>${x?`<span class="hw" title="${esc(`${x.temp} grader${x.regn>=0.1?`, ${wxMm(x.regn)} mm regn`:""}`)}"><span aria-hidden="true">${esc(x.ikon)}</span> ${x.temp}°</span>${x.regn>=0.1?`<span class="hr">${wxMm(x.regn)} mm</span>`:""}`:""}</div>`; }).join("");
+  const lines=hours.map(hh=>`<div class="hline" style="top:${((hh-from)*60/span*100).toFixed(3)}%"></div>`).join("");
+  const heads=ppl.map(p=>`<div class="dh" style="--c:${p.color}">${pav(p)}<span>${esc(p.name)}</span></div>`).join("");
+  const allRow=lanes.map(l=>`<div class="dad">${l.allDay.filter(i=>i.kind!=="fam").map(i=>dayChip(i)).join("")}</div>`).join("");
+  const body=lanes.map(l=>`<div class="dlane" style="--c:${l.p.color}" data-person="${esc(l.p.id)}">${l.timed.filter(i=>!(i.kind==="fam"&&spanning.has(i.ev.id))).map(i=>dayBlock(i,from,span,nowMin,isToday)).join("")}</div>`).join("");
+  const span1=[...spanning].map(id=>{ const it={...all.find(i=>i.ev?.id===id), col:0, ncol:1, p:null}; return dayBlock(it,from,span,nowMin,isToday); }).join("");
+  const nowLine = isToday && nowMin>=from*60 && nowMin<=to*60 ? `<div class="dnow" style="top:${((nowMin-from*60)/span*100).toFixed(3)}%" aria-hidden="true"><span>${hm(now)}</span></div>` : "";
+  const empty = !all.length && !lanes.some(l=>l.allDay.length) ? `<p class="empty dnone">Intet på programmet ${dayWord()}</p>` : "";
+  const hasAll = lanes.some(l=>l.allDay.some(i=>i.kind!=="fam")) || famAllDay.length;
+  box.innerHTML=`<div class="dgrid" style="--n:${ppl.length};--hours:${to-from}">
+      <div class="dax"></div><div class="dheads">${heads}</div>
+      ${hasAll?`<div class="dax dallh">Hele dagen</div><div class="dallday">${famAllDay.length?`<div class="dfam">${famAllDay.map(i=>dayChip(i)).join("")}</div>`:""}<div class="dads">${allRow}</div></div>`:""}
+      <div class="dax daxis" aria-hidden="true">${axis}</div>
+      <div class="dbody">${lines}<div class="dcols">${body}</div><div class="dspan">${span1}</div>${nowLine}</div>
+    </div>${empty}${dayList(lanes, famAllDay, day, isToday, now)}`;
+}
+// Smal skærm: én liste i tidsorden. Samme aftale for flere står én gang med deres avatarer; skolen er én linje pr. barn.
+function dayList(lanes, famAllDay, day, isToday, now){
+  const rows=new Map(), nowMin=now.getHours()*60+now.getMinutes();
+  for(const l of lanes){
+    const ls=l.timed.filter(i=>i.kind==="lesson").map(i=>i.l);
+    if(ls.length){ const s=toMin(ls[0].start), e=Math.max(...ls.map(x=>toMin(lessonEnd(x)))), subs=ls.filter(x=>x.substitute).length;
+      rows.set("s:"+l.p.id,{s,e,who:[l.p],title:"Skole",sub:`til ${minHM(e).replace(":",".")} · ${ls.length} lektioner${subs?` · vikar i ${subs}`:""}`,
+        k:dKey(()=>openDetail(`${l.p.name}: skole ${dayWord()}`, lessonsDetailHtml(l.p,ls)))}); }
+    for(const i of l.timed.filter(i=>i.ev)){
+      const e=i.ev, r=rows.get(e.id);
+      if(r){ if(!r.who.includes(l.p)) r.who.push(l.p); continue; }
+      rows.set(e.id,{s:i.s,e:i.e,who:[l.p],fam:e.people.includes("family"),title:e.title,
+        sub:[i.point?NO_END:`til ${hm(new Date(e.end))}`, e.location].filter(Boolean).join(" · "), k:dKey(()=>showEvent(e.id))});
+    }
+  }
+  const list=[...rows.values()].sort((a,b)=>a.s-b.s);
+  const chips=[...famAllDay, ...lanes.flatMap(l=>l.allDay.filter(i=>i.kind!=="fam"))];
+  let html="", nowDone=!isToday;
+  for(const r of list){
+    if(!nowDone && r.s>nowMin){ html+=`<li class="lnow" aria-hidden="true"><span>Nu ${hm(now)}</span></li>`; nowDone=true; }
+    const past=isToday && nowMin>=Math.max(r.e,r.s+1);
+    const who=r.fam?`<span class="pav fam" style="--c:var(--muted)" title="Hele familien">👪</span>`:r.who.map(pav).join("");
+    html+=`<li><button type="button" class="lrow${past?" past":""}" data-d="${r.k}"><time>${minHM(r.s).replace(":",".")}</time><span class="lt">${esc(r.title)}${r.sub?`<small>${esc(r.sub)}</small>`:""}</span><span class="lw">${who}</span></button></li>`;
+  }
+  if(!nowDone && list.length) html+=`<li class="lnow" aria-hidden="true"><span>Nu ${hm(now)}</span></li>`;
+  return `<div class="dlist">${chips.length?`<div class="lchips">${[...new Map(chips.map(c=>[c.ev?.id||c.w?.id,c])).values()].map(c=>dayChip(c,true)).join("")}</div>`:""}<ul class="lrows" aria-label="Dagens program">${html}</ul></div>`;
+}
+// Husk og lektier: fokusdagen og de to næste dage – samme regel som kiosken (en opgave står kun på den første dag, den gælder)
+function renderDayHusk(day){
+  const kinds={lektie:"Lektie",husk:"Husk",besked:"Besked",handling:"Skal gøres"}, seen=new Set(), out=[];
+  for(const d of [0,1,2].map(i=>addDays(day,i))){
+    const key=ymd(d);
+    const ts=state.data.tasks.filter(t=>!seen.has(t.id) && kTaskActive(t,key) && personVisible(tPeople(t)))
+      .sort((a,b)=>((b.recurring==="daily")-(a.recurring==="daily")) || String(a.due).localeCompare(String(b.due)));
+    ts.forEach(t=>seen.add(t.id));
+    out.push(`<div class="hgroup" data-day="${key}"><h3 class="hday">${esc(kDayLabel(d))}</h3>`);
+    out.push(ts.length ? `<ul class="hlist">${ts.map(t=>{
+      const extra=[whoText(tPeople(t)), kinds[t.kind]||t.kind, t.recurring==="daily"?"hver dag":t.openEnded?"snarest":""].filter(Boolean).join(" · ");
+      return `<li style="--c:${tColor(t)}"><button type="button" class="hrow" data-task="${esc(t.id)}">${tPeople(t).map(person).filter(Boolean).map(pav).join("")}<span><span class="ht">${esc(t.title)}</span>${t.confidence==="middel"?` <span class="flag">Muligvis</span>`:""}<small>${esc(extra)}</small></span></button></li>`; }).join("")}</ul>`
+      : `<p class="empty hnone">Intet${key===ymd(day)?" "+dayWord():""}</p>`, `</div>`);
+  }
+  const box=document.getElementById("taskList"); box.innerHTML=out.join("");
+  box.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>showTask(b.dataset.task));
+}
+// Overblikket: højst fire linjer, "Vis hele overblikket" folder det ud (valget huskes, mens appen kører)
+state.briefOpen=false;
+function clampBrief(el){
+  el.querySelector(".bmore")?.remove();
+  const body=el.querySelector(".story,.bsecs"); if(!body){ el.classList.remove("clamp"); return; }
+  el.classList.add("clamp");
+  const over=body.scrollHeight>body.clientHeight+1;
+  el.classList.toggle("clamp", over && !state.briefOpen);
+  if(!over && !state.briefOpen) return;
+  const b=document.createElement("button"); b.type="button"; b.className="bmore"; b.setAttribute("aria-expanded",String(state.briefOpen));
+  b.textContent=state.briefOpen?"Vis kortere":"Vis hele overblikket";
+  b.onclick=()=>{ state.briefOpen=!state.briefOpen; clampBrief(el); };
+  body.after(b);
+}
+function renderToday(){
+  dItems=new Map();
+  const fday=focusDay(), now=new Date(), isToday=dayOffset()===0;
+  document.getElementById("dayTitle").textContent = isToday ? "I dag" : "I morgen";
+  document.getElementById("daySub").textContent = `${DAYS[fday.getDay()]} ${fday.getDate()}. ${MONTHS[fday.getMonth()]}`;
+  renderBrief("day","briefDay");
+  const bd=document.getElementById("briefDay"); if(!bd.classList.contains("hidden")) clampBrief(bd);
+  renderDayLanes(fday, isToday, now);
+  renderDayHusk(fday);
+}
+// "Nu"-linjen og overståede ting flytter sig hvert minut, uden at resten tegnes om
+// (hele I dag-visningen, så tryk-nøglerne i dItems ikke hober sig op; ikke mens en dialog er åben eller fokus står i visningen)
+setInterval(()=>{ if(state.data && state.view==="today" && !state.kiosk && !document.querySelector("dialog[open]") && !document.getElementById("todayView").contains(document.activeElement)) renderToday(); },60000);
 
 function weekLanes(){ return [{id:"family",name:"Hele familien",color:"var(--ink)",note:""},...state.data.people.filter(p=>!state.hidden.has(p.id))]; }
 function pillsFor(l,d){
@@ -1367,10 +1525,11 @@ function pillsFor(l,d){
   const evs=state.data.events.filter(e=>onDay(e,d)&&(l.id==="family"?e.people.includes("family"):e.people.includes(l.id))).sort(byStart);
   const tks=l.id==="family"?[]:state.data.tasks.filter(t=>!t.openEnded&&tPeople(t).includes(l.id)&&t.due===key);
   const pls=l.id==="family"?[]:arr("weekplan").filter(w=>w.person===l.id&&w.date===key&&w.category!=="anden_klasse");
-  return evs.map(e=>`<button class="pill${e.source==="besked"?" sugg":""}" data-ev="${e.id}">${icon("event")}${e.allDay?"":`<time>${evRange(e)}</time>`}${esc(e.title)}</button>`).join("")
+  return evs.map(e=>`<button class="pill${e.source==="besked"?" sugg":""}" data-ev="${e.id}">${icon("event")}${e.allDay?"":`<time>${evRange(e)}</time> `}${esc(e.title)}</button>`).join("")
     + tks.map(t=>`<button class="pill task" data-task="${t.id}">${icon("task")}${esc(t.title)}</button>`).join("")
     + pls.map(w=>`<button class="pill plan" data-plan="${esc(w.id)}">${icon(planIcon(w))}${esc(planTitle(w))}</button>`).join("");
 }
+const wkWx = d => { const w=weatherFor(d); return w ? `<span class="dwx" title="${esc(w.tekst)}"><span aria-hidden="true">${esc(w.ikon||"")}</span> ${wxTemp(w)}</span>` : ""; };
 function renderWeek(){
   renderBrief("week","briefWeek");
   const board=document.getElementById("board"), agenda=document.getElementById("agenda"), todayKey=ymd(new Date());
@@ -1378,10 +1537,14 @@ function renderWeek(){
   // Tavle (bred skærm): én bane pr. person, én kolonne pr. dag
   document.getElementById("weekLabel").textContent=`Uge ${isoWeek(state.weekStart)}`;
   let html=`<div class="dh">Uge ${isoWeek(state.weekStart)}</div>`;
-  html+=days.map(d=>`<div class="dh ${ymd(d)===todayKey?"is-today":""}">${DAYS[d.getDay()].slice(0,3)}<strong>${d.getDate()}</strong></div>`).join("");
+  // Dagens vejr i overskriften (hvor der er en prognose); overståede dage afdæmpede; en bane uden noget hele ugen fylder én linje
+  const dcls = d => ymd(d)===todayKey ? "is-today" : ymd(d)<todayKey ? "past" : "";
+  html+=days.map(d=>`<div class="dh ${dcls(d)}">${DAYS[d.getDay()].slice(0,3)}<strong>${d.getDate()}</strong>${wkWx(d)}</div>`).join("");
   lanes.forEach(l=>{
-    html+=`<div class="lane" style="--c:${l.color}"><div class="who">${l.id==="family"?"":pav(l)}${esc(l.name)}<small>${esc(l.note||"")}</small></div>`;
-    days.forEach(d=>{ html+=`<div class="cell ${ymd(d)===todayKey?"is-today":""}">${pillsFor(l,d)}</div>`; });
+    const cells=days.map(d=>pillsFor(l,d)), empty=cells.every(c=>!c);
+    html+=`<div class="lane${empty?" empty":""}" style="--c:${l.color}"><div class="who">${l.id==="family"?"":pav(l)}${esc(l.name)}<small>${esc(l.note||"")}</small></div>`;
+    if(empty) html+=`<div class="cell span">Intet denne uge</div>`;
+    else days.forEach((d,i)=>{ html+=`<div class="cell ${dcls(d)}">${cells[i]}</div>`; });
     html+=`</div>`;
   });
   board.innerHTML=html;
@@ -1391,7 +1554,7 @@ function renderWeek(){
   const order = todayIdx>0 ? [...days.slice(todayIdx), ...days.slice(0,todayIdx)] : days;
   agenda.innerHTML=order.map(d=>{
     const key=ymd(d), past = key<todayKey, rows=lanes.map(l=>{ const items=pillsFor(l,d); return items ? `<div class="alane" style="--c:${l.color}"><div>${l.id==="family"?`<span class="pav" style="--c:var(--muted)" title="Hele familien">👪</span>`:pav(l)}</div><div class="pills">${items}</div></div>` : ""; }).join("");
-    return `<section class="acard${key===todayKey?" is-today":""}${past?" past":""}" id="ad-${key}"><h3>${DAYS[d.getDay()]}<small>${d.getDate()}. ${MONTHS[d.getMonth()]}${key===todayKey?" · i dag":""}</small></h3>${rows||`<p class="anone">Intet planlagt</p>`}</section>`;
+    return `<section class="acard${key===todayKey?" is-today":""}${past?" past":""}" id="ad-${key}"><h3>${DAYS[d.getDay()]}<small>${d.getDate()}. ${MONTHS[d.getMonth()]}${key===todayKey?" · i dag":""}</small>${wkWx(d)}</h3>${rows||`<p class="anone">Intet planlagt</p>`}</section>`;
   }).join("");
   const root=document.getElementById("weekView");
   root.querySelectorAll("[data-ev]").forEach(b=>b.onclick=()=>showEvent(b.dataset.ev));
@@ -1860,7 +2023,7 @@ function enterKiosk(){
   render();
 }
 function exitKiosk(){
-  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit","k-night"); delete document.body.dataset.kwx; kThemeColor(null);
+  state.kiosk=false; document.body.classList.remove("kiosk","k-showexit");
   try{ history.replaceState(null,"",location.pathname); }catch{}
   clearInterval(kioskTick); clearInterval(kioskLoad); try{ wakeLock?.release(); }catch{} wakeLock=null;
   render();
@@ -2012,25 +2175,26 @@ function kWeather(day,isToday,now){
     ${strip.length?`<ol class="k-wxstrip" aria-hidden="true">${strip.map(h=>`<li><span class="t">${pad(h.kl)}</span><span class="i">${esc(h.ikon)}</span><span class="c">${h.temp}°</span><span class="r">${h.regn>=0.1?`${wxMm(h.regn)} mm`:""}</span></li>`).join("")}</ol>`:""}</button>`;
 }
 
-// Baggrunden: himlen for fokusdagens samlede vejr (dagsikonet fra MET Norway; fast hele dagen). Mørkt kl. 21–06.
-const K_NIGHT_FROM=21, K_NIGHT_TO=6;
-const K_SKY={"☀":"sol","🌤":"sol","⛅":"skyet","☁":"overskyet","🌫":"overskyet","🌧":"regn","⛈":"regn","❄":"frost","🌨":"frost"};
-function kTheme(now,day){
-  const h=now.getHours(), b=document.body;
-  b.classList.toggle("k-night", h>=K_NIGHT_FROM || h<K_NIGHT_TO);
-  const sky=K_SKY[String(weatherFor(day)?.ikon||"").replace(/\uFE0F/g,"")];
-  if(sky) b.dataset.kwx=sky; else delete b.dataset.kwx;
+// ---------- Tema (hele appen, også kiosken): himlen for fokusdagens samlede vejr (dagsikonet fra MET Norway;
+// fast hele dagen, efter evening_hour altså i morgen). Mørkt kl. 21–06. Uge- og feedvisningen følger også fokusdagen –
+// en uge uden prognose beholder dagens himmel.
+const NIGHT_FROM=21, NIGHT_TO=6;
+const SKY={"☀":"sol","🌤":"sol","⛅":"skyet","☁":"overskyet","🌫":"overskyet","🌧":"regn","⛈":"regn","❄":"frost","🌨":"frost"};
+const isNight = now => now.getHours()>=NIGHT_FROM || now.getHours()<NIGHT_TO;
+const metaThemes=[...document.querySelectorAll('meta[name="theme-color"]')];
+function applyTheme(now=new Date(), day=focusDay()){
+  const b=document.body;
+  b.classList.toggle("night", isNight(now));
+  const sky=SKY[String(weatherFor(day)?.ikon||"").replace(/\uFE0F/g,"")];
+  if(sky) b.dataset.sky=sky; else delete b.dataset.sky;
   // Statusbjælken (iPad/iPhone) og browserens værktøjslinje følger theme-color: samme farve som toppen af skærmen
-  const top=getComputedStyle(b).getPropertyValue(b.classList.contains("k-night")?"--paper":"--sky1").trim();
-  kThemeColor(top);
+  const top=getComputedStyle(b).getPropertyValue(b.classList.contains("night")?"--paper":"--sky1").trim();
+  metaThemes.forEach(m=>{ m.content=top; });
 }
-// theme-color findes to gange (lyst og mørkt tema på enheden); kiosken sætter begge og lægger appens egne tilbage bagefter
-const kMetaThemes=[...document.querySelectorAll('meta[name="theme-color"]')].map(m=>[m,m.content]);
-const kThemeColor = c => kMetaThemes.forEach(([m,orig])=>{ m.content = c || orig; });
 function renderKiosk(){
   const now=new Date(), day=focusDay(), off=dayOffset(), isToday=off===0;
   kItems=new Map();
-  kTheme(now,day);
+  applyTheme(now,day);
   document.getElementById("kClock").textContent=`${pad(now.getHours())}.${pad(now.getMinutes())}`;
   document.getElementById("kDay").textContent=isToday?"I dag":"I morgen";
   document.getElementById("kDate").textContent=`${DAYS[day.getDay()]} ${day.getDate()}. ${MONTHS[day.getMonth()]}`;
@@ -2416,6 +2580,7 @@ document.addEventListener("click",e=>{
   if(k==="move") openEvDialog(s); else if(k==="cancel") applyChange(s,"cancel"); else calAct(k,s.id);
 });
 function render(){
+  applyTheme();
   renderChrome();
   document.getElementById("kioskView").classList.toggle("hidden",!state.kiosk);
   if(state.kiosk){ ["todayView","weekView","mailView","aulaView"].forEach(i=>document.getElementById(i).classList.add("hidden")); renderKiosk(); return; }
