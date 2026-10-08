@@ -5,6 +5,12 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (progress bars)
+- While the server fetches, the status line shows one compact progress bar per data type instead of the spinning
+  icon: a real percentage where the amount is known (Google calendars, message threads, albums, overview), a busy
+  animation otherwise. A failed part turns red until the fetch ends; afterwards the bars show "færdig" for a few
+  seconds and disappear. Not on the kiosk. `/api/status` has a new `progress` field (after login only).
+
 ### Changed (Aula fetch)
 - Faster, gentler Aula fetch: the parts run concurrently behind one shared cap of 3 simultaneous calls, each call
   has a timeout, and temporary errors are retried a few times (never login errors). Log query strings are removed.

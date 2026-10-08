@@ -58,7 +58,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 | **Overblik** | Only the assistant's day/week summary | (not for the app in general) |
 | **Hele familien** | Everyone | Familien, Fælles |
 | **Adgangskode** / **Kode til private samtaler** | Login / unlocking private threads | |
-| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status ("Opdateret …") and a spinning sync icon while the server fetches – warnings live under ⚠ at the title | Menu, Opdatér nu (removed: the server fetches by itself) |
+| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status ("Opdateret …") and, while the server fetches, one progress bar per data type (no spinner any more) – warnings live under ⚠ at the title | Menu, Opdatér nu (removed: the server fetches by itself) |
 
 Formats: clock times `08.00` everywhere (kiosk clock too); dates `man 12/10` in lists, `mandag 12. oktober` in details.
 No duplicates on one screen: a week-plan item that produced tasks (task id `<plan id>:<n>`) is shown only as a task
@@ -292,6 +292,20 @@ Planned restructuring (do in small steps, tests green after each):
   AND every thread is fetched again (no reuse), because an edit to an older message does not always change the
   thread's list entry. Images are cached on disk by id, so the deep check costs message calls, not downloads.
 - Not yet run against the real Aula at the time of writing (only simulated in `tests/test_aula_fetch.py`).
+
+## Progress bars while fetching (`progress.py`, Oct 2026)
+
+User decisions: compact bars in the status line replace the spinning icon; one per data type the fetch actually
+runs (Google, Aula-kalender, Opgaver, Ugeplan, Opslag, Beskeder, Billeder, Kalenderforslag, Vejr, Overblik –
+parts switched off in config get no bar, `fetch_family._progress_parts`). Real percentage where the total is
+known (Google: calendars, Beskeder: threads to fetch once the list is read, Billeder: albums, Overblik: day +
+week), otherwise a "henter …" animation (static with reduced motion). A failed part turns red ("fejlede") until
+the fetch ends; afterwards the bars stay ~4 s as "færdig" (`PROG_LINGER`) and disappear. Never on the kiosk.
+- `progress.start(keys)` / `begin(key, total)` / `step(key, done, total)` / `finish(key, ok)` / `end()`; in memory
+  only, reset in `create_app`. `end()` marks parts that never finished as failed (timeout, login required …);
+  `run_once` and `Runner.run` both call it. `/api/status` → `progress: {running, started, finished, parts}`.
+- Frontend: `renderProgress()` / `progItem()`; `watchRun` polls `/api/status` every 1.5 s while fetching and only
+  redraws the bars, not the whole app. Each bar is `role="progressbar"` with `aria-valuetext`.
 
 ## Problems at the title (`problems.py`, Oct 2026)
 
