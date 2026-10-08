@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
+import stat
 
 import httpx
 import pytest
@@ -151,11 +153,172 @@ def test_a_cached_reply_is_a_copy(tmp_path, clock):
 @pytest.mark.parametrize("body", [gemini_text("Her er dit overblik: …"), gemini_text("[1, 2]"), {"candidates": []},
                                   gemini_ok({"a": 1}, finish="MAX_TOKENS"), {"promptFeedback": {"blockReason": "SAFETY"}}],
                          ids=["ikke-json", "liste", "tomt", "afbrudt", "blokeret"])
-def test_invalid_output_raises_and_pauses(tmp_path, clock, body):
+def test_invalid_output_is_retried_once_then_pauses_only_that_content(tmp_path, clock, body):
+    fake = Fake((200, body, {}))
+    c = make(tmp_path, clock, fake)
     with pytest.raises(ai.AIUnavailable) as e:
-        make(tmp_path, clock, Fake((200, body, {}))).generate_json("s", "p")
-    assert e.value.reason == "ugyldigt_svar"
-    assert usage(tmp_path)["backoff_until"]
+        c.generate_json("s", "p")
+    assert e.value.reason == "ugyldigt_svar" and len(fake.requests) == 2      # prøvet straks én gang til
+    u = usage(tmp_path)
+    assert not u.get("backoff_until")                                       # ingen pause for al AI
+    assert len(u["invalid"]) == 1 and u["last_error"]["reason"] == "ugyldigt_svar"
+
+
+def test_the_same_content_waits_but_other_content_may_still_ask(tmp_path, clock):
+    fake = Fake((200, gemini_text('{\n  "fortaelling": [\n    …\n  ]\n}'), {}), (200, gemini_text("nej"), {}),
+                (200, gemini_ok({"andet": 1}), {}))
+    c = make(tmp_path, clock, fake)
+    with pytest.raises(ai.AIUnavailable):
+        c.generate_json("s", "p")
+    with pytest.raises(ai.AIUnavailable) as e:                              # samme data: intet sendes
+        c.generate_json("s", "p")
+    assert e.value.reason == "ugyldigt_svar" and "samme data" in e.value.detail and len(fake.requests) == 2
+    assert c.generate_json("s", "nye data") == {"andet": 1}                 # nyt indhold (fx kalenderforslag) må gerne
+    assert len(usage(tmp_path)["invalid"]) == 1                             # mærket for det første indhold består
+
+
+def test_the_pause_for_one_content_grows_and_a_valid_answer_removes_it(tmp_path, clock):
+    fake = Fake((200, gemini_text("nej"), {}), (200, gemini_text("nej"), {}), (200, gemini_text("nej"), {}),
+                (200, gemini_text("nej"), {}), (200, gemini_ok({"ok": 1}), {}))
+    c = make(tmp_path, clock, fake, rpm=0)
+    pauses = []
+    for _ in range(2):
+        with pytest.raises(ai.AIUnavailable):
+            c.generate_json("s", "p")
+        until = dt.datetime.fromisoformat(next(iter(usage(tmp_path)["invalid"].values()))["until"])
+        pauses.append((until - clock.t).total_seconds())
+        clock.t = until
+    assert pauses == [15 * 60, 30 * 60]
+    assert c.generate_json("s", "p") == {"ok": 1}
+    assert not usage(tmp_path)["invalid"]
+
+
+def test_a_retry_that_succeeds_is_returned_and_cached(tmp_path, clock):
+    fake = Fake((200, gemini_text("Her er dit overblik"), {}), (200, gemini_ok({"ok": 1}), {}))
+    c = make(tmp_path, clock, fake)
+    assert c.generate_json("s", "p") == {"ok": 1} and len(fake.requests) == 2
+    assert c.generate_json("s", "p") == {"ok": 1} and len(fake.requests) == 2      # fra cachen
+    assert not usage(tmp_path).get("invalid") and usage(tmp_path)["last_ok"]
+
+
+def test_the_raw_invalid_answer_is_saved_privately_and_never_logged(tmp_path, clock, caplog):
+    raw = '{\n  "fortaelling": [\n    Carla skal have drikkedunk med\n  ]\n}'
+    secret = tmp_path / "secrets" / ai.INVALID_FILE
+    s = ai.Settings(daily_cap=10, rpm=3)
+    c = ai.Client(s, tmp_path, transport=httpx.MockTransport(Fake((200, gemini_text(raw), {}))), clock=clock,
+                  sleep=clock.sleep, env={s.api_key_env: KEY}, invalid_path=secret)
+    with caplog.at_level("INFO", logger="familieplanner.ai"), pytest.raises(ai.AIUnavailable):
+        c.generate_json("s", "p")
+    saved = json.loads(secret.read_text("utf-8"))
+    assert saved["text"] == raw and saved["finish"] == "STOP" and saved["model"] == s.model
+    assert "Expecting value: line 3 column 5" in saved["error"]
+    assert "drikkedunk" not in caplog.text and str(secret) in caplog.text
+    if os.name == "posix":
+        assert stat.S_IMODE(secret.stat().st_mode) == 0o600
+
+
+def test_a_blocked_answer_without_text_saves_the_providers_reply(tmp_path, clock):
+    secret = tmp_path / "bad.json"
+    s = ai.Settings(daily_cap=10, rpm=3)
+    c = ai.Client(s, tmp_path, transport=httpx.MockTransport(Fake((200, {"promptFeedback": {"blockReason": "SAFETY"}}, {}))),
+                  clock=clock, sleep=clock.sleep, env={s.api_key_env: KEY}, invalid_path=secret)
+    with pytest.raises(ai.AIUnavailable):
+        c.generate_json("s", "p")
+    saved = json.loads(secret.read_text("utf-8"))
+    assert saved["text"] is None and saved["response"]["promptFeedback"]["blockReason"] == "SAFETY"
+
+
+def test_without_a_path_nothing_is_saved(tmp_path, clock):
+    with pytest.raises(ai.AIUnavailable):
+        make(tmp_path, clock, Fake((200, gemini_text("nej"), {}))).generate_json("s", "p")
+    assert not list(tmp_path.rglob(ai.INVALID_FILE))
+
+
+def test_an_old_pause_from_an_invalid_answer_no_longer_blocks_everything(tmp_path, clock):
+    (tmp_path / "ai_usage.json").write_text(json.dumps({                    # sådan så filen ud før denne version
+        "day": "2026-10-02", "requests": 3, "failures": 5, "backoff_until": "2026-10-02T12:00:00+00:00",
+        "last_error": {"reason": "ugyldigt_svar", "detail": "Expecting value", "at": "2026-10-02T07:00:00+00:00"}}))
+    fake = Fake((200, gemini_ok({"ok": 1}), {}))
+    assert make(tmp_path, clock, fake).generate_json("s", "p") == {"ok": 1}
+    assert usage(tmp_path)["failures"] == 0
+
+
+def test_a_pause_from_a_real_outage_still_blocks(tmp_path, clock):
+    (tmp_path / "ai_usage.json").write_text(json.dumps({
+        "day": "2026-10-02", "failures": 1, "backoff_until": "2026-10-02T12:00:00+00:00", "pause_reason": "serverfejl",
+        "last_error": {"reason": "ugyldigt_svar", "detail": "x", "at": "2026-10-02T07:00:00+00:00"}}))
+    fake = Fake()
+    with pytest.raises(ai.AIUnavailable) as e:
+        make(tmp_path, clock, fake).generate_json("s", "p")
+    assert e.value.reason == "pause" and not fake.requests
+
+
+# ---------------------------------------------------------------- svarformat (schema)
+SCHEMA = {"type": "OBJECT", "properties": {"svar": {"type": "STRING"}}, "required": ["svar"]}
+
+
+def test_a_schema_is_sent_to_gemini(tmp_path, clock):
+    fake = Fake((200, gemini_ok({"svar": "ok"}), {}))
+    make(tmp_path, clock, fake).generate_json("s", "p", schema=SCHEMA)
+    gc = fake.body()["generationConfig"]
+    assert gc["responseSchema"] == SCHEMA and gc["responseMimeType"] == "application/json"
+
+
+def test_without_a_schema_gemini_gets_none(tmp_path, clock):
+    fake = Fake((200, gemini_ok({"svar": "ok"}), {}))
+    make(tmp_path, clock, fake).generate_json("s", "p")
+    assert "responseSchema" not in fake.body()["generationConfig"]
+
+
+def test_claude_ignores_the_schema(tmp_path, clock):
+    fake = Fake((200, {"content": [{"type": "text", "text": '{"svar": "ok"}'}], "stop_reason": "end_turn"}, {}))
+    c = make(tmp_path, clock, fake, provider="claude", model="claude-sonnet-5-5", api_key_env="ANTHROPIC_API_KEY")
+    assert c.generate_json("s", "p", schema=SCHEMA) == {"svar": "ok"}
+    assert "schema" not in json.dumps(fake.body()).lower()
+
+
+def test_if_gemini_rejects_the_schema_the_request_is_repeated_without(tmp_path, clock):
+    fake = Fake((400, google_error(400, "INVALID_ARGUMENT", "Invalid JSON payload: responseSchema"), {}),
+                (200, gemini_ok({"svar": "ok"}), {}))
+    assert make(tmp_path, clock, fake).generate_json("s", "p", schema=SCHEMA) == {"svar": "ok"}
+    assert "responseSchema" in fake.body(0)["generationConfig"] and "responseSchema" not in fake.body(1)["generationConfig"]
+    assert not usage(tmp_path).get("backoff_until")
+
+
+def test_a_400_without_and_with_schema_is_still_afvist(tmp_path, clock):
+    fake = Fake((400, google_error(400, "INVALID_ARGUMENT", "nope"), {}))
+    with pytest.raises(ai.AIUnavailable) as e:
+        make(tmp_path, clock, fake).generate_json("s", "p", schema=SCHEMA)
+    assert e.value.reason == "afvist" and len(fake.requests) == 2
+
+
+# ---------------------------------------------------------------- logning
+def test_reasons_that_send_nothing_are_logged_once(tmp_path, clock, caplog):
+    s = ai.Settings()
+    c = ai.Client(s, tmp_path, clock=clock, env={})
+    with caplog.at_level("WARNING", logger="familieplanner.ai"):
+        for _ in range(3):
+            with pytest.raises(ai.AIUnavailable):
+                c.generate_json("s", "p")
+    assert caplog.text.count("API-nøglen mangler") == 1
+
+
+def test_a_pause_is_logged_once_and_again_after_the_next_failure(tmp_path, clock, caplog):
+    fake = Fake((503, google_error(503, "UNAVAILABLE"), {}))
+    c = make(tmp_path, clock, fake)
+    with pytest.raises(ai.AIUnavailable):
+        c.generate_json("s", "p")
+    with caplog.at_level("WARNING", logger="familieplanner.ai"):
+        for _ in range(3):
+            with pytest.raises(ai.AIUnavailable):
+                c.generate_json("s", "p")
+        assert caplog.text.count("venter efter en tidligere fejl") == 1
+        clock.t = dt.datetime.fromisoformat(usage(tmp_path)["backoff_until"])
+        with pytest.raises(ai.AIUnavailable):                              # ny fejl, ny pause
+            c.generate_json("s", "p")
+        with pytest.raises(ai.AIUnavailable):
+            c.generate_json("s", "p")
+    assert caplog.text.count("venter efter en tidligere fejl") == 2
 
 
 def test_output_failing_the_callers_validation_is_invalid_and_not_cached(tmp_path, clock):

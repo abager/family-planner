@@ -94,7 +94,7 @@ def check_access(settings) -> list[Result]:
 def check_permissions(cfg: dict) -> list[Result]:
     if os.name != "posix":
         return []
-    files = [Path(cfg.get("aula", {}).get("token_file", "secrets/aula_tokens.json")), private_mod.store_path(cfg), Path(cfg.get("calendar_write", {}).get("service_account_file", "secrets/google_service_account.json"))]
+    files = [Path(cfg.get("aula", {}).get("token_file", "secrets/aula_tokens.json")), private_mod.store_path(cfg), private_mod.store_path(cfg).parent / "ai_last_invalid.json", Path(cfg.get("calendar_write", {}).get("service_account_file", "secrets/google_service_account.json"))]
     loose = [str(f) for f in files if f.exists() and f.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO)]
     return [Result(WARN if loose else OK, "Rettigheder på nøglefiler", "for åbne: " + ", ".join(loose) if loose else "kun ejeren kan læse dem",
                    "Kør: chmod 600 " + " ".join(loose) if loose else "")]
@@ -240,7 +240,7 @@ AI_HINTS = {
     "minutgraense": "For mange forespørgsler lige nu. Prøv igen om et minut.",
     "serverfejl": "Udbyderen har problemer lige nu. Prøv igen senere.",
     "netvaerk": "Serveren kan ikke nå udbyderen. Tjek internetforbindelsen og evt. firewall.",
-    "ugyldigt_svar": "Modellen svarede ikke med gyldigt JSON. Prøv igen; sker det tit, så prøv en anden model i [ai] model.",
+    "ugyldigt_svar": "Modellen svarede ikke med gyldigt JSON. Det seneste ugyldige svar ligger i secrets/ai_last_invalid.json. Sker det tit, så prøv en anden model i [ai] model.",
     "ukendt_udbyder": "Sæt [ai] provider til \"gemini\" eller \"claude\".",
 }
 

@@ -365,3 +365,62 @@ def test_unchanged_coarse_weather_costs_no_new_ai_request(acfg):
     later["weather"]["hentet"] = "2026-10-01T07:00:00+02:00"           # ny hentning, samme grove vejr
     brief(acfg, fake, data=later, now=NOW + dt.timedelta(hours=1, minutes=5))
     assert len(fake.requests) == 1
+
+
+# ---------------------------------------------------------------- svarformat og log
+def test_the_briefing_asks_gemini_for_a_fixed_answer_format(acfg):
+    fake = Fake(ok(GOOD))
+    brief(acfg, fake)
+    gc = json.loads(fake.requests[0].content)["generationConfig"]
+    assert gc["responseSchema"] == B.SCHEMA
+    assert set(B.SCHEMA["required"]) == {"fortaelling", "kilder"}
+
+
+def test_the_format_example_in_the_prompt_is_valid_json():
+    example = B.SYSTEM.split("i dette format", 1)[1].split("\n", 1)[1].rsplit("}", 1)[0] + "}"
+    assert set(json.loads(example)) == {"fortaelling", "kilder"}            # ingen "…" modellen kan efterligne
+
+
+def test_the_ai_client_saves_invalid_answers_next_to_the_private_threads(acfg):
+    import private
+    c = B.ai_client(acfg)
+    assert c.invalid_path == private.store_path(acfg).parent / ai.INVALID_FILE
+    assert Path(acfg["output"]).parent not in c.invalid_path.parents       # aldrig i den mappe, der serveres
+
+
+def test_the_fallback_log_line_says_why(acfg, caplog):
+    with caplog.at_level("INFO", logger="familieplanner.briefing"):
+        B.make_briefing(acfg, family_data(), "day", now=NOW, client=client(acfg, Fake(ok(GOOD)), env={}))
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("Skrev"))
+    assert "uden sprogmodel – AI ikke tilgængelig: API-nøglen mangler i .env (GEMINI_API_KEY)" in line
+
+
+def test_during_a_pause_the_log_line_names_the_last_error(acfg, caplog):
+    out = Path(acfg["output"]).parent
+    (out / "ai_usage.json").write_text(json.dumps({
+        "day": "2026-10-01", "failures": 2, "backoff_until": "2026-10-01T09:30:00+00:00", "pause_reason": "serverfejl",
+        "last_error": {"reason": "serverfejl", "detail": "HTTP 503", "at": "2026-10-01T06:45:00+00:00"}}))
+    with caplog.at_level("INFO", logger="familieplanner.briefing"):
+        b = brief(acfg, Fake(ok(GOOD)))
+    assert b["ai_fallback"]["reason"] == "pause"
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("Skrev"))
+    assert "venter efter en tidligere fejl til kl. 11.30" in line
+    assert "seneste fejl 01.10. kl. 08.45: udbyderen har problemer (5xx) (HTTP 503)" in line
+
+
+def test_the_case_from_the_log_invalid_json_twice_is_saved_and_only_that_data_waits(acfg, tmp_path):
+    broken = {"candidates": [{"content": {"parts": [{"text": '{\n  "fortaelling": [\n    Torsdag skal Carla …\n  ]\n}'}]},
+                              "finishReason": "STOP"}]}
+    fake = Fake((200, broken))
+    secret = tmp_path / "secrets" / ai.INVALID_FILE
+    c = client(acfg, fake)
+    c.invalid_path = secret
+    b = B.make_briefing(acfg, family_data(), "day", now=NOW, client=c)
+    assert b["method"] == "offline" and b["ai_fallback"]["reason"] == "ugyldigt_svar" and len(fake.requests) == 2
+    assert "line 3 column 5" in json.loads(secret.read_text("utf-8"))["error"]
+    B.make_briefing(acfg, family_data(), "day", now=NOW + dt.timedelta(minutes=5), client=c)
+    assert len(fake.requests) == 2                                         # samme data: venter
+    good = Fake(ok(GOOD))
+    b = B.make_briefing(acfg, family_data("Læs side 12-20"), "day", now=NOW + dt.timedelta(minutes=10),
+                        client=client(acfg, good))
+    assert b["method"] == "ai" and len(good.requests) == 1                 # nye data: spørger med det samme

@@ -230,3 +230,9 @@ def test_a_move_needs_the_new_date_in_the_text(acfg):
 def test_a_change_without_exactly_one_app_event_is_dropped(acfg, targets):
     fake = Gemini(lambda items: {"Aflysning": change()})
     assert run(acfg, data(msg("m2", "Skovturen den 8. oktober er aflyst.", "Aflysning")), fake, targets)[0] == []
+
+
+def test_the_calendar_check_asks_gemini_for_a_fixed_answer_format(acfg):
+    fake = Gemini()
+    run(acfg, data(msg("m1", "Fotografering torsdag den 8. oktober.")), fake)
+    assert json.loads(fake.requests[0].content)["generationConfig"]["responseSchema"] == C.SCHEMA

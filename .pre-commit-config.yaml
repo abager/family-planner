@@ -41,6 +41,7 @@ repos:
             web/learned_rules\.json|
             .*ai_cache\.json|
             .*ai_usage\.json|
+            .*ai_last_invalid\.json|
             .*home_location\.json|
             .*weather_cache\.json|
             .*private_messages\.json|

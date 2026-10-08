@@ -56,6 +56,29 @@ Svar KUN med JSON:
                   "ny_dato": "ÅÅÅÅ-MM-DD eller null", "start": "HH:MM eller null", "slut": "HH:MM eller null", "citat": "…"}]}]}"""
 
 
+_S = {"type": "STRING"}
+_N = {"type": "STRING", "nullable": True}
+# Svarformatet til sprogmodellen (Gemini overholder det). Indholdet kontrolleres bagefter mod punktets tekst.
+SCHEMA = {
+    "type": "OBJECT",
+    "properties": {"punkter": {"type": "ARRAY", "items": {
+        "type": "OBJECT",
+        "properties": {
+            "id": _S,
+            "nye": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+                "titel": _S, "dato": _S, "slut_dato": _N, "start": _N, "slut": _N, "hele_dagen": {"type": "BOOLEAN"},
+                "sted": _N, "hvem": {"type": "ARRAY", "items": _S}, "citat": _S},
+                "required": ["titel", "dato", "hele_dagen", "citat"]}},
+            "aendringer": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+                "type": {"type": "STRING", "enum": ["cancel", "hold", "move"]}, "gammel_titel": _S, "gammel_dato": _N,
+                "ny_dato": _N, "start": _N, "slut": _N, "citat": _S},
+                "required": ["type", "gammel_titel", "citat"]}},
+        },
+        "required": ["id", "nye", "aendringer"]}}},
+    "required": ["punkter"],
+}
+
+
 # ---------------------------------------------------------------- hjælpere
 def _iso(v) -> dt.date | None:
     try:
@@ -236,7 +259,7 @@ def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], 
         batch = [(f"S{j + 1}", s) for j, s in enumerate(todo[i:i + BATCH])]
         ids = {sid for sid, _ in batch}
         try:
-            res = client.generate_json(SYSTEM, build_prompt(batch, today, people_map), validate=lambda r: validate_batch(r, ids),
+            res = client.generate_json(SYSTEM, build_prompt(batch, today, people_map), validate=lambda r: validate_batch(r, ids), schema=SCHEMA,
                                        cache_key="kalender|" + "|".join(item_key(s) for _, s in batch))
         except ai.AIUnavailable as e:
             log.info("Kalendertjek med AI springes over (%s) – reglerne bruges for resten", e.reason)

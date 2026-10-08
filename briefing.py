@@ -26,6 +26,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import ai
+import private as private_mod
 
 TZ = ZoneInfo("Europe/Copenhagen")
 log = logging.getLogger("familieplanner.briefing")
@@ -194,12 +195,24 @@ Regler:
 - Ren tekst: ingen markdown, punkttegn, overskrifter eller fed skrift.
 - "kilder" skal indeholde kilde-id'erne (fx "A3", "O1", "V1") for alt, du nævner.
 
-Svar KUN med JSON (ingen markdown, ingen forklaring) i dette format:
+Svar KUN med JSON (ingen markdown, ingen forklaring) i dette format, hvor hvert afsnit er en tekst i anførselstegn:
 {
-  "fortaelling": ["første afsnit", "andet afsnit", …],
-  "kilder": ["A1", "O2", …]
+  "fortaelling": ["første afsnit", "andet afsnit"],
+  "kilder": ["A1", "O2"]
 }
 Er der intet særligt, så skriv kort og venligt, at det er en stille dag."""
+
+
+# Svarformatet til sprogmodellen (Gemini overholder det; for Claude styrer prompten). validate_narrative tjekker resten.
+SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "fortaelling": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "afsnittene, ren tekst"},
+        "kilder": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "kilde-id'er, fx A1"},
+    },
+    "required": ["fortaelling", "kilder"],
+    "propertyOrdering": ["fortaelling", "kilder"],
+}
 
 
 def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[dict]:
@@ -309,7 +322,24 @@ def _write(path: Path, briefing: dict) -> None:
 
 def ai_client(cfg: dict) -> ai.Client:
     out_dir = Path(cfg.get("output", "web/family.json")).parent
-    return ai.Client(ai.settings_from(cfg), state_dir=out_dir)
+    invalid = private_mod.store_path(cfg).parent / ai.INVALID_FILE   # i secrets/ ved siden af de private samtaler
+    return ai.Client(ai.settings_from(cfg), state_dir=out_dir, invalid_path=invalid)
+
+
+def why_unavailable(e: ai.AIUnavailable, client: ai.Client) -> str:
+    """Til loggen: hvorfor AI ikke kunne bruges – og ved en pause, hvad den seneste fejl var."""
+    text = ai.REASONS.get(e.reason, e.reason)
+    st = client.status()
+    if e.reason == "pause" and st.get("backoff_until"):
+        text += " til kl. " + dt.datetime.fromisoformat(st["backoff_until"]).astimezone(TZ).strftime("%H.%M")
+    elif e.detail:
+        text += f" ({e.detail})"
+    last = st.get("last_error") or {}
+    if e.reason == "pause" and last:
+        at = dt.datetime.fromisoformat(last["at"]).astimezone(TZ).strftime("%d.%m. kl. %H.%M") if last.get("at") else ""
+        text += f"; seneste fejl {at}: {ai.REASONS.get(last.get('reason'), last.get('reason'))}"
+        text += f" ({last['detail']})" if last.get("detail") else ""
+    return text
 
 
 def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | None = None,
@@ -325,7 +355,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
     digest = build_digest(data, start, end, now)
     out_path = Path(cfg.get("output", "web/family.json")).with_name(f"briefing{'_uge' if mode == 'week' else ''}.json")
 
-    def offline(extra: dict | None = None) -> dict:
+    def offline(extra: dict | None = None, why: str = "") -> dict:
         from offline_briefing import offline_briefing
         result = offline_briefing(digest, mode, now)
         b = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "offline",
@@ -334,7 +364,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
             print(json.dumps(b, ensure_ascii=False, indent=1))
             return b
         _write(out_path, b)
-        log.info("Skrev %s (uden sprogmodel%s)", out_path, ", AI ikke tilgængelig" if extra else "")
+        log.info("Skrev %s (uden sprogmodel%s)", out_path, f" – AI ikke tilgængelig: {why}" if extra else "")
         return b
 
     if provider == "offline":
@@ -364,18 +394,19 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
     client = client or ai_client(cfg)
     data_text = messages[0]["content"].split("Data:", 1)[1] + "\n" + rules
     try:
-        result = client.generate_json(SYSTEM, messages[0]["content"],
+        result = client.generate_json(SYSTEM, messages[0]["content"], schema=SCHEMA,
                                       validate=lambda r: validate_narrative(r, digest["_refs"], data_text, mode),
                                       cache_key="|".join([fingerprint, mode, headline, *period]))
     except ai.AIUnavailable as e:
+        why = why_unavailable(e, client)
         prev = (old or {}).get("ai_stale") or (old or {}).get("ai_fallback") or {}
         flag = {"reason": e.reason, "since": prev.get("since") or now.isoformat(timespec="minutes")}
         if old_ai:                               # behold det seneste AI-overblik for perioden, men sig, at det måske er forældet
             old_ai["ai_stale"] = flag
             _write(out_path, old_ai)
-            log.warning("AI ikke tilgængelig (%s) – beholder overblikket fra %s", e.reason, old_ai["generated"])
+            log.warning("AI ikke tilgængelig: %s – beholder overblikket fra %s", why, old_ai["generated"])
             return old_ai
-        return offline({"ai_fallback": flag})
+        return offline({"ai_fallback": flag}, why)
 
     result["kilde_ids"] = result.pop("kilder", [])  # id'erne gemmes, så man kan se, hvad fortællingen bygger på
     s = client.s
