@@ -278,6 +278,21 @@ Planned restructuring (do in small steps, tests green after each):
   "Hjem for vejret er ikke sat" with a button; the action itself is also "Sæt hjem for vejret" in the menu.
 - Weather is an extra: any failure → no weather, never an error banner (it is listed under ⚠). Tests use a simulated MET Norway only.
 
+## Aula fetch (optimised, Oct 2026)
+
+- All Aula calls in one fetch go through `AulaGate`: one shared cap on simultaneous calls (`max_concurrent`, 3),
+  a timeout per call (`request_timeout`), and `max_retries` retries with growing pauses (or `Retry-After`, max 30 s)
+  for temporary errors only (timeout, network, 429/5xx). Never for login or program errors. Logs strip URL query
+  strings (`_describe`). `_once` runs shared work once per fetch even when several parts ask at the same time.
+- The parts (tasks, weekplan, posts, messages, albums) run concurrently, each with `part_timeout`; a failing part
+  keeps its previous data (`None`) and is listed under ⚠ as `aula.part:<key>` until it works again.
+- Messages are incremental: a thread whose list entry is unchanged (`sig` = `_thread_sig`) is reused without calls,
+  and the list stops after `messages_stop_after_unchanged` unchanged threads in a row; the rest is carried over.
+- Deep check (user decision: every hour, `deep_check_minutes`, `health.aula.last_full_sweep`): the whole list is read
+  AND every thread is fetched again (no reuse), because an edit to an older message does not always change the
+  thread's list entry. Images are cached on disk by id, so the deep check costs message calls, not downloads.
+- Not yet run against the real Aula at the time of writing (only simulated in `tests/test_aula_fetch.py`).
+
 ## Problems at the title (`problems.py`, Oct 2026)
 
 User decisions: any error in AI, Aula, Google (read and write), weather or ntfy shows ⚠ + count next to the title
@@ -288,7 +303,7 @@ under each overview stays (it explains how the overview was made).
 - `problems.report(key, area, title, detail, hint, action)` / `clear(key)`; in-memory only, `create_app` calls
   `reset()` (and tests reset via an autouse fixture). `detail` goes through `scrub()` (keys, tokens, bearer,
   lat/lon); `action` may only be a relative link inside the app (e.g. `auth`).
-- Keys: `ai.briefing.day|week`, `ai.briefing.error`, `ai.calendar`, `aula.fetch`, `aula.mark` (derived from
+- Keys: `ai.briefing.day|week`, `ai.briefing.error`, `ai.calendar`, `aula.fetch`, `aula.part:<key>`, `aula.mark` (derived from
   `State.mark_error` in `/api/status`), `google.read:<name>`, `google.api:<name>`, `google.write`,
   `google.write.setup`, `weather`, `ntfy`. AI: every overview or calendar check made without AI counts,
   whatever the reason; offline mode in config does not. Hints come from `ai.HINTS` (shared with the self-test).

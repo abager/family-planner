@@ -52,6 +52,13 @@ Billeder tjekkes på indholdet, så fejlsider aldrig gemmes som billeder. iPhone
 
 Hver del kan slås fra i `config.toml`. Børnenes ikoner (`icon`) sættes også der. Fejler én del, genbruges de forrige data for netop den del.
 
+**Sådan hentes der (hurtigt og skånsomt):**
+- Delene (opgaver, ugeplan, opslag, beskeder, billeder) hentes samtidigt, men højst 3 kald til Aula ad gangen (`max_concurrent`).
+- Hvert kald har en tidsgrænse, og midlertidige fejl (timeout, netværk, Aula travl) prøves igen et par gange. Et udløbet login prøves aldrig igen.
+- Beskeder hentes trinvist: tråde, der ikke har ændret sig, genbruges uden nye kald. Én gang i timen laves en **dyb kontrol**, hvor alle tråde hentes igen, så rettede og slettede beskeder også kommer med inden for en time (`deep_check_minutes`).
+- Fejler en del (fx billederne), vises de forrige data for den del, og fejlen står under ⚠ ved titlen, til det virker igen.
+- Loggen slutter med, hvor lang tid hver del tog, og hvor mange kald, genforsøg og timeouts der var.
+
 ## Lektie-genkendelse (homework.py)
 
 Meebook-ugeplanen analyseres sætning for sætning og hvert punkt får en kategori: lektie, husk, praktisk info eller undervisning. Lektier og husk-ting lander i "Husk og lektier" med den rigtige dag ("på mandag", "Afleveres uge 43", "hver dag").

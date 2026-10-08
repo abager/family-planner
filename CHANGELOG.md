@@ -5,6 +5,15 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (Aula fetch)
+- Faster, gentler Aula fetch: the parts run concurrently behind one shared cap of 3 simultaneous calls, each call
+  has a timeout, and temporary errors are retried a few times (never login errors). Log query strings are removed.
+- Messages are fetched incrementally: unchanged threads are reused without calls. Every hour a deep check fetches
+  every thread again, so edited and deleted messages show within an hour (`deep_check_minutes`).
+- A part of the Aula fetch that fails (e.g. albums) keeps its previous data and is listed under ⚠ until it works.
+- New `[aula]` settings in `config.example.toml`: `max_concurrent`, `request_timeout`, `max_retries`, `part_timeout`,
+  `messages_stop_after_unchanged`, `messages_max_pages`, `deep_check_minutes`, `lesson_notes_max`.
+
 ### Added (errors at the title)
 - ⚠ with a count next to "Familieplan" whenever AI, Aula, Google Calendar (read or write), weather or ntfy fails.
   Tapping it opens a dialog with the full error, when it happened and how often, what to do, and a link where

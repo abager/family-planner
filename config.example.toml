@@ -27,6 +27,15 @@ images_per_item = 8     # max billeder der hentes per opslag/besked (gemmes i we
 fetch_gallery = true    # billeder fra Aulas galleri
 gallery_albums = 8      # antal nyeste albums
 images_per_album = 12   # max billeder per album
+lesson_notes_max = 15   # højst så mange lektionsnoter (fx besked til vikaren) hentes pr. hentning
+# Hentningens tempo og robusthed (standardværdierne passer de fleste)
+max_concurrent = 3      # højst så mange samtidige kald til Aula – skånsomt mod Aula, selvom delene hentes samtidigt
+request_timeout = 30    # sekunder pr. kald, før det opgives (og evt. prøves igen)
+max_retries = 2         # genforsøg ved midlertidige fejl (timeout, netværk, 429/5xx) – aldrig ved login-fejl
+part_timeout = 900      # sekunder pr. del (beskeder, opslag, billeder …); en del, der tager længere, genbruger forrige data
+messages_stop_after_unchanged = 5   # trådlisten stopper, når så mange tråde i træk er uændrede
+messages_max_pages = 40             # højst så mange sider i trådlisten
+deep_check_minutes = 60             # dyb kontrol: hele trådlisten og alle tråde hentes igen (fanger rettede og slettede beskeder)
 
 [assistant]
 mode = "ai"              # "ai" = sprogmodellen i [ai] skriver overblikket (appens egne regler er reserve) · "offline" = kun egne regler, intet forlader maskinen · "off" = intet overblik
