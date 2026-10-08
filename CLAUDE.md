@@ -217,7 +217,7 @@ Planned restructuring (do in small steps, tests green after each):
   content removes its mark. A legacy global pause caused by `ugyldigt_svar` (no `pause_reason`) is ignored.
 - Two reasons for a bad answer: `ugyldigt_svar` (not JSON / wrong shape from the provider) and `fejlede_tjek` (valid
   JSON, but the caller's `validate` raised – e.g. a time not in the data). Same retry and per-content pause; the
-  mark stores its reason. Neither is shown in the banner.
+  mark stores its reason. Neither is shown in the note under the overview.
 - Times in briefing text (`briefing._times`, also used by `calendar_ai.times_in_text`): `kl. 8`, `klokken 13`,
   `13.00`, `13:00`, plus the END of a range only when it hangs on such a time (`kl. 8-13`, `8.00–13`,
   `fra kl. 8 til 13`). Bare pairs (`side 12-20`, `13-14`) are not times. Applies to the data and to the model's
@@ -238,9 +238,12 @@ Planned restructuring (do in small steps, tests green after each):
   backoff per reason (`BACKOFF`, stored with `pause_reason`), doubling per consecutive failure; a 429 on a per-day
   quota pauses until Pacific midnight.
 - Briefing fallback states in `briefing*.json`: `ai_stale` (last AI briefing for the same period kept; data has
-  changed since) and `ai_fallback` (made by `offline_briefing`). Both carry `{reason, since}`. The frontend shows
-  the "AI ikke tilgængelig" banner (`#aiBanner`, top of `.wrap`, also in kiosk) for the briefing currently shown.
-  The banner never shows the technical reason; `/api/status` → `ai` does (login only, never the key).
+  changed since) and `ai_fallback` (made by `offline_briefing`). Both carry `{reason, since}`. The frontend shows a
+  subtle note (`aiNote(b)`, `.ainote`) just below that briefing's text – one per briefing: under "I dag" for the
+  day, under "Ugen" for the week; on the kiosk `#kAiNote` under the overview. Wording (user decision, keep it):
+  "Familieassistenten er ikke tilgængelig – overblikket er lavet ud fra faste regler." / "… er fra kl. HH.MM og er
+  måske ikke opdateret." No banner at the top any more (removed Oct 2026). The note never shows the technical
+  reason; ⚠ at the title and `/api/status` do (login only, never the key).
 - Selftest uses `ignore_pause=True` so a fixed key can be verified immediately; it is not cached.
 - Tests: only `httpx.MockTransport` with a fake clock/sleep. Never a real provider, never real family data.
 
@@ -280,8 +283,8 @@ Planned restructuring (do in small steps, tests green after each):
 User decisions: any error in AI, Aula, Google (read and write), weather or ntfy shows ⚠ + count next to the title
 "Familieplan"; tapping opens `#probDlg` with the full message. Never on the kiosk (the kiosk keeps `#kStatus`).
 An entry disappears the next time that integration succeeds, or on restart. The old red status-line warnings
-are gone; "Data er over en time gamle" and "Hjem for vejret er ikke sat" moved into the dialog. The AI banner
-above the overview stays (it explains how the overview was made).
+are gone; "Data er over en time gamle" and "Hjem for vejret er ikke sat" moved into the dialog. The AI note
+under each overview stays (it explains how the overview was made).
 - `problems.report(key, area, title, detail, hint, action)` / `clear(key)`; in-memory only, `create_app` calls
   `reset()` (and tests reset via an autouse fixture). `detail` goes through `scrub()` (keys, tokens, bearer,
   lat/lon); `action` may only be a relative link inside the app (e.g. `auth`).
@@ -301,7 +304,7 @@ denser – no separate design). Small, light type (people stand close to it), th
 system font (San Francisco on iPad; nothing to load, so the shared font `<link>` is untouched).
 
 - Theme: the app-wide theme (see "Theme" below); the kiosk only adds its own details (`body.kiosk:not(.night)` for
-  the banner, the current row and the warning colours).
+  the current row and the warning colours).
 
 - Layout (`#kioskView`, grid rows): top bar (clock, day, status, weather, exit) → `#kBrief` overview band in full
   width → `.k-body`: `#kPeople` (one `.k-person` column per person: children, then adults, then anyone else; ~78 %

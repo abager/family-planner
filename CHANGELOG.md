@@ -13,6 +13,8 @@ All notable changes to this project. Versions are git tags. The format is loosel
   family data.
 
 ### Changed
+- The yellow "Familieassistenten er ikke tilgængelig" banner at the top is replaced by a subtle line just below the
+  overview's text, one per overview ("I dag" and "Ugen"), on the kiosk too. Same wording as before.
 - The red warnings in the status line are gone; "Data er over en time gamle" and "Hjem for vejret er ikke sat"
   are listed in the new dialog instead. The AI banner above the overview is unchanged.
 - The AI hints shown by the self-test now live in `ai.py` (`ai.HINTS`) and are shared with the dialog.

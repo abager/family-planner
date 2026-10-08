@@ -18,7 +18,7 @@ VIEWS = [("v-today", "I dag"), ("v-week", "Ugen"), ("v-mail", "Beskeder"), ("v-a
 def test_no_new_accessibility_violations(make_page, site, hour):
     page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, hour, 0), fixed=True, goto=False)
     day = "2026-10-02" if hour >= 18 else "2026-10-01"                   # efter kl. 18 handler I dag om i morgen
-    # Med et overblik lavet af reserven, så banneret "Familieassistenten er ikke tilgængelig" også kontrastprøves
+    # Med et overblik lavet af reserven, så noten "Familieassistenten er ikke tilgængelig" også kontrastprøves
     fake.briefing = {"generated": "2026-10-01T08:00:00+02:00", "mode": "day", "method": "offline", "headline_label": "i dag",
                      "period": [day, day], "ai_fallback": {"reason": "kvote", "since": "2026-10-01T08:00"},
                      "afsnit": [{"titel": "Husk", "punkter": [{"tekst": "Gymnastiktøj", "hvem": ["Hugo"], "kilder": []}]}]}
@@ -27,7 +27,7 @@ def test_no_new_accessibility_violations(make_page, site, hour):
     # Med vejr, så himlen (regn: den mørkeste) også kontrastprøves
     page.evaluate("state.data.weather={kilde:'MET Norway',dage:[0,1].map(i=>({dato:ymd(addDays(new Date(),i)),min:8,max:11,ikon:'🌧️',tekst:'regn',raad:[],"
                   "timer:[10,11,12].map(kl=>({kl,ikon:'🌧️',temp:9,regn:1.2,vind:4}))}))}; render()")
-    assert page.evaluate("!document.getElementById('aiBanner').classList.contains('hidden')")
+    assert page.locator("#briefDay .ainote").count() == 1                 # noten under overblikket kontrastprøves også
     page.add_script_tag(content=Path(AXE).read_text())
     found = {}
     for vid, name in VIEWS:
