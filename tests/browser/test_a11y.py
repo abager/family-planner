@@ -38,3 +38,22 @@ def test_no_new_accessibility_violations(make_page, site, hour):
     new = {k: v for k, v in found.items() if k not in KNOWN}
     assert new == {}, new
     assert all(i != "critical" for vs in found.values() for (_, i, _) in vs)
+
+
+@pytest.mark.parametrize("hour", [10, 22])
+def test_the_warning_symbol_and_its_dialog_are_accessible(make_page, site, hour):
+    page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, hour, 0), fixed=True, goto=False)
+    page.goto(site.url + "/index.html")
+    fake.use_demo(page)
+    fake.problems = [{"key": "aula.fetch", "area": "aula", "area_title": "Aula", "title": "Aula-login er udløbet",
+                      "detail": "Aula kræver et nyt MitID-login.", "hint": "Log ind med MitID igen.",
+                      "action": {"label": "Log ind", "href": "auth"}, "since": "2026-10-01T07:15:00+02:00",
+                      "last": "2026-10-01T09:45:00+02:00", "count": 3}]
+    page.reload()
+    page.wait_for_timeout(500)
+    page.add_script_tag(content=Path(AXE).read_text())
+    rules = "{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','best-practice']}}"
+    closed = page.evaluate(f"axe.run(document.querySelector('header'),{rules}).then(r=>r.violations.map(v=>v.id))")
+    page.click("#probBtn")
+    opened = page.evaluate(f"axe.run(document.getElementById('probDlg'),{rules}).then(r=>r.violations.map(v=>v.id))")
+    assert closed == [] and opened == [], (closed, opened)

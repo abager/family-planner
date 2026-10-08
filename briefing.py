@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 
 import ai
 import private as private_mod
+import problems
 
 TZ = ZoneInfo("Europe/Copenhagen")
 log = logging.getLogger("familieplanner.briefing")
@@ -380,7 +381,10 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
         log.info("Skrev %s (uden sprogmodel%s)", out_path, f" – AI ikke tilgængelig: {why}" if extra else "")
         return b
 
+    pkey = f"ai.briefing.{mode}"
+    what = "Ugens overblik" if mode == "week" else "Dagens overblik"
     if provider == "offline":
+        problems.clear(pkey)                     # appens egne regler er valgt i config – ikke en fejl
         return offline()
 
     rules_path = Path(acfg.get("rules_file", "familie_regler.md"))
@@ -398,6 +402,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
             if old_ai.pop("ai_stale", None):       # data er som da det blev skrevet: overblikket er ikke forældet
                 _write(out_path, old_ai)
             log.info("Overblik uændret – springer over")
+            problems.clear(pkey)
             return old_ai
         age = (now - dt.datetime.fromisoformat(old_ai["generated"])).total_seconds() / 60
         if age < acfg.get("min_minutes_between", 60) and not old_ai.get("ai_stale"):
@@ -412,6 +417,8 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
                                       cache_key="|".join([fingerprint, mode, headline, *period]))
     except ai.AIUnavailable as e:
         why = why_unavailable(e, client)
+        problems.report(pkey, "ai", f"{what} er lavet uden AI" if not old_ai else f"{what} kunne ikke opdateres med AI",
+                        detail=why, hint=ai.hint(e.reason, client.s))
         prev = (old or {}).get("ai_stale") or (old or {}).get("ai_fallback") or {}
         flag = {"reason": e.reason, "since": prev.get("since") or now.isoformat(timespec="minutes")}
         if old_ai:                               # behold det seneste AI-overblik for perioden, men sig, at det måske er forældet
@@ -426,6 +433,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
     briefing = {"generated": now.isoformat(timespec="minutes"), "mode": mode, "method": "ai", "provider": s.provider,
                 "model": s.model, "headline_label": headline, "period": period, "fingerprint": fingerprint, **result}
     _write(out_path, briefing)
+    problems.clear(pkey)
     log.info("Skrev %s (%s)", out_path, s.provider)
     return briefing
 

@@ -28,6 +28,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+import problems
+
 log = logging.getLogger("familieplanner.weather")
 TZ = ZoneInfo("Europe/Copenhagen")
 UTC = dt.timezone.utc
@@ -232,9 +234,12 @@ def hours(state_dir: Path, now: dt.datetime, transport: httpx.BaseTransport | No
         got = fetch_raw(home["lat"], home["lon"], transport, cfg=cfg, if_modified_since=ims)
     except WeatherUnavailable as e:
         log.warning("Vejret kunne ikke hentes: %s", e)
+        problems.report("weather", "weather", "Vejret kunne ikke hentes", detail=str(e),
+                        hint="Appen viser den seneste prognose, hvis den ikke er for gammel, og prøver igen senere.")
         _write_private(cpath, {**(c if same_place else {}), "source": SOURCE, "lat": home["lat"], "lon": home["lon"],
                                "failed": now.isoformat(timespec="seconds"), "error": str(e)[:200]})
         return cached()
+    problems.clear("weather")
     rows = got.rows if got.rows is not None else _rows_from_cache(c)   # 304: prognosen er uændret
     _write_private(cpath, {"source": SOURCE, "lat": home["lat"], "lon": home["lon"],
                            "fetched": now.isoformat(timespec="seconds"), "expires": got.expires,
@@ -390,6 +395,7 @@ def for_family(cfg: dict, now: dt.datetime, transport: httpx.BaseTransport | Non
     Skriver altid én linje i loggen, så man kan se, om vejret er med – og hvorfor ikke (aldrig koordinaterne)."""
     if not enabled(cfg):
         log.info("Vejr: slået fra i config.toml ([weather] enabled = false)")
+        problems.clear("weather")
         return None
     state_dir = Path(cfg.get("output", "web/family.json")).parent
     home = load_home(state_dir)
@@ -401,6 +407,7 @@ def for_family(cfg: dict, now: dt.datetime, transport: httpx.BaseTransport | Non
         rows = hours(state_dir, now, transport, cfg)
     except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
         log.warning("Vejret sprunget over: %s", e)
+        problems.report("weather", "weather", "Vejret kunne ikke laves", detail=f"{type(e).__name__}: {e}")
         return None
     if not rows:
         log.info("Vejr: ingen brugbar prognose fra %s – overblikket er uden vejr", SOURCE)

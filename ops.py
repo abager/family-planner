@@ -14,6 +14,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+import problems
+
 TZ = ZoneInfo("Europe/Copenhagen")
 log = logging.getLogger("familieplan.ops")
 DAYS = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
@@ -51,9 +53,12 @@ class Notifier:
             async with httpx.AsyncClient(timeout=10) as http:
                 r = await http.post(self.base, json=body)
                 r.raise_for_status()
+            problems.clear("ntfy")
             return True
         except Exception as e:  # noqa: BLE001
             log.warning("Kunne ikke sende besked via ntfy: %s", e)
+            problems.report("ntfy", "ntfy", "En besked kunne ikke sendes via ntfy", detail=f"{type(e).__name__}: {e}",
+                            hint="Tjek notify_ntfy i config.toml og at ntfy-serveren kan nås. Advarsler (fx udløbet Aula-login) når ikke frem imens.")
             return False
 
 

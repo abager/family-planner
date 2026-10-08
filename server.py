@@ -43,6 +43,7 @@ from fastapi.staticfiles import StaticFiles
 import fetch_family
 import ops
 import private as private_mod
+import problems
 import suggestions as sugg
 
 TZ = ZoneInfo("Europe/Copenhagen")
@@ -540,6 +541,7 @@ setInterval(()=>{if(qr.length>1){i=(i+1)%qr.length;const e=document.getElementBy
 
 # ---------------------------------------------------------------- app
 def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_auth: bool) -> FastAPI:
+    problems.reset()                           # fejllisten ved titlen starter forfra ved hver (gen)start
     state = State()
     hooks = WebAuthHooks(state)
     fetch_family.auth_hooks = hooks
@@ -626,6 +628,14 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         resp.delete_cookie(COOKIE)
         return resp
 
+    def _problems() -> list[dict]:
+        out = problems.snapshot()
+        if state.mark_error:                   # læst-markering i Aula: tilstanden ligger i ReadMarker
+            out.append({"key": "aula.mark", "area": "aula", "area_title": problems.AREAS["aula"],
+                        "title": "Læst-markering blev ikke gemt i Aula", "detail": problems.scrub(state.mark_error),
+                        "hint": "Appen prøver igen af sig selv.", "action": None, "since": None, "last": None, "count": 1})
+        return out
+
     def _ai_status():
         try:
             import briefing
@@ -646,6 +656,7 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         return {**state.public(), "interval_minutes": settings.interval // 60, "aula_enabled": settings.use_aula,
                 "mark_read_enabled": settings.mark_read and settings.use_aula,
                 "ai": _ai_status(),            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
+                "problems": _problems(),       # aktuelle fejl i integrationerne – til ⚠ ved titlen
                 "weather": _weather_status()} # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
 
 
@@ -736,6 +747,9 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
     # ----- kalender: opret, afvis, fortryd, fjern
     store = sugg.Store(out_dir / "suggestions_state.json")
     gcal = sugg.GoogleCalendar(cfg)
+    if cfg.get("calendar_write", {}).get("enabled") and not gcal.enabled:     # slået til, men kan ikke bruges
+        problems.report("google.write.setup", "google", "Oprettelse i Google Kalender er ikke sat rigtigt op",
+                        detail=str(gcal.problem), hint="Se [calendar_write] i config.toml og README (servicekonto).")
     cal_lock = asyncio.Lock()
 
     async def cal_body(request: Request) -> dict | JSONResponse:

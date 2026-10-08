@@ -16,6 +16,8 @@ from urllib.parse import quote, unquote
 
 import httpx
 
+import problems
+
 TZ_NAME = "Europe/Copenhagen"
 KEY_RX = re.compile(r"^(sg|ev)_[0-9a-f]{12}$")
 
@@ -253,7 +255,27 @@ class GoogleCalendar:
         hint = {403: " – er kalenderen delt med servicekontoen med ret til at foretage ændringer?", 404: " – kalender-id'et passer ikke, eller kalenderen er ikke delt med servicekontoen"}.get(r.status_code, "")
         return f"Google svarede {r.status_code}: {msg}{hint}"
 
+    async def _tracked(self, what: str, coro):
+        """Fejl ved skrivning til Google Kalender vises ved appens titel, til næste skrivning lykkes."""
+        try:
+            result = await coro
+        except CalendarError as e:
+            problems.report("google.write", "google", f"Kunne ikke {what} i Google Kalender", detail=str(e),
+                            hint="Tjek at servicekontoen har ret til at foretage ændringer i familiekalenderen.")
+            raise
+        problems.clear("google.write")
+        return result
+
     async def create(self, key: str, payload: dict, version: int = 0) -> dict:
+        return await self._tracked("oprette aftalen", self._create(key, payload, version))
+
+    async def patch(self, event_id: str, payload: dict) -> dict:
+        return await self._tracked("rette aftalen", self._patch(event_id, payload))
+
+    async def delete(self, event_id: str) -> None:
+        return await self._tracked("slette aftalen", self._delete(event_id))
+
+    async def _create(self, key: str, payload: dict, version: int = 0) -> dict:
         """Opretter aftalen. Idempotent: findes id'et allerede, genbruges den eksisterende aftale."""
         body = build_event(payload)
         eid = event_id_for(key, version)
@@ -266,12 +288,12 @@ class GoogleCalendar:
             g = await self._call("GET", self._url("/" + eid))
             if g.status_code == 200 and g.json().get("status") != "cancelled":
                 return {"id": eid, "html_link": g.json().get("htmlLink"), "already": True, "version": version}
-            return await self.create(key, payload, version + 1)    # tidligere slettet: id'et er optaget, brug et nyt
+            return await self._create(key, payload, version + 1)   # tidligere slettet: id'et er optaget, brug et nyt
         if r.status_code >= 300:
             raise CalendarError(self._explain(r), 403 if r.status_code == 403 else 502)
         return {"id": eid, "html_link": r.json().get("htmlLink"), "already": False, "version": version}
 
-    async def patch(self, event_id: str, payload: dict) -> dict:
+    async def _patch(self, event_id: str, payload: dict) -> dict:
         """Flytter/retter en eksisterende aftale (dato, tid, sted). Titlen beholdes, medmindre en ny gives."""
         body = build_event(payload)
         body["extendedProperties"] = {"private": {"endInferred": "1" if end_inferred(payload) else "0"}}   # Google fletter private-felterne
@@ -298,7 +320,7 @@ class GoogleCalendar:
             params["pageToken"] = j["nextPageToken"]
         raise CalendarError("For mange sider fra Google Kalender", 502)
 
-    async def delete(self, event_id: str) -> None:
+    async def _delete(self, event_id: str) -> None:
         r = await self._call("DELETE", self._url("/" + event_id))
         if r.status_code not in (200, 204, 404, 410):
             raise CalendarError(self._explain(r), 403 if r.status_code == 403 else 502)

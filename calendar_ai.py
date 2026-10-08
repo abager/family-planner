@@ -22,6 +22,7 @@ import re
 
 import activities as A
 import ai
+import problems
 from briefing import _scrub, _times
 
 log = logging.getLogger("familieplanner.calendar_ai")
@@ -263,7 +264,11 @@ def find_all(data: dict, cfg: dict, today: dt.date, people_map: dict[str, str], 
                                        cache_key="kalender|" + "|".join(item_key(s) for _, s in batch))
         except ai.AIUnavailable as e:
             log.info("Kalendertjek med AI springes over (%s) – reglerne bruges for resten", e.reason)
+            detail = ai.REASONS.get(e.reason, e.reason) + (f" ({e.detail})" if e.detail else "")
+            problems.report("ai.calendar", "ai", "Kalenderforslag blev lavet uden AI", detail=detail,
+                            hint=ai.hint(e.reason, client.s) + " Appens egne regler bruges imens.")
             break
+        problems.clear("ai.calendar")
         by_id = {p["id"]: p for p in res["punkter"]}
         for sid, s in batch:
             ans = {"nye": by_id.get(sid, {}).get("nye", [])[:MAX_PER_ITEM], "aendringer": by_id.get(sid, {}).get("aendringer", [])[:MAX_PER_ITEM]}

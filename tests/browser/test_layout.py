@@ -48,10 +48,13 @@ def test_message_list_uses_plain_list_semantics(make_page):
     assert page.locator('#mitems .mrow[aria-current="true"]').count() == 1
 
 
-def test_google_outage_is_shown_in_the_header(make_page):
+def test_google_outage_without_a_server_is_shown_under_the_warning_at_the_title(make_page):
+    # Uden server (statisk brug) er family.json den eneste kilde – fejlen står under ⚠ ved titlen, ikke i statuslinjen
     from data import family
     from fake_server import FakeServer
     fake = FakeServer()
     fake.family = family(health={"google": {"ok": False, "failed": ["Familiekalender"], "last_ok": "2026-10-01T08:15:00+02:00"}, "aula": {"state": "ok"}})
     page, *_ = make_page(fake)
-    assert "Familiekalenderen kunne ikke hentes" in page.inner_text("#status")
+    assert "kunne ikke hentes" not in page.inner_text("#status")
+    page.click("#probBtn")
+    assert "Familiekalenderen kunne ikke hentes" in page.inner_text("#probDlg")

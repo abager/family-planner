@@ -201,6 +201,30 @@ def parse_json(text: str) -> dict:
     return obj
 
 
+# Hvad man gør ved hver grund – til selvtesten og fejldialogen i appen
+WHERE = ("skriv {env}=værdi på én linje i .env i projektmappen (uden mellemrum og anførselstegn), "
+         "eller kør setx {env} \"værdi\" i PowerShell og åbn et nyt vindue. Genstart derefter appen.")
+
+HINTS = {
+    "mangler_noegle": "Sæt {env} – " + "{where}",
+    "afvist": "Tjek at nøglen er rigtig, at den er begrænset til Generative Language API, og at modellen ({model}) findes.",
+    "betaling": "Udbyderen beder om betaling. På Googles gratis niveau skal fakturering forblive slået FRA i projektet.",
+    "kvote": "Kvoten er brugt. Den nulstilles ved midnat Stillehavstid (kl. 9 dansk tid). Overblikket bruger imens reserven.",
+    "dagsbudget": "Appens eget dagsbudget ([ai] daily_cap) er brugt. Det nulstilles ved midnat Stillehavstid.",
+    "minutgraense": "For mange forespørgsler lige nu. Prøv igen om et minut.",
+    "serverfejl": "Udbyderen har problemer lige nu. Prøv igen senere.",
+    "netvaerk": "Serveren kan ikke nå udbyderen. Tjek internetforbindelsen og evt. firewall.",
+    "ugyldigt_svar": "Modellen svarede ikke med gyldigt JSON. Det seneste ugyldige svar ligger i secrets/ai_last_invalid.json. Sker det tit, så prøv en anden model i [ai] model.",
+    "fejlede_tjek": "Modellen svarede, men svaret holdt ikke appens tjek (fx et klokkeslæt, der ikke står i data). Svaret ligger i secrets/ai_last_invalid.json.",
+    "pause": "Appen venter efter en tidligere fejl (se den seneste fejl) og prøver selv igen. Selvtesten (python server.py --selftest --no-notify) prøver med det samme.",
+    "ukendt_udbyder": "Sæt [ai] provider til \"gemini\" eller \"claude\".",
+}
+
+
+def hint(reason: str, s: "Settings") -> str:
+    return HINTS.get(reason, "").format(env=s.api_key_env, model=s.model, where=WHERE.format(env=s.api_key_env))
+
+
 def raw_text(data) -> str | None:
     """Svarteksten uden tjek – til at gemme et ugyldigt svar, så man kan se, hvad modellen skrev."""
     if not isinstance(data, dict):

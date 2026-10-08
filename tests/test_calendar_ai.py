@@ -236,3 +236,14 @@ def test_the_calendar_check_asks_gemini_for_a_fixed_answer_format(acfg):
     fake = Gemini()
     run(acfg, data(msg("m1", "Fotografering torsdag den 8. oktober.")), fake)
     assert json.loads(fake.requests[0].content)["generationConfig"]["responseSchema"] == C.SCHEMA
+
+
+
+def test_a_calendar_check_without_ai_is_shown_at_the_title_until_ai_answers_again(acfg):
+    import problems
+    run(acfg, data(msg("m1", TRIP, "Skovtur")), Gemini(status=503))
+    p = [x for x in problems.snapshot() if x["key"] == "ai.calendar"]
+    assert p and p[0]["title"] == "Kalenderforslag blev lavet uden AI" and "egne regler" in p[0]["hint"]
+    (Path(acfg["output"]).parent / "ai_usage.json").unlink()          # pausen efter 503 er forbi
+    run(acfg, data(msg("m2", TRIP, "Skovtur 2")), Gemini(lambda items: {"Skovtur 2": new()}))
+    assert not [x for x in problems.snapshot() if x["key"] == "ai.calendar"]

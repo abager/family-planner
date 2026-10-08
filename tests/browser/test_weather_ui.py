@@ -164,16 +164,19 @@ def test_after_the_evening_hour_the_kiosk_shows_tomorrows_weather(make_page, sit
     assert page.eval_on_selector_all("#kWeather .k-wxstrip .t", "ts => ts.map(t => t.textContent)")[0] == "07"
 
 
-def test_the_status_line_warns_when_weather_is_on_but_home_is_missing(make_page, site):
-    # Handlingen ligger altid i menuen; advarslen står kun i statuslinjen, når hjemmet mangler
+def test_a_missing_home_for_the_weather_is_shown_under_the_warning_and_can_be_fixed_there(make_page, site):
+    # Handlingen ligger altid i menuen; advarslen står under ⚠ ved titlen, når hjemmet mangler
     page, _ = app(make_page, site, None, status={"enabled": True, "home": False})
-    w = page.locator("#homeWarn")
-    assert w.inner_text() == "Hjem for vejret er ikke sat" and "srvwarn" in w.get_attribute("class")
+    assert "Hjem for vejret" not in page.inner_text("#status")
+    page.click("#probBtn")
+    assert "Hjem for vejret er ikke sat" in page.inner_text("#probDlg")
+    page.click("#probHome")
+    assert page.locator("#homeDlg").evaluate("d => d.open") and not page.locator("#probDlg").evaluate("d => d.open")
     assert page.locator("#homeBtn").text_content() == "Sæt hjem for vejret"
     page, _ = app(make_page, site, None, status={"enabled": True, "home": True})
-    assert page.locator("#homeWarn").count() == 0 and page.locator("#homeBtn").text_content() == "Sæt hjem for vejret"
+    assert page.locator("#probBtn").count() == 0 and page.locator("#homeBtn").text_content() == "Sæt hjem for vejret"
     page, _ = app(make_page, site, None, status={"enabled": False, "home": False})
-    assert page.locator("#homeWarn").count() == 0
+    assert page.locator("#probBtn").count() == 0
 
 
 def test_the_details_close_by_themselves_after_10_seconds(make_page, site):

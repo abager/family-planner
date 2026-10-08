@@ -29,6 +29,7 @@ import recurring_ical_events
 import activities
 import homework
 import private as private_mod
+import problems
 import messages as msg_analysis
 import schedule
 import suggestions as sugg_store
@@ -152,12 +153,21 @@ async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.da
                     got = await fetch_google_api(cfg, cal_cfg, people, start, end)
                     events += got
                     log.info("Google «%s» via API: %d aftaler", name, len(got))
+                    problems.clear(f"google.api:{name}")
+                    problems.clear(f"google.read:{name}")
                     continue
                 except Exception as e:  # noqa: BLE001
                     log.warning("Kunne ikke læse «%s» via Google API: %s%s", name, e, " – prøver iCal" if cal_cfg.get("ical_url") else "")
+                    problems.report(f"google.api:{name}", "google", f"Kalenderen «{name}» kunne ikke læses via Google API",
+                                    detail=f"{type(e).__name__}: {e}",
+                                    hint=("Appen bruger iCal-adressen imens, så ændringer kan være op til et par timer forsinkede. "
+                                          if cal_cfg.get("ical_url") else "")
+                                    + "Tjek servicekontoen (secrets/google_service_account.json), og at kalenderen er delt med den.")
                     if not cal_cfg.get("ical_url"):
                         if failed is not None:
                             failed.append(name)
+                        problems.report(f"google.read:{name}", "google", f"Kalenderen «{name}» kunne ikke hentes",
+                                        detail=f"{type(e).__name__}: {e}", hint="Appen viser de seneste kendte aftaler fra kalenderen.")
                         continue
             try:
                 resp = await http.get(cal_cfg["ical_url"])
@@ -167,7 +177,11 @@ async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.da
                 log.warning("Kunne ikke hente Google-kalender %s: %s", name, e)
                 if failed is not None:
                     failed.append(name)
+                problems.report(f"google.read:{name}", "google", f"Kalenderen «{name}» kunne ikke hentes",
+                                detail=f"{type(e).__name__}: {e}",
+                                hint="Appen viser de seneste kendte aftaler fra kalenderen. Tjek iCal-adressen i config.toml og internetforbindelsen.")
                 continue
+            problems.clear(f"google.read:{name}")
             for comp in recurring_ical_events.of(cal).between(start, end):
                 if str(comp.get("STATUS", "")).upper() == "CANCELLED":
                     continue
@@ -1152,6 +1166,8 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     extra_keys = ("tasks", "weekplan", "posts", "messages", "albums")
     extra = {k: previous.get(k, []) for k in extra_keys}
     aula_state, aula_error = "skipped", None
+    if not use_aula:
+        problems.clear("aula.fetch")             # Aula er slået fra – ikke en fejl
     if use_aula:
         try:
             prev_msgs = previous.get("messages")
@@ -1163,14 +1179,21 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
                 if aula.get(k) is not None:  # None = den del fejlede, behold forrige
                     extra[k] = aula[k]
             aula_state = "ok"
+            problems.clear("aula.fetch")
         except LoginRequired:
             aula_state = "login_required"
             log.warning("Aula-login er udløbet – genbruger forrige Aula-data. Log ind igen.")
+            problems.report("aula.fetch", "aula", "Aula-login er udløbet", detail="Aula kræver et nyt MitID-login.",
+                            hint="Log ind med MitID igen. Appen viser imens de seneste hentede Aula-data.",
+                            action={"label": "Log ind", "href": "auth"})
             events += [x for x in previous.get("events", []) if x.get("source") == "aula"]
         except Exception as e:  # noqa: BLE001
             # Behold sidste gode Aula-data frem for at vise et tomt overblik
             aula_state, aula_error = "error", str(e) or e.__class__.__name__
             log.error("Aula-hentning fejlede, genbruger forrige data: %s", e)
+            problems.report("aula.fetch", "aula", "Aula-hentningen fejlede", detail=f"{e.__class__.__name__}: {e}",
+                            hint="Appen viser de seneste hentede Aula-data og prøver igen ved næste hentning. "
+                                 "Bliver det ved, så prøv at logge ind igen.", action={"label": "Log ind", "href": "auth"})
             events += [x for x in previous.get("events", []) if x.get("source") == "aula"]
 
     msg_tasks, msg_events = analyse_messages(cfg, extra["messages"], events)
@@ -1208,6 +1231,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         weather_data = weather.for_family(cfg, now)        # groft dagsresumé, aldrig placeringen; None uden hjem
     except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
         log.warning("Vejret sprunget over: %s", e)
+        problems.report("weather", "weather", "Vejret kunne ikke laves", detail=f"{type(e).__name__}: {e}")
         weather_data = None
     data = {
         "generated": iso(now),
@@ -1241,8 +1265,12 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
             briefing.make_briefing(wk, data, "week")
     except SystemExit as e:
         log.warning("Overblik springes over: %s", e)
+        problems.report("ai.briefing.error", "ai", "Overblikket kunne ikke laves", detail=str(e))
     except Exception as e:  # noqa: BLE001
         log.warning("Kunne ikke lave overblik: %s", e)
+        problems.report("ai.briefing.error", "ai", "Overblikket kunne ikke laves", detail=f"{type(e).__name__}: {e}")
+    else:
+        problems.clear("ai.briefing.error")
     return {"aula": aula_state, "error": aula_error, "generated": data["generated"], "google_ok": not google_failed,
             "counts": {"events": len(events), **{k: len(extra[k]) for k in extra_keys},
                        "suggestions": sum(1 for x in suggestions_list if x.get("status") == "new")}}

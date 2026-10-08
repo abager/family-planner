@@ -87,3 +87,12 @@ def fake_aula(monkeypatch):
     f = Fake()
     monkeypatch.setattr(F, "fetch_aula", f)
     return f
+
+
+@pytest.fixture(autouse=True)
+def _clean_problems():
+    """Fejllisten ved titlen er global i processen – hver test starter uden fejl."""
+    import problems
+    problems.reset()
+    yield
+    problems.reset()

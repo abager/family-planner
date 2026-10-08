@@ -216,3 +216,26 @@ def test_deadlines_are_measured_against_the_real_today_not_the_day_shown():
     secs = {s["titel"]: [p["tekst"] for p in s["punkter"]] for s in out["afsnit"]}
     assert any("Læs side 12" in t for t in secs["Husk"])                                      # forfalder på den viste dag
     assert any("senest i morgen" in t for t in secs["Skal gøres"])                            # ikke "senest i dag"
+
+
+# ---------------------------------------------------------------- ⚠ ved titlen
+def test_a_google_outage_is_a_problem_until_the_calendar_answers_again(cfg, ical):
+    import problems
+    cfg["google"][0]["ical_url"] = ical.dead
+    go(cfg)
+    (p,) = [x for x in problems.snapshot() if x["key"] == "google.read:Familiekalender"]
+    assert p["area"] == "google" and p["title"] == "Kalenderen «Familiekalender» kunne ikke hentes" and p["detail"]
+    cfg["google"][0]["ical_url"] = f"{ical.url}/family.ics"
+    go(cfg)
+    assert not [x for x in problems.snapshot() if x["area"] == "google"]
+
+
+def test_an_aula_outage_is_a_problem_with_a_login_link_until_aula_works_again(cfg, fake_aula):
+    import problems
+    fake_aula.down = True
+    go(cfg, use_aula=True)
+    (p,) = [x for x in problems.snapshot() if x["key"] == "aula.fetch"]
+    assert p["title"] == "Aula-hentningen fejlede" and "Aula er nede" in p["detail"] and p["action"]["href"] == "auth"
+    fake_aula.down = False
+    go(cfg, use_aula=True)
+    assert not [x for x in problems.snapshot() if x["area"] == "aula"]

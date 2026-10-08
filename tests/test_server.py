@@ -279,3 +279,38 @@ def test_home_location_needs_login_and_the_file_is_never_served(cfg, env):
     assert anon.get("/api/home-location").status_code in (302, 303, 401, 403)
     assert anon.post("/api/home-location", json={"lat": 55.7, "lon": 12.6}, headers=H).status_code in (302, 303, 401, 403)
     assert env.c.get("/home_location.json").status_code == 404
+
+
+
+# ---------------------------------------------------------------- ⚠ ved titlen
+def test_current_problems_are_in_the_status_after_login_only(env):
+    import problems
+    problems.report("weather", "weather", "Vejret kunne ikke hentes", "met.no svarede 500")
+    j = env.c.get("/api/status").json()
+    assert [p["key"] for p in j["problems"]] == ["weather"] and j["problems"][0]["area_title"] == "Vejr"
+    anon = TestClient(env.app, base_url="http://testserver")
+    assert anon.get("/api/status").status_code == 401 and "problems" not in anon.get("/api/health").json()
+
+
+def test_a_read_marking_error_in_aula_is_listed_as_a_problem(env):
+    env.app.state.status.mark_error = "Kunne ikke markere som læst i Aula: timeout"
+    (p,) = [x for x in env.c.get("/api/status").json()["problems"] if x["key"] == "aula.mark"]
+    assert p["title"] == "Læst-markering blev ikke gemt i Aula" and "timeout" in p["detail"]
+    env.app.state.status.mark_error = None
+    assert env.c.get("/api/status").json()["problems"] == []
+
+
+def test_a_restart_starts_with_no_problems(env, cfg):
+    import problems
+    problems.report("ntfy", "ntfy", "x")
+    again = Env(cfg, server.Settings(cfg))
+    assert again.c.get("/api/status").json()["problems"] == []
+
+
+def test_a_write_calendar_that_is_switched_on_but_broken_is_a_problem(cfg, monkeypatch):
+    monkeypatch.setenv("FAMILIEPLAN_PRIVATE_CODE", CODE)
+    cfg["calendar_write"] = {**cfg.get("calendar_write", {}), "enabled": True, "service_account_file": "findes/ikke.json"}
+    (Path(cfg["output"]).parent / "family.json").write_text(json.dumps({"events": [], "messages": []}))
+    e = Env(cfg, server.Settings(cfg))
+    (p,) = [x for x in e.c.get("/api/status").json()["problems"] if x["key"] == "google.write.setup"]
+    assert "findes/ikke.json" in p["detail"]
