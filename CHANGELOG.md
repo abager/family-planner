@@ -5,6 +5,18 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (errors at the title)
+- ⚠ with a count next to "Familieplan" whenever AI, Aula, Google Calendar (read or write), weather or ntfy fails.
+  Tapping it opens a dialog with the full error, when it happened and how often, what to do, and a link where
+  there is one (e.g. "Log ind" for Aula). An error disappears the next time that integration succeeds, or on
+  restart. Not shown on the kiosk. Error texts are scrubbed of keys, tokens and coordinates and never contain
+  family data.
+
+### Changed
+- The red warnings in the status line are gone; "Data er over en time gamle" and "Hjem for vejret er ikke sat"
+  are listed in the new dialog instead. The AI banner above the overview is unchanged.
+- The AI hints shown by the self-test now live in `ai.py` (`ai.HINTS`) and are shared with the dialog.
+
 ### Fixed (AI overview)
 - An invalid answer from the language model (not valid JSON) paused all AI for hours and grew with every retry,
   because the same data gave the same bad answer. Now Gemini is asked to follow a fixed answer format

@@ -58,7 +58,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 | **Overblik** | Only the assistant's day/week summary | (not for the app in general) |
 | **Hele familien** | Everyone | Familien, Fælles |
 | **Adgangskode** / **Kode til private samtaler** | Login / unlocking private threads | |
-| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status and warnings; a spinning sync icon while the server fetches | Menu, Opdatér nu (removed: the server fetches by itself) |
+| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status ("Opdateret …") and a spinning sync icon while the server fetches – warnings live under ⚠ at the title | Menu, Opdatér nu (removed: the server fetches by itself) |
 
 Formats: clock times `08.00` everywhere (kiosk clock too); dates `man 12/10` in lists, `mandag 12. oktober` in details.
 No duplicates on one screen: a week-plan item that produced tasks (task id `<plan id>:<n>`) is shown only as a task
@@ -271,9 +271,28 @@ Planned restructuring (do in small steps, tests green after each):
   detail dialog. The strip loses hours from the end if the top bar is too wide. The strip scrolls sideways, never the page.
 - Logging: `for_family` writes exactly one INFO line per run (off / home not set / no usable forecast / "N dage
   fra MET Norway (prognose hentet kl. HH:MM)"). Never coordinates in logs.
-- `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the status line shows
-  a warning button ("Hjem for vejret er ikke sat"); the action itself is "Sæt hjem for vejret" in the menu.
-- Weather is an extra: any failure → no weather, never an error banner. Tests use a simulated MET Norway only.
+- `/api/status` → `weather: {enabled, home}` (yes/no only). When enabled and home is missing, the ⚠ dialog lists
+  "Hjem for vejret er ikke sat" with a button; the action itself is also "Sæt hjem for vejret" in the menu.
+- Weather is an extra: any failure → no weather, never an error banner (it is listed under ⚠). Tests use a simulated MET Norway only.
+
+## Problems at the title (`problems.py`, Oct 2026)
+
+User decisions: any error in AI, Aula, Google (read and write), weather or ntfy shows ⚠ + count next to the title
+"Familieplan"; tapping opens `#probDlg` with the full message. Never on the kiosk (the kiosk keeps `#kStatus`).
+An entry disappears the next time that integration succeeds, or on restart. The old red status-line warnings
+are gone; "Data er over en time gamle" and "Hjem for vejret er ikke sat" moved into the dialog. The AI banner
+above the overview stays (it explains how the overview was made).
+- `problems.report(key, area, title, detail, hint, action)` / `clear(key)`; in-memory only, `create_app` calls
+  `reset()` (and tests reset via an autouse fixture). `detail` goes through `scrub()` (keys, tokens, bearer,
+  lat/lon); `action` may only be a relative link inside the app (e.g. `auth`).
+- Keys: `ai.briefing.day|week`, `ai.briefing.error`, `ai.calendar`, `aula.fetch`, `aula.mark` (derived from
+  `State.mark_error` in `/api/status`), `google.read:<name>`, `google.api:<name>`, `google.write`,
+  `google.write.setup`, `weather`, `ntfy`. AI: every overview or calendar check made without AI counts,
+  whatever the reason; offline mode in config does not. Hints come from `ai.HINTS` (shared with the self-test).
+- Never family data in a problem: no AI answer text (only that `secrets/ai_last_invalid.json` exists), no
+  coordinates. `/api/status` (and thus `problems`) is only available after login.
+- Frontend: `currentProblems()` = server list + client-side (old data, missing home; without a server also
+  `health.google` from family.json). `renderProblems()` draws the button in `#probSlot`; `fillProblems()` the dialog.
 
 ## Kiosk (`?kiosk=1`)
 
