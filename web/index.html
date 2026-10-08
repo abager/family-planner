@@ -67,7 +67,7 @@ header > .hmain{grid-area:main}
 .status{grid-area:status;align-self:end;justify-self:end}
 h1{font:600 clamp(1.6rem,4vw,2.4rem)/1.05 var(--display);margin:0;letter-spacing:-.01em}
 .sub{color:var(--muted);margin:6px 0 0}
-.status{font-size:.85rem;color:var(--muted)}
+.status{font-size:.85rem;color:var(--muted);text-align:right}
 .status b{color:var(--ink)}
 .srv{display:flex;gap:12px;justify-content:flex-end;align-items:center;margin-top:4px;flex-wrap:wrap}
 /* ⚠ ved titlen: aktuelle fejl i integrationerne (aldrig på kiosken) */
@@ -97,10 +97,22 @@ body.kiosk #probSlot{display:none}
 .srvbtn.gear{display:inline-flex;align-items:center;justify-content:center;color:var(--muted);border-radius:8px;padding:4px}
 .srvbtn.gear .ic{width:22px;height:22px}
 .srvbtn.gear:hover,.srvbtn.gear[aria-expanded="true"]{color:var(--ink)}
-.spin{display:inline-flex;vertical-align:-.2em;color:var(--accent)}
-.spin .ic{width:1.1em;height:1.1em}
-@keyframes fp-spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:no-preference){.spin .ic{animation:fp-spin 1s linear infinite}}
+/* Fremdrift pr. datatype, mens serveren henter (erstatter det snurrende ikon). Aldrig på kiosken. */
+.prog{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:flex-end;margin-top:6px}
+.pg{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted);white-space:nowrap}
+.pg .bar{position:relative;width:56px;height:5px;border-radius:3px;background:color-mix(in srgb,var(--ink) 12%,transparent);overflow:hidden}
+.pg .fill{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent);transition:width .4s ease}
+.pg.ind .fill{width:35%}
+@media (prefers-reduced-motion:no-preference){.pg.ind .fill{animation:fp-ind 1.2s ease-in-out infinite}}
+@keyframes fp-ind{0%{left:-35%}100%{left:100%}}
+.pg.wait .fill{width:0}
+.pg.done{color:var(--ink)}
+.pg.done .fill{width:100%}
+.pg.failed{color:var(--warn);font-weight:700}
+.pg.failed .fill{width:100%;background:var(--warn)}
+.pg .pct{font-variant-numeric:tabular-nums;min-width:2.6em;text-align:left}
+body.kiosk #progSlot{display:none}
+@media (max-width:700px){.prog{justify-content:flex-start}}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;min-width:220px;display:flex;flex-direction:column;gap:2px;padding:6px;
   background:var(--solid);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
 .menu[hidden]{display:none}
@@ -701,7 +713,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   header{margin-bottom:12px;row-gap:2px;column-gap:8px;grid-template-areas:"main gear" "status status"}
   h1{font-size:1.9rem}
   .sub{margin-top:2px;font-size:.92rem}
-  .status{width:100%;font-size:.8rem;justify-self:stretch}
+  .status{width:100%;font-size:.8rem;justify-self:stretch;text-align:left}
   .srv{justify-content:flex-start;margin-top:2px}
   .controls{margin-bottom:12px;gap:8px}
   .seg{position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:none;overflow:visible;border:0;border-top:1px solid var(--line);border-radius:0;
@@ -1168,12 +1180,36 @@ async function watchRun(){
   if(runWatch || !state.server?.running) return;
   runWatch=true;
   try{
-    for(let i=0;i<200 && state.server?.running;i++){            // højst ca. 10 minutter
-      await new Promise(r=>setTimeout(r,3000));
+    for(let i=0;i<400 && state.server?.running;i++){            // højst ca. 10 minutter
+      await new Promise(r=>setTimeout(r,1500));
       await loadServer();
+      renderProgress();                                           // bjælkerne følger med uden at tegne alt forfra
     }
   } finally { runWatch=false; }
   await load();
+}
+// ---- Bjælker pr. datatype i statuslinjen, mens serveren henter. Står et par sekunder som "færdig" bagefter.
+const PROG_LINGER=4000;
+let progShownUntil=0, progWasRunning=false, progTimer=null;
+function renderProgress(){
+  const slot=document.getElementById("progSlot"); if(!slot) return;
+  const pr=state.server?.progress, running=!!(state.server?.running || pr?.running), now=Date.now();
+  if(progWasRunning && !running){ progShownUntil=now+PROG_LINGER; clearTimeout(progTimer); progTimer=setTimeout(renderProgress, PROG_LINGER+50); }
+  progWasRunning=running;
+  const parts=pr?.parts||[];
+  if(!parts.length || (!running && now>progShownUntil)){ slot.innerHTML=""; return; }
+  slot.innerHTML=`<div class="prog" role="group" aria-label="${running?"Henter data":"Hentning færdig"}">${parts.map(progItem).join("")}</div>`;
+}
+function progItem(p){
+  const known=p.state==="running" && p.total>0, pct=known ? Math.round(100*p.done/p.total) : null;
+  const cls=p.state==="failed"?"failed":p.state==="done"?"done":p.state==="waiting"?"wait":known?"":"ind";
+  const text=p.state==="failed"?"fejlede":p.state==="done"?"færdig":p.state==="waiting"?"venter":known?`${p.done} af ${p.total}`:"henter …";
+  const shown=p.state==="failed"?"fejlede":p.state==="done"?"✓":known?`${pct} %`:p.state==="waiting"?"":"…";
+  const val=p.state==="done"?100:known?pct:p.state==="waiting"?0:null;
+  return `<span class="pg ${cls}" role="progressbar" aria-label="${esc(p.label)}" aria-valuemin="0" aria-valuemax="100"`
+    + (val!==null?` aria-valuenow="${val}"`:"") + ` aria-valuetext="${esc(text)}" title="${esc(p.label)}: ${esc(text)}">`
+    + `${esc(p.label)}<span class="bar"><span class="fill"${known?` style="width:${pct}%"`:""}></span></span>`
+    + `<span class="pct" aria-hidden="true">${shown}</span></span>`;
 }
 // Vejret (MET Norway) for en dag, hvis prognosen dækker den. Kun det grove resumé – placeringen er aldrig i family.json.
 function weatherFor(day){ return (state.data?.weather?.dage||[]).find(d=>d.dato===ymd(day)) || null; }
@@ -1297,7 +1333,7 @@ function renderChrome(){
   const sv=state.server;
   let line = state.data.demo ? "<b>Demodata</b> – ingen family.json fundet"
     : `Opdateret <b>${hm(g)}</b> fra Aula og familiekalenderen`;     // advarsler står under ⚠ ved titlen
-  if(sv?.running) line += ` <span class="spin" role="status" title="Henter data"><svg class="ic" aria-hidden="true"><use href="#i-sync"/></svg><span class="sronly">Henter data</span></span>`;
+  line += `<div id="progSlot"></div>`;                                // bjælker pr. datatype, mens der hentes
   // Statuslinjen viser kun status. Fejl og advarsler står under ⚠ ved titlen; handlinger ligger i menuen.
   const items=[`<button type="button" id="kioskBtn">Kioskvisning</button>`];
   if(sv){
@@ -1309,6 +1345,7 @@ function renderChrome(){
   document.getElementById("hdrGear").innerHTML = `<button type="button" class="srvbtn gear" id="menuBtn" aria-label="Indstillinger" title="Indstillinger" aria-expanded="${open}" aria-controls="actMenu"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></button>`
         + `<div class="menu" id="actMenu"${open?"":" hidden"}>${items.join("")}</div>`;
   document.getElementById("status").innerHTML = line;
+  renderProgress();
   const closeMenu=()=>{ state.menuOpen=false; document.getElementById("actMenu").hidden=true; document.getElementById("menuBtn").setAttribute("aria-expanded","false"); };
   const act=(id,fn)=>document.getElementById(id)?.addEventListener("click",()=>{ closeMenu(); fn(); });
   document.getElementById("menuBtn").addEventListener("click",()=>{

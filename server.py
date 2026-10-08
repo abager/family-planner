@@ -44,6 +44,7 @@ import fetch_family
 import ops
 import private as private_mod
 import problems
+import progress
 import suggestions as sugg
 
 TZ = ZoneInfo("Europe/Copenhagen")
@@ -244,6 +245,7 @@ class Runner:
             except Exception as e:  # noqa: BLE001
                 log.exception("Hentning fejlede")
                 res = {"aula": "error", "error": str(e) or e.__class__.__name__}
+            progress.end()                         # også efter timeout eller fejl: det, der ikke nåede i mål, er fejlet
             if not isinstance(res, dict):
                 res = {"aula": "error", "error": "Hentningen gav et uventet svar"}
             st.aula, st.last_error = res.get("aula", "error"), res.get("error")
@@ -542,6 +544,7 @@ setInterval(()=>{if(qr.length>1){i=(i+1)%qr.length;const e=document.getElementBy
 # ---------------------------------------------------------------- app
 def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_auth: bool) -> FastAPI:
     problems.reset()                           # fejllisten ved titlen starter forfra ved hver (gen)start
+    progress.reset()
     state = State()
     hooks = WebAuthHooks(state)
     fetch_family.auth_hooks = hooks
@@ -657,6 +660,7 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
                 "mark_read_enabled": settings.mark_read and settings.use_aula,
                 "ai": _ai_status(),            # sprogmodellens tilstand (ingen nøgle, intet indhold) – kun efter login
                 "problems": _problems(),       # aktuelle fejl i integrationerne – til ⚠ ved titlen
+                "progress": progress.snapshot(),   # fremdrift pr. datatype i den igangværende hentning – til bjælkerne
                 "weather": _weather_status()} # vejret slået til / hjemmet sat (kun ja/nej, aldrig placeringen)
 
 

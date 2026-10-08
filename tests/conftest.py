@@ -93,6 +93,9 @@ def fake_aula(monkeypatch):
 def _clean_problems():
     """Fejllisten ved titlen er global i processen – hver test starter uden fejl."""
     import problems
+    import progress
     problems.reset()
+    progress.reset()
     yield
     problems.reset()
+    progress.reset()

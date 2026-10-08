@@ -59,15 +59,12 @@ def test_settings_gear_holds_the_actions_and_has_no_refresh(make_page):
     assert page.locator("#refreshNow").count() == 0 and "Opdatér nu" not in page.inner_text("#actMenu")
 
 
-def test_a_spinning_icon_replaces_the_fetching_text_while_the_server_fetches(make_page):
+def test_progress_bars_replace_the_fetching_text_while_the_server_fetches(make_page):
     page, *_ = make_page(now=NOW, fixed=True)
-    page.evaluate("state.server={running:true,runs:1,aula:'ok'}; runWatch=true; renderChrome()")   # runWatch: ingen rigtig polling i testen
-    assert page.locator("#status .spin").count() == 1 and "Henter …" not in page.inner_text("#status")
-    assert page.locator("#status .spin .sronly").text_content() == "Henter data"
-    page.evaluate("state.server={running:false,runs:2,aula:'ok'}; renderChrome()")
-    assert page.locator("#status .spin").count() == 0
-
-
+    page.evaluate("state.server={running:true,runs:1,aula:'ok',progress:{running:true,parts:[{key:'google',label:'Google',state:'running',done:1,total:2}]}};"
+                  " runWatch=true; renderChrome()")                   # runWatch: ingen rigtig polling i testen
+    assert page.locator("#status .pg").count() == 1 and "Henter …" not in page.inner_text("#status")
+    assert page.locator("#status .spin").count() == 0                  # det snurrende ikon er væk
 def _gear_box(page):
     return page.evaluate("""(()=>{const g=document.getElementById('menuBtn').getBoundingClientRect(), h=document.querySelector('header').getBoundingClientRect(),
         t=document.getElementById('greeting').getBoundingClientRect(); return {gr:g.right, gt:g.top, gb:g.bottom, hr:h.right, ht:h.top, tt:t.top, tb:t.bottom};})()""")

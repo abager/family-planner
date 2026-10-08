@@ -15,6 +15,8 @@ class FakeServer:
         self.weather_status = {"enabled": True, "home": True}   # /api/status: vejret slået til, hjemmet sat
         self.mark_read = True
         self.problems: list[dict] = []                  # /api/status: aktuelle fejl i integrationerne
+        self.running = False                            # /api/status: henter serveren lige nu?
+        self.progress: dict = {"running": False, "parts": []}   # /api/status: fremdrift pr. datatype
         self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
                     "default_people": ["family"], "created": {}, "dismissed": [], "applied": [], "by_source": {}}
         self.fail_event = False
@@ -63,8 +65,8 @@ class FakeServer:
         if path == "/api/status":
             if not self.server:
                 return route.fulfill(status=404, body="")
-            return self._json(route, {"mark_read_enabled": self.mark_read, "running": False, "runs": 1, "aula": "ok", "pending_reads": 0, "mark_error": None, "aula_enabled": True,
-                                     "weather": self.weather_status, "problems": self.problems})
+            return self._json(route, {"mark_read_enabled": self.mark_read, "running": self.running, "runs": 1, "aula": "ok", "pending_reads": 0, "mark_error": None, "aula_enabled": True,
+                                     "weather": self.weather_status, "problems": self.problems, "progress": self.progress})
         if path == "/api/home-location":
             if m == "POST":
                 if not (54.4 <= body["lat"] <= 57.9):

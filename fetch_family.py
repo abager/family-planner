@@ -32,6 +32,7 @@ import activities
 import homework
 import private as private_mod
 import problems
+import progress
 import messages as msg_analysis
 import schedule
 import suggestions as sugg_store
@@ -147,8 +148,11 @@ async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.da
     Skrivekalenderen læses via Googles API, når servicekontoen er sat op (ændringer ses med det samme). Fejler det,
     bruges iCal-adressen, hvis den findes."""
     events: list[dict] = []
+    cals = cfg.get("google", [])
+    progress.begin("google", len(cals))
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
-        for cal_cfg in cfg.get("google", []):
+        for n_cal, cal_cfg in enumerate(cals):
+            progress.step("google", n_cal)
             name = cal_cfg.get("name", "Google")
             if _reads_via_api(cfg, cal_cfg):
                 try:
@@ -209,6 +213,7 @@ async def fetch_google(cfg: dict, people: People, start: dt.datetime, end: dt.da
                     "location": str(comp.get("LOCATION", "")) or None,
                     "notes": str(comp.get("DESCRIPTION", "")).strip()[:500] or None,
                 })
+    progress.finish("google", ok=not failed)
     log.info("Google: %d aftaler", len(events))
     return events
 
@@ -540,6 +545,7 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
         client = AulaGate(raw_client, max_concurrent=acfg.get("max_concurrent", 3),
                           timeout=acfg.get("request_timeout", 30), retries=acfg.get("max_retries", 2))
         t0 = time.perf_counter()
+        progress.begin("aula.kalender")
         profile = await client.get_profile()
 
         # Aula institution-profil-id → vores person-id
@@ -612,6 +618,7 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
         # Detaljer (beskrivelse) for kommende Aula-aftaler – her står skemaet nogle gange som tekst
         await _enrich_aula_events(client, events, acfg)
         timings["detaljer"] = time.perf_counter() - t0
+        progress.finish("aula.kalender")
         if dump_path:
             _dump_aula(dump_path, raw_events, events, lesson_details)
 
@@ -635,15 +642,18 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
 
         async def run_part(key: str, fn) -> None:
             t = time.perf_counter()
+            progress.begin(f"aula.{key}")
             try:
                 result[key] = await asyncio.wait_for(fn(), part_timeout)
                 problems.clear(f"aula.part:{key}")
+                progress.finish(f"aula.{key}")
             except Exception as e:  # noqa: BLE001
                 slow = isinstance(e, TimeoutError) and time.perf_counter() - t >= part_timeout - 1
                 why = f"tog over {part_timeout:.0f} s" if slow else _describe(e)
                 log.warning("Aula %s fejlede (%s) – genbruger forrige data", key, why)
                 problems.report(f"aula.part:{key}", "aula", f"Aula: {PART_LABELS.get(key, key)} kunne ikke hentes", detail=why,
                                 hint="Appen viser de seneste hentede data for denne del og prøver igen ved næste hentning.")
+                progress.finish(f"aula.{key}", ok=False)
                 result[key] = None  # None = genbrug forrige data
             finally:
                 timings[key] = time.perf_counter() - t
@@ -1053,7 +1063,18 @@ async def _fetch_gallery(client, profile, owner: dict[int, str], people: People,
             "source": "aula",
         }
 
-    return [x for x in await asyncio.gather(*(one_album(a) for a in albums[: acfg.get("gallery_albums", 8)])) if x]
+    picked = albums[: acfg.get("gallery_albums", 8)]
+    done = {"n": 0}
+    progress.step("aula.albums", 0, len(picked))
+
+    async def counted(a: dict) -> dict | None:
+        try:
+            return await one_album(a)
+        finally:
+            done["n"] += 1
+            progress.step("aula.albums", done["n"], len(picked))
+
+    return [x for x in await asyncio.gather(*(counted(a) for a in picked)) if x]
 
 
 async def _fetch_posts(client, profile, owner: dict[int, str], acfg: dict, media: MediaStore) -> list[dict]:
@@ -1273,7 +1294,17 @@ async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
             todo.append(i)
 
     t1 = time.perf_counter()
-    results = await asyncio.gather(*(fetch_one(threads[i]) for i in todo), return_exceptions=True)
+    got = {"n": 0}
+    progress.step("aula.messages", 0, len(todo))
+
+    async def counted(raw: dict) -> dict:
+        try:
+            return await fetch_one(raw)
+        finally:
+            got["n"] += 1
+            progress.step("aula.messages", got["n"], len(todo))
+
+    results = await asyncio.gather(*(counted(threads[i]) for i in todo), return_exceptions=True)
     t_fetch = time.perf_counter() - t1
     fetched, kept_old, failed = 0, 0, []
     for i, res in zip(todo, results):
@@ -1442,6 +1473,28 @@ def analyse_messages(cfg: dict, msgs: list[dict], events: list[dict]) -> tuple[l
 
 
 # ---------------------------------------------------------------- main
+def _progress_parts(cfg: dict, use_aula: bool) -> list[str]:
+    """De dele, denne hentning henter – kun dem får en bjælke i appen."""
+    acfg = cfg.get("aula", {})
+    keys = ["google"] if cfg.get("google") else []
+    if use_aula:
+        keys.append("aula.kalender")
+        keys += [f"aula.{k}" for k, flag in (("tasks", "fetch_tasks"), ("weekplan", "fetch_weekplan"), ("posts", "fetch_posts"),
+                                             ("messages", "fetch_messages"), ("albums", "fetch_gallery")) if acfg.get(flag, True)]
+    if cfg.get("suggestions", {}).get("enabled", True):
+        keys.append("kalenderforslag")
+    try:
+        import weather
+        if weather.enabled(cfg):
+            keys.append("vejr")
+        import briefing
+        if briefing.assistant_mode(cfg.get("assistant", {})) != "off":
+            keys.append("overblik")
+    except Exception:  # noqa: BLE001 – bjælkerne må aldrig vælte hentningen
+        pass
+    return keys
+
+
 async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     """Én hentning. Returnerer status til serveren: {"aula": skipped|ok|login_required|error, "error": str|None, "counts": {...}}."""
     people = People(cfg["people"])
@@ -1452,6 +1505,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
 
     out_path = Path(cfg.get("output", "web/family.json"))
     previous = json.loads(out_path.read_text("utf-8")) if out_path.exists() else {}
+    progress.start(_progress_parts(cfg, use_aula))
 
     google_failed: list[str] = []
     events = await fetch_google(cfg, people, start, end, google_failed)
@@ -1510,6 +1564,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     suggestions_list: list[dict] = []
     new_ids: list[str] = []
     if cfg.get("suggestions", {}).get("enabled", True):
+        progress.begin("kalenderforslag")
         try:
             store = sugg_store.Store(out_path.with_name("suggestions_state.json"))
             people_map = {p["id"]: p["name"] for p in cfg["people"]}
@@ -1524,15 +1579,20 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
                     item["cal"] = options.get(item["id"], [])
             new_ids = store.annotate(suggestions_list, options)
             events += created_events(store, events, people)
+            progress.finish("kalenderforslag")
         except Exception as e:  # noqa: BLE001 – forslag må aldrig vælte hentningen
             log.warning("Kunne ikke finde kalenderforslag: %s", e)
+            progress.finish("kalenderforslag", ok=False)
     events.sort(key=lambda x: x["start"])
+    progress.begin("vejr")
     try:
         import weather
         weather_data = weather.for_family(cfg, now)        # groft dagsresumé, aldrig placeringen; None uden hjem
+        progress.finish("vejr", ok="weather" not in {p["key"] for p in problems.snapshot()})
     except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
         log.warning("Vejret sprunget over: %s", e)
         problems.report("weather", "weather", "Vejret kunne ikke laves", detail=f"{type(e).__name__}: {e}")
+        progress.finish("vejr", ok=False)
         weather_data = None
     data = {
         "generated": iso(now),
@@ -1561,17 +1621,23 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     try:
         import briefing
         if briefing.assistant_mode(acfg) != "off":
+            progress.begin("overblik", 2)
             briefing.make_briefing(cfg, data, "day")
+            progress.step("overblik", 1)
             wk = {**cfg, "assistant": {**acfg, "min_minutes_between": acfg.get("week_min_minutes_between", 360)}}
             briefing.make_briefing(wk, data, "week")
+            progress.finish("overblik")
     except SystemExit as e:
         log.warning("Overblik springes over: %s", e)
         problems.report("ai.briefing.error", "ai", "Overblikket kunne ikke laves", detail=str(e))
+        progress.finish("overblik", ok=False)
     except Exception as e:  # noqa: BLE001
         log.warning("Kunne ikke lave overblik: %s", e)
         problems.report("ai.briefing.error", "ai", "Overblikket kunne ikke laves", detail=f"{type(e).__name__}: {e}")
+        progress.finish("overblik", ok=False)
     else:
         problems.clear("ai.briefing.error")
+    progress.end()
     log.info("Hentning færdig på %.1f s", time.perf_counter() - t_cycle)
     return {"aula": aula_state, "error": aula_error, "generated": data["generated"], "google_ok": not google_failed,
             "counts": {"events": len(events), **{k: len(extra[k]) for k in extra_keys},
