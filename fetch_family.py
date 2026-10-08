@@ -15,8 +15,10 @@ import inspect
 import datetime as dt
 import json
 import logging
+import random
 import re
 import sys
+import time
 import tomllib
 from collections import defaultdict
 from pathlib import Path
@@ -237,21 +239,21 @@ def _plain_keep_lines(html: str) -> str:
 
 
 async def _enrich_aula_events(client, events: list[dict], acfg: dict) -> None:
-    """Hent beskrivelsen for Aula-aftaler de næste dage og find skema-tekst i den."""
+    """Hent beskrivelsen for Aula-aftaler de næste dage og find skema-tekst i den. Hentes samtidigt (loftet sidder i AulaGate)."""
     today = dt.date.today()
     horizon = today + dt.timedelta(days=acfg.get("event_details_days", 7))
     todo = [e for e in events if e.get("_aula_id")
             and today - dt.timedelta(days=1) <= dt.date.fromisoformat(e["start"][:10]) <= horizon]
     todo = todo[: acfg.get("event_details_max", 60)]
-    found = 0
-    for e in todo:
+
+    async def one(e: dict) -> str:
         try:
             detail = await client.get_calendar_event(e["_aula_id"])
         except Exception as ex:  # noqa: BLE001
-            log.debug("Ingen detaljer for %s: %s", e["title"], ex)
-            continue
+            log.debug("Ingen detaljer for %s: %s", e["title"], _describe(ex))
+            return "fejl"
         if not detail:
-            continue
+            return "tom"
         desc = detail.get("description")
         html = desc.get("html") if isinstance(desc, dict) else desc
         text = _plain_keep_lines(html) if isinstance(html, str) else ""
@@ -260,30 +262,40 @@ async def _enrich_aula_events(client, events: list[dict], acfg: dict) -> None:
         lessons = parse_schedule_text(text) or parse_schedule_text(e["title"].replace(";", "\n"))
         if lessons:
             e["lessons"], e["schedule"] = lessons, True
-            found += 1
+            return "skema"
+        return "ok"
+
+    results = await asyncio.gather(*(one(e) for e in todo))
     if todo:
-        log.info("Aula: detaljer for %d aftaler, skema fundet i tekst for %d", len(todo), found)
+        failed = results.count("fejl")
+        log.log(logging.WARNING if failed else logging.INFO, "Aula: detaljer for %d aftaler, skema fundet i tekst for %d%s",
+                len(todo), results.count("skema"), f", {failed} kunne ikke hentes" if failed else "")
 
 
 async def _lesson_notes(client, events: list[dict], acfg: dict) -> list[dict]:
-    """Hent noten på de lektioner, Aula markerer med hasRelevantNote. Returnerer rå detaljer til --dump-aula."""
+    """Hent noten på de lektioner, Aula markerer med hasRelevantNote (samtidigt). Returnerer rå detaljer til --dump-aula."""
     today = dt.date.today()
     horizon = today + dt.timedelta(days=acfg.get("lesson_notes_days", 3))
     todo = [(e, l) for e in events if e.get("lessons") and today <= dt.date.fromisoformat(e["start"][:10]) <= horizon
             for l in e["lessons"] if l.get("hasNote") and l.get("id")]
-    raw_details: list[dict] = []
-    for e, l in todo[: acfg.get("lesson_notes_max", 15)]:
+    picked = todo[: acfg.get("lesson_notes_max", 15)]
+
+    async def one(e: dict, l: dict) -> dict | None:
         try:
             detail = await client.get_calendar_event(l["id"])
         except Exception as ex:  # noqa: BLE001
-            log.debug("Ingen note for %s: %s", l.get("title"), ex)
-            continue
-        raw_details.append({"id": l["id"], "title": l["title"], "date": e["start"][:10], "detail": detail})
+            log.debug("Ingen note for %s: %s", l.get("title"), _describe(ex))
+            return None
         text = _find_note_text(detail)
         if text:
             l["note"] = text[:600]
+        return {"id": l["id"], "title": l["title"], "date": e["start"][:10], "detail": detail}
+
+    raw_details = [d for d in await asyncio.gather(*(one(e, l) for e, l in picked)) if d]
     if todo:
-        log.info("Aula: %d lektioner med note, %d hentet", len(todo), sum(1 for _, l in todo if l.get("note")))
+        failed = len(picked) - len(raw_details)
+        log.log(logging.WARNING if failed else logging.INFO, "Aula: %d lektioner med note, %d hentet%s",
+                len(todo), sum(1 for _, l in todo if l.get("note")), f", {failed} kunne ikke hentes" if failed else "")
     for e in events:
         for l in e.get("lessons") or []:
             l.pop("id", None)
@@ -363,6 +375,141 @@ class AuthHooks:
 auth_hooks = AuthHooks()
 
 
+# ---------------------------------------------------------------- Aula: kald med loft, timeout og genforsøg
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+_URL_QUERY = re.compile(r"\?[^\s'\"]*")
+
+
+def _describe(e: BaseException) -> str:
+    """Kort fejltekst til loggen – uden query-strenge fra URL'er (de kan indeholde id'er og tokens)."""
+    text = _URL_QUERY.sub("?…", str(e)) or "-"
+    return f"{e.__class__.__name__}: {text[:200]}"
+
+
+def _transient(e: BaseException) -> str | None:
+    """Slags midlertidig fejl, der er værd at prøve igen. None = prøv ikke igen (fx login udløbet eller en programfejl)."""
+    if isinstance(e, (TimeoutError, httpx.TimeoutException)):
+        return "timeout"
+    if isinstance(e, httpx.HTTPStatusError):
+        return "http" if e.response is not None and e.response.status_code in _RETRY_STATUS else None
+    if isinstance(e, httpx.TransportError):
+        return "netværk"
+    return None
+
+
+def _retry_after(obj) -> float | None:
+    """Aulas Retry-After (sekunder) fra et svar eller en HTTP-fejl – højst 30 s."""
+    resp = getattr(obj, "response", obj)
+    try:
+        value = resp.headers.get("Retry-After")
+        return min(30.0, max(0.0, float(value))) if value else None
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+class AulaGate:
+    """Alle kald til Aula i én hentning går herigennem.
+
+    - ét fælles loft over samtidige kald (max_concurrent), så de dele, der hentes samtidigt, tilsammen er skånsomme mod Aula
+    - timeout pr. kald, så ét hængende kald ikke stopper hele hentningen
+    - få genforsøg med stigende pause ved midlertidige fejl (timeout, netværk, 429/5xx) – aldrig ved login- eller programfejl
+    - tæller kald, genforsøg og fejl til loggens opsummering
+    Biblioteket kalder sine egne metoder direkte (ikke gennem porten), så et kald tæller kun én gang og kan ikke låse sig selv fast.
+    """
+
+    backoff = 1.0                 # sekunder før første genforsøg; ganges med 3 for hvert nyt forsøg
+    _SUBCLIENTS = ("widgets",)    # under-klienter, hvis kald også skal gennem porten
+
+    def __init__(self, target, max_concurrent: int = 3, timeout: float = 30.0, retries: int = 2, *, _shared: dict | None = None):
+        self._target = target
+        if _shared is None:
+            _shared = {"sem": asyncio.Semaphore(max(1, int(max_concurrent))), "stats": defaultdict(int), "memo": {},
+                       "timeout": float(timeout), "retries": max(0, int(retries))}
+        self._shared = _shared
+        self.stats: defaultdict[str, int] = _shared["stats"]
+        self.memo: dict = _shared["memo"]
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") or name in ("_target", "_shared"):
+            raise AttributeError(name)
+        attr = getattr(self._target, name)
+        if name in self._SUBCLIENTS and attr is not None:
+            return AulaGate(attr, _shared=self._shared)
+        if inspect.iscoroutinefunction(attr):
+            async def call(*args, **kwargs):
+                return await self._call(name, attr, args, kwargs)
+            return call
+        return attr
+
+    def _delay(self, attempt: int) -> float:
+        base = type(self).backoff
+        return base * 3 ** (attempt - 1) + random.uniform(0, 0.3 * base)
+
+    async def _call(self, name: str, fn, args, kwargs):
+        sh, attempt = self._shared, 0
+        while True:
+            attempt += 1
+            try:
+                async with sh["sem"]:
+                    self.stats["kald"] += 1
+                    result = await asyncio.wait_for(fn(*args, **kwargs), sh["timeout"])
+            except Exception as e:  # noqa: BLE001 – kun midlertidige fejl prøves igen, resten sendes videre
+                kind = _transient(e)
+                if kind is None:
+                    raise
+                if kind == "timeout":
+                    self.stats["timeout"] += 1
+                if attempt > sh["retries"]:
+                    self.stats["opgivet"] += 1
+                    log.warning("Aula-kald %s opgivet efter %d forsøg: %s", name, attempt, _describe(e))
+                    raise
+                self.stats["genforsøg"] += 1
+                delay = _retry_after(e) or self._delay(attempt)
+                log.debug("Aula-kald %s: %s – prøver igen om %.1f s", name, kind, delay)
+                await asyncio.sleep(delay)
+                continue
+            status = getattr(result, "status_code", None)
+            if isinstance(status, int) and status in _RETRY_STATUS:
+                if attempt > sh["retries"]:
+                    self.stats["opgivet"] += 1
+                    log.warning("Aula-kald %s opgivet efter %d forsøg: HTTP %d", name, attempt, status)
+                    return result                 # kalderen afgør selv, hvad svaret betyder (raise_for_status)
+                self.stats["genforsøg"] += 1
+                delay = _retry_after(result) or self._delay(attempt)
+                log.debug("Aula-kald %s: HTTP %d – prøver igen om %.1f s", name, status, delay)
+                await asyncio.sleep(delay)
+                continue
+            return result
+
+
+async def _once(client, key: str, factory):
+    """Kør factory højst én gang pr. hentning (pr. AulaGate) – også når flere dele beder om det samtidigt."""
+    if not isinstance(client, AulaGate):
+        return await factory()
+    task = client.memo.get(key)
+    if task is None:
+        task = client.memo[key] = asyncio.ensure_future(factory())
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())   # ingen "exception never retrieved"
+    return await asyncio.shield(task)        # én del, der timer ud, må ikke afbryde opgaven for de andre
+
+
+def _full_sweep_due(last: str | None, now: dt.datetime, acfg: dict) -> bool:
+    """Skal trådlisten gennemgås helt (fanger slettede/arkiverede tråde)? Én gang i døgnet i nattevinduet,
+    og under alle omstændigheder hvis det er over 36 timer siden (fx hvis maskinen var slukket om natten)."""
+    if not last:
+        return True
+    try:
+        last_dt = dt.datetime.fromisoformat(last)
+    except (TypeError, ValueError):
+        return True
+    if last_dt.tzinfo is None:
+        last_dt = last_dt.replace(tzinfo=TZ)
+    if now - last_dt > dt.timedelta(hours=36):
+        return True
+    lo, hi = int(acfg.get("full_sweep_from", 2)), int(acfg.get("full_sweep_to", 6))
+    return last_dt.astimezone(TZ).date() < now.astimezone(TZ).date() and lo <= now.astimezone(TZ).hour < hi
+
+
 async def open_aula_client(cfg: dict):
     """Forbindelse til Aula med de gemte tokens (bruges som `async with await open_aula_client(cfg) as client`).
     Kræves et nyt MitID-login, afgør auth_hooks, hvad der sker (terminal, webside eller LoginRequired)."""
@@ -381,12 +528,18 @@ async def open_aula_client(cfg: dict):
 
 
 async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, dump_path: Path | None = None,
-                     previous_messages: list[dict] | None = None) -> dict:
+                     previous_messages: list[dict] | None = None, full_sweep: bool = True) -> dict:
     acfg = cfg["aula"]
     events: list[dict] = []
     result: dict = {"tasks": [], "weekplan": [], "posts": [], "messages": [], "albums": []}
+    meta = {"full_sweep_done": False}
+    timings: dict[str, float] = {}
+    t_start = time.perf_counter()
 
-    async with await open_aula_client(cfg) as client:
+    async with await open_aula_client(cfg) as raw_client:
+        client = AulaGate(raw_client, max_concurrent=acfg.get("max_concurrent", 3),
+                          timeout=acfg.get("request_timeout", 30), retries=acfg.get("max_retries", 2))
+        t0 = time.perf_counter()
         profile = await client.get_profile()
 
         # Aula institution-profil-id → vores person-id
@@ -450,43 +603,62 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
                 "location": None,
                 "notes": schedule.schedule_summary(lesson_list),
             })
+        timings["kalender"] = time.perf_counter() - t0
 
         # Noter på lektioner (fx besked til vikaren) – kun de næste dage, og kun lektioner Aula markerer med en note
+        t0 = time.perf_counter()
         lesson_details = await _lesson_notes(client, events, acfg)
 
         # Detaljer (beskrivelse) for kommende Aula-aftaler – her står skemaet nogle gange som tekst
         await _enrich_aula_events(client, events, acfg)
+        timings["detaljer"] = time.perf_counter() - t0
         if dump_path:
             _dump_aula(dump_path, raw_events, events, lesson_details)
 
-        # Hver del hentes for sig, så én fejl ikke vælter resten
+        # De fem dele hentes samtidigt (AulaGate holder det samlede antal kald nede). Hver del fejler for sig,
+        # så én fejl eller ét hængende kald ikke vælter resten – en del, der fejler, genbruger forrige data.
+        out_dir = Path(cfg.get("output", "web/family.json")).parent
+        media = MediaStore(client, out_dir / "media", acfg.get("images_per_item", 8))
+        msg_report: dict = {}
         extras = [
             ("tasks", acfg.get("fetch_tasks", True), lambda: _fetch_mu_tasks(client, profile, people)),
             ("weekplan", acfg.get("fetch_weekplan", True), lambda: _fetch_meebook(client, profile, people)),
             ("posts", acfg.get("fetch_posts", True), lambda: _fetch_posts(client, profile, owner, acfg, media)),
-            ("messages", acfg.get("fetch_messages", True), lambda: _fetch_messages(client, people, acfg, media, previous_messages)),
+            ("messages", acfg.get("fetch_messages", True),
+             lambda: _fetch_messages(client, people, acfg, media, previous_messages, full_sweep=full_sweep, report=msg_report)),
             ("albums", acfg.get("fetch_gallery", True), lambda: _fetch_gallery(client, profile, owner, people, acfg, media)),
         ]
-        out_dir = Path(cfg.get("output", "web/family.json")).parent
-        media = MediaStore(client, out_dir / "media", acfg.get("images_per_item", 8))
-        for key, enabled, fn in extras:
-            if not enabled:
-                continue
+        part_timeout = float(acfg.get("part_timeout", 900))
+
+        async def run_part(key: str, fn) -> None:
+            t = time.perf_counter()
             try:
-                result[key] = await fn()
+                result[key] = await asyncio.wait_for(fn(), part_timeout)
             except Exception as e:  # noqa: BLE001
-                log.warning("Aula %s fejlede: %s", key, e)
+                slow = isinstance(e, TimeoutError) and time.perf_counter() - t >= part_timeout - 1
+                log.warning("Aula %s fejlede (%s) – genbruger forrige data", key,
+                            f"tog over {part_timeout:.0f} s" if slow else _describe(e))
                 result[key] = None  # None = genbrug forrige data
+            finally:
+                timings[key] = time.perf_counter() - t
+
+        await asyncio.gather(*(run_part(key, fn) for key, enabled, fn in extras if enabled))
         # Ryd kun op, når både opslag og beskeder blev hentet, ellers slettes billeder vi stadig viser
         media.report()
         if all(result.get(k) is not None for k in ("posts", "messages", "albums")):
             media.cleanup()
+        meta["full_sweep_done"] = bool(full_sweep and result.get("messages") is not None and msg_report.get("complete"))
 
     for e in events:
         e.pop("_aula_id", None)
     result["events"] = events
     log.info("Aula: %d aftaler, %s", len(events),
              ", ".join(f"{len(v or [])} {k}" for k, v in result.items() if k != "events"))
+    st = client.stats
+    log.info("Aula-tider: %s · i alt %.1f s · %d kald, %d genforsøg, %d timeouts, %d opgivet",
+             " · ".join(f"{k} {v:.1f} s" for k, v in timings.items()), time.perf_counter() - t_start,
+             st["kald"], st["genforsøg"], st["timeout"], st["opgivet"])
+    result["meta"] = meta
     return result
 
 
@@ -498,7 +670,7 @@ async def _fetch_mu_tasks(client, profile, people: People) -> list[dict]:
         return []
     child_filter, inst_filter = _widget_filters(profile)
     try:
-        ctx = await client.get_profile_context()
+        ctx = await _once(client, "profile_context", client.get_profile_context)
         session_uuid = ctx["data"]["userId"]
     except Exception as e:  # noqa: BLE001
         log.info("Ingen widget-kontekst (opgaver springes over): %s", e)
@@ -597,6 +769,7 @@ class MediaStore:
         self.folder.mkdir(parents=True, exist_ok=True)
         self.used: set[str] = set()
         self.stats: defaultdict[str, int] = defaultdict(int)
+        self._locks: dict[str, asyncio.Lock] = {}
 
     def _existing(self, key: str) -> str | None:
         """Genbrug en tidligere hentet fil – men kun hvis den faktisk er et billede.
@@ -635,32 +808,44 @@ class MediaStore:
         return list(dict.fromkeys(urls))          # uden dubletter, rækkefølge bevaret
 
     async def _fetch(self, key: str, urls: list[str]) -> str | None:
-        if (have := self._existing(key)):
-            self.stats["fra cache"] += 1
-            return have
-        for url in urls:
-            try:
-                data = await self.client.download_file(url)
-            except Exception as e:  # noqa: BLE001
-                self.stats["download fejlede"] += 1
-                log.debug("Billede %s: download fejlede (%s): %s", key, url[:80], e)
-                continue
-            ext = _sniff(data)
-            if ext == ".heic":
-                converted = _heic_to_jpg(data)
-                if converted is None:
-                    self.stats["HEIC uden konvertering"] += 1
-                    continue                      # prøv thumbnail i stedet
-                data, ext = converted, ".jpg"
-            if not ext:
-                self.stats["ikke et billede"] += 1
-                log.debug("Billede %s: indholdet er ikke et billede (%r…)", key, data[:40])
-                continue
-            fname = f"{key}{ext}"
-            (self.folder / fname).write_bytes(data)
-            self.stats["hentet"] += 1
-            return fname
-        return None
+        # Samme billede kan dukke op flere steder samtidigt: kun én henter, de andre venter og får filen fra cachen
+        async with self._locks.setdefault(key, asyncio.Lock()):
+            if (have := self._existing(key)):
+                self.stats["fra cache"] += 1
+                return have
+            for url in urls:
+                try:
+                    data = await self.client.download_file(url)
+                except Exception as e:  # noqa: BLE001
+                    self.stats["download fejlede"] += 1
+                    log.debug("Billede %s: download fejlede: %s", key, _describe(e))
+                    continue
+                ext = _sniff(data)
+                if ext == ".heic":
+                    converted = _heic_to_jpg(data)
+                    if converted is None:
+                        self.stats["HEIC uden konvertering"] += 1
+                        continue                      # prøv thumbnail i stedet
+                    data, ext = converted, ".jpg"
+                if not ext:
+                    self.stats["ikke et billede"] += 1
+                    log.debug("Billede %s: indholdet er ikke et billede (%r…)", key, data[:40])
+                    continue
+                fname = f"{key}{ext}"
+                tmp = self.folder / f"{fname}.part"
+                try:
+                    tmp.write_bytes(data)
+                    tmp.replace(self.folder / fname)   # atomisk: en afbrudt hentning efterlader aldrig et halvt billede
+                except OSError as e:
+                    self.stats["kunne ikke gemmes"] += 1
+                    log.warning("Billede %s kunne ikke gemmes: %s", key, e)
+                    tmp.unlink(missing_ok=True)
+                    return None
+                self.stats["hentet"] += 1
+                return fname
+            if urls:
+                self.stats["ikke hentet"] += 1        # ingen af adresserne gav et billede
+            return None
 
     async def urls(self, key: str, urls: list[str]) -> str | None:
         """Hent ét billede ud fra en liste af mulige adresser (bruges til galleriet)."""
@@ -685,8 +870,12 @@ class MediaStore:
         for src in re.findall(r"<img[^>]+src=[\"']([^\"']+)", html or "", re.I):
             if src.startswith("http"):
                 jobs.append((hashlib.sha1(src.split("?")[0].encode()).hexdigest()[:16], [src]))
-        for key, urls in jobs[: self.max]:
-            fname = await self._fetch(key, urls)
+        names = await asyncio.gather(*(self._fetch(key, urls) for key, urls in jobs[: self.max]), return_exceptions=True)
+        for fname in names:                       # samme rækkefølge som vedhæftningerne
+            if isinstance(fname, BaseException):
+                self.stats["fejl"] += 1
+                log.debug("Billede fejlede: %s", _describe(fname))
+                continue
             if fname:
                 self.used.add(fname)
                 out.append(f"{self.folder.name}/{fname}")
@@ -694,7 +883,8 @@ class MediaStore:
 
     def report(self) -> None:
         if self.stats:
-            log.info("Billeder: %s", ", ".join(f"{v} {k}" for k, v in self.stats.items()))
+            bad = any(self.stats.get(k) for k in ("ikke hentet", "kunne ikke gemmes", "fejl"))
+            log.log(logging.WARNING if bad else logging.INFO, "Billeder: %s", ", ".join(f"{v} {k}" for k, v in self.stats.items()))
 
     def cleanup(self) -> None:
         """Slet billeder, der ikke længere hører til et opslag eller en besked."""
@@ -738,7 +928,7 @@ def _parse_plan_date(text: str, monday: dt.date) -> str | None:
 
 async def _fetch_meebook(client, profile, people: People) -> list[dict]:
     child_filter, inst_filter = _widget_filters(profile)
-    ctx = await client.get_profile_context()
+    ctx = await _once(client, "profile_context", client.get_profile_context)
     session_uuid = ctx["data"]["userId"]
     today = dt.date.today()
     out: list[dict] = []
@@ -769,29 +959,34 @@ async def _fetch_meebook(client, profile, people: People) -> list[dict]:
     return out
 
 
-_GROUP_CACHE: dict[int, tuple[dict, dict]] = {}
-
-
 async def _child_groups(client, profile, owner: dict[int, str]) -> tuple[dict[int, set[str]], dict[str, set[str]]]:
-    """Barnets grupper (klasse, SFO, stue …) → barn, og institutionskode → børn."""
-    if id(client) in _GROUP_CACHE:
-        return _GROUP_CACHE[id(client)]
-    group_owner: dict[int, set[str]] = defaultdict(set)
-    inst_owner: dict[str, set[str]] = defaultdict(set)
-    for child in profile.children:
-        pid = owner.get(child.id)
-        if not pid:
-            continue
-        code = str((child._raw or {}).get("institutionProfile", {}).get("institutionCode") or "")
-        if code:
-            inst_owner[code].add(pid)
-        try:
-            for g in await client.get_groups(child_institution_profile_ids=[child.id]):
-                group_owner[g.id].add(pid)
-        except Exception as e:  # noqa: BLE001
-            log.debug("Kunne ikke hente grupper for %s: %s", child.name, e)
-    _GROUP_CACHE[id(client)] = (group_owner, inst_owner)
-    return group_owner, inst_owner
+    """Barnets grupper (klasse, SFO, stue …) → barn, og institutionskode → børn.
+
+    Hentes én gang pr. hentning og deles af opslag og galleri (tidligere en cache, der aldrig blev tømt)."""
+    async def load():
+        group_owner: dict[int, set[str]] = defaultdict(set)
+        inst_owner: dict[str, set[str]] = defaultdict(set)
+
+        async def groups_for(child, pid: str) -> None:
+            try:
+                for g in await client.get_groups(child_institution_profile_ids=[child.id]):
+                    group_owner[g.id].add(pid)
+            except Exception as e:  # noqa: BLE001
+                log.debug("Kunne ikke hente grupper for %s: %s", child.name, _describe(e))
+
+        jobs = []
+        for child in profile.children:
+            pid = owner.get(child.id)
+            if not pid:
+                continue
+            code = str((child._raw or {}).get("institutionProfile", {}).get("institutionCode") or "")
+            if code:
+                inst_owner[code].add(pid)
+            jobs.append(groups_for(child, pid))
+        await asyncio.gather(*jobs)
+        return group_owner, inst_owner
+
+    return await _once(client, "groups", load)
 
 
 def _parse_ts(value) -> str | None:
@@ -804,23 +999,23 @@ def _parse_ts(value) -> str | None:
 
 
 async def _fetch_gallery(client, profile, owner: dict[int, str], people: People, acfg: dict, media: MediaStore) -> list[dict]:
-    """Galleri-albums. Mange institutioner lægger billeder her i stedet for i opslag."""
+    """Galleri-albums. Mange institutioner lægger billeder her i stedet for i opslag. Albums og billeder hentes samtidigt."""
     group_owner, inst_owner = await _child_groups(client, profile, owner)
     ids = profile.institution_profile_ids
     albums = await client.get_gallery_albums(ids, limit=acfg.get("gallery_albums", 8))
     log.info("Aula: %d albums i galleriet", len(albums))
     per_album = acfg.get("images_per_album", 12)
-    out: list[dict] = []
-    for a in albums[: acfg.get("gallery_albums", 8)]:
+
+    async def one_album(a: dict) -> dict | None:
         album_id = a.get("id")
         if not isinstance(album_id, int):
-            continue
+            return None
         try:
             pics = await client.get_album_pictures(ids, album_id, limit=per_album)
         except Exception as e:  # noqa: BLE001
-            log.warning("Kunne ikke hente billeder i album %s: %s", a.get("title"), e)
-            continue
-        images, tagged = [], set()
+            log.warning("Kunne ikke hente billeder i album %s: %s", a.get("title"), _describe(e))
+            return None
+        jobs, tagged = [], set()
         for pic in pics[:per_album]:
             for t in pic.get("tags") or []:        # børn, der er tagget på billedet
                 pid = people.by_aula_name(t.get("name") or "")
@@ -829,8 +1024,8 @@ async def _fetch_gallery(client, profile, owner: dict[int, str], people: People,
             f = pic.get("file") or {}
             is_video = "video" in str(pic.get("mediaType", "")).lower()
             urls = ([] if is_video else [f.get("url")]) + [pic.get(k) for k in MediaStore._THUMB_KEYS]
-            if (path := await media.urls(f"g{pic.get('id') or f.get('id')}", urls)):
-                images.append(path)
+            jobs.append(media.urls(f"g{pic.get('id') or f.get('id')}", urls))
+        images = [path for path in await asyncio.gather(*jobs) if path]
         who: set[str] = set(tagged)
         for g in a.get("sharedWithGroups") or []:
             if isinstance(g, dict):
@@ -839,7 +1034,7 @@ async def _fetch_gallery(client, profile, owner: dict[int, str], people: People,
             code = str(a.get("institutionCode") or (a.get("creator") or {}).get("institutionCode") or "")
             who = inst_owner.get(code, set())
         creator = a.get("creator") or {}
-        out.append({
+        return {
             "id": f"album:{album_id}",
             "title": a.get("title") or "Album",
             "author": creator.get("name") or creator.get("fullName") or a.get("creatorName"),
@@ -850,8 +1045,9 @@ async def _fetch_gallery(client, profile, owner: dict[int, str], people: People,
             "tagged": sorted(tagged),
             "people": sorted(who) or ["family"],
             "source": "aula",
-        })
-    return out
+        }
+
+    return [x for x in await asyncio.gather(*(one_album(a) for a in albums[: acfg.get("gallery_albums", 8)])) if x]
 
 
 async def _fetch_posts(client, profile, owner: dict[int, str], acfg: dict, media: MediaStore) -> list[dict]:
@@ -865,8 +1061,9 @@ async def _fetch_posts(client, profile, owner: dict[int, str], acfg: dict, media
 
     raw_posts = await client.get_posts(profile.institution_profile_ids, limit=limit)
     log.info("Aula: %d opslag hentet", len(raw_posts))
+    all_images = await asyncio.gather(*(media.images(p.attachments, p.content_html) for p in raw_posts))
     out: list[dict] = []
-    for p in raw_posts:
+    for p, imgs in zip(raw_posts, all_images):
         who: set[str] = set()
         for g in p.shared_with_groups or []:
             gid = g.get("id") if isinstance(g, dict) else None
@@ -881,7 +1078,7 @@ async def _fetch_posts(client, profile, owner: dict[int, str], acfg: dict, media
             "timestamp": iso(p.timestamp) if p.timestamp else None,
             "important": bool(p.is_important),
             "text": _plain(p.content_html),
-            "images": (imgs := await media.images(p.attachments, p.content_html)),
+            "images": imgs,
             "attachments": len(p.attachments or []) - len(imgs),
             "groups": [g.get("name") for g in (p.shared_with_groups or []) if isinstance(g, dict) and g.get("name")],
             "people": sorted(who) or ["family"],
@@ -897,25 +1094,56 @@ async def _api_json(client, query: str) -> dict:
     return resp.json()
 
 
-async def _all_threads(client, max_threads: int, max_pages: int) -> list[dict]:
-    """Alle beskedtråde (nyeste først), side for side, til der ikke kommer nye."""
+def _thread_sig(raw: dict, per_thread: int) -> str:
+    """Fingeraftryk af en tråd i trådlisten. Ændrer Aula noget ved tråden (ny besked, læst, deltagere …), ændres det."""
+    return hashlib.sha1(f"{per_thread}|{json.dumps(raw, sort_keys=True, default=str)}".encode()).hexdigest()[:16]
+
+
+async def _list_threads(client, max_threads: int, max_pages: int, unchanged=None, stop_after: int = 0) -> tuple[list[dict], dict]:
+    """Beskedtråde (nyeste først), side for side, til der ikke kommer nye.
+
+    Med unchanged + stop_after stopper vi efter en side, når de seneste stop_after tråde alle var uændrede: Aula
+    sorterer efter seneste aktivitet, så resten er så godt som altid også uændret. info["complete"] fortæller,
+    om hele listen blev set – ellers overfører kalderen resten fra forrige hentning.
+    """
+    info = {"pages": 0, "complete": True, "early_stop": False}
     if not (hasattr(client, "_request_with_version_retry") and hasattr(client, "api_url")):
         log.warning("Aula-biblioteket kan ikke side-inddele beskeder i denne version – henter kun første side")
-        return [t._raw or {} for t in await client.get_message_threads()][:max_threads]
+        info["complete"] = False
+        return [t._raw or {} for t in await client.get_message_threads()][:max_threads], info
     seen: set = set()
     out: list[dict] = []
+    run = 0
     for page in range(max_pages):
-        data = await _api_json(client, f"method=messaging.getThreads&sortOn=date&orderDirection=desc&page={page}")
+        try:
+            data = await _api_json(client, f"method=messaging.getThreads&sortOn=date&orderDirection=desc&page={page}")
+        except Exception as e:  # noqa: BLE001
+            if page == 0:
+                raise                           # ingen liste overhovedet: hele beskeddelen genbruger forrige data
+            log.warning("Beskedtråde: side %d kunne ikke hentes (%s) – resten genbruges fra forrige hentning", page + 1, _describe(e))
+            info["complete"] = False
+            break
+        info["pages"] += 1
         fresh = [t for t in ((data.get("data") or {}).get("threads") or []) if t.get("id") is not None and t["id"] not in seen]
         if not fresh:
             break                               # tom side, eller serveren gentager sig selv
         for t in fresh:
             seen.add(t["id"])
             out.append(t)
+            if unchanged is not None:
+                run = run + 1 if unchanged(t) else 0
         if len(out) >= max_threads:
             break
+        if stop_after and run >= stop_after:
+            info["early_stop"], info["complete"] = True, False
+            break
         await asyncio.sleep(0.15)
-    return out[:max_threads]
+    return out[:max_threads], info
+
+
+async def _all_threads(client, max_threads: int, max_pages: int) -> list[dict]:
+    """Alle beskedtråde (nyeste først), side for side, til der ikke kommer nye."""
+    return (await _list_threads(client, max_threads, max_pages))[0]
 
 
 async def _thread_messages(client, thread_id, per_thread: int, max_pages: int = 4) -> list:
@@ -947,64 +1175,60 @@ async def _thread_messages(client, thread_id, per_thread: int, max_pages: int = 
 
 
 async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
-                          previous: list[dict] | None = None) -> list[dict]:
-    """Hele beskedhistorikken. Tråde, der ikke er ændret siden sidst, genbruges fra forrige family.json."""
+                          previous: list[dict] | None = None, full_sweep: bool = True, report: dict | None = None) -> list[dict]:
+    """Hele beskedhistorikken.
+
+    - Uændrede tråde genbruges fra forrige family.json uden nye kald.
+    - Uden full_sweep stopper trådlisten, når den når uændrede tråde, og resten overføres fra forrige hentning.
+      En fuld gennemgang (om natten) fanger slettede og arkiverede tråde.
+    - Ændrede tråde og deres billeder hentes samtidigt (loftet over samtidige kald sidder i AulaGate).
+    - Kan en tråd ikke hentes, vises forrige version, og tråden prøves igen næste gang.
+    """
     max_threads = acfg.get("messages_limit", 500)
     per_thread = acfg.get("messages_per_thread", 50)
     image_days = acfg.get("message_images_days", 90)
-    threads = await _all_threads(client, max_threads, acfg.get("messages_max_pages", 40))
+    stop_after = 0 if full_sweep else int(acfg.get("messages_stop_after_unchanged", 5))
+    prev_list = [m for m in (previous or []) if str(m.get("id", "")).startswith("msg:")]
+    prev_by_id = {m["id"]: m for m in prev_list}
+
+    def unchanged(raw: dict) -> bool:
+        old = prev_by_id.get(f"msg:{raw.get('id')}")
+        return bool(old and old.get("thread") and old.get("sig") == _thread_sig(raw, per_thread))
+
+    t0 = time.perf_counter()
+    threads, info = await _list_threads(client, max_threads, acfg.get("messages_max_pages", 40), unchanged, stop_after)
+    t_list = time.perf_counter() - t0
     try:
-        unread = {t.thread_id for t in await client.get_message_threads(filter_on="unread")}
+        unread = {f"msg:{t.thread_id}" for t in await client.get_message_threads(filter_on="unread")}
     except Exception:  # noqa: BLE001
         unread = set()
-    prev_by_id = {m["id"]: m for m in (previous or []) if m.get("id")}
-    today = dt.date.today()
-    out: list[dict] = []
-    fetched = cached = 0
-    for raw in threads:
-        tid, subject = raw.get("id"), raw.get("subject")
-        key = f"msg:{tid}"
-        sig = hashlib.sha1(f"{per_thread}|{json.dumps(raw, sort_keys=True, default=str)}".encode()).hexdigest()[:16]
-        old = prev_by_id.get(key)
-        if old and old.get("sig") == sig and old.get("thread"):
-            entry = dict(old)                                   # uændret tråd: ingen nye kald
-            entry["unread"] = tid in unread
-            entry["people"] = old.get("people_aula") or ["family"]   # analysen kører igen på alle beskeder
-            for src in [*entry.get("images", []), *[i for m in entry["thread"] for i in m.get("images", [])]]:
-                media.used.add(Path(src).name)                   # billederne må ikke ryddes væk
-            out.append(entry)
-            cached += 1
-            continue
 
+    def reuse(old: dict) -> dict:
+        entry = dict(old)                                       # ingen nye kald
+        entry["unread"] = entry["id"] in unread
+        entry["people"] = old.get("people_aula") or ["family"]  # analysen kører igen på alle beskeder
+        for src in [*entry.get("images", []), *[i for m in entry.get("thread") or [] for i in m.get("images", [])]]:
+            media.used.add(Path(src).name)                      # billederne må ikke ryddes væk
+        return entry
+
+    def regarding(raw: dict) -> list[str]:
         # Hvem handler tråden om? Prøv Aulas "angående"-felt, ellers navne i emnet
         who: list[str] = []
         for c in raw.get("regardingChildren") or []:
             pid = people.by_aula_name(c.get("displayName") or c.get("name") or "")
             if pid and pid not in who:
                 who.append(pid)
-        if not who:
-            who = [p for p in people.in_text(subject) if people.by_id[p].get("role") == "child"]
-        thread: list[dict] = []
-        try:
-            for i, mm in enumerate(await _thread_messages(client, tid, per_thread)):
-                age = (today - mm.send_datetime.astimezone(TZ).date()).days if mm.send_datetime else 0
-                thread.append({
-                    "from": mm.sender_name,
-                    "timestamp": iso(mm.send_datetime) if mm.send_datetime else None,
-                    "text": _plain(mm.content_html, 6000 if i == 0 else 3000),
-                    "images": await media.images(mm.attachments, mm.content_html) if age <= image_days else [],
-                    "files": [a.name for a in (mm.attachments or []) if a.name],
-                })
-        except Exception as e:  # noqa: BLE001
-            log.debug("Kunne ikke hente beskeder i tråd %s: %s", tid, e)
+        return who or [p for p in people.in_text(raw.get("subject")) if people.by_id[p].get("role") == "child"]
+
+    def make_entry(raw: dict, who: list[str], thread: list[dict]) -> dict:
         latest = thread[0] if thread else {}
-        out.append({
-            "id": key,
-            "sig": sig,
-            "subject": subject or "(uden emne)",
+        return {
+            "id": f"msg:{raw.get('id')}",
+            "sig": _thread_sig(raw, per_thread),
+            "subject": raw.get("subject") or "(uden emne)",
             "from": latest.get("from"),
             "timestamp": latest.get("timestamp") or raw.get("lastUpdatedDate"),
-            "unread": tid in unread,
+            "unread": f"msg:{raw.get('id')}" in unread,
             "text": latest.get("text", ""),        # seneste besked – det er den, analysen kigger på
             "images": latest.get("images", []),
             "thread": thread,
@@ -1012,11 +1236,75 @@ async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
             "people": who or ["family"],
             "people_aula": who or ["family"],
             "source": "aula",
-        })
-        fetched += 1
-        if fetched % 25 == 0:
-            log.info("Beskeder: %d tråde hentet …", fetched)
-    log.info("Beskeder: %d tråde i alt (%d hentet, %d uændrede genbrugt)", len(out), fetched, cached)
+        }
+
+    today = dt.date.today()
+
+    async def fetch_one(raw: dict) -> dict:
+        msgs = await _thread_messages(client, raw.get("id"), per_thread)   # fejl sendes videre og håndteres nedenfor
+
+        async def one(i: int, mm) -> dict:
+            age = (today - mm.send_datetime.astimezone(TZ).date()).days if mm.send_datetime else 0
+            return {
+                "from": mm.sender_name,
+                "timestamp": iso(mm.send_datetime) if mm.send_datetime else None,
+                "text": _plain(mm.content_html, 6000 if i == 0 else 3000),
+                "images": await media.images(mm.attachments, mm.content_html) if age <= image_days else [],
+                "files": [a.name for a in (mm.attachments or []) if a.name],
+            }
+
+        return make_entry(raw, regarding(raw), list(await asyncio.gather(*(one(i, mm) for i, mm in enumerate(msgs)))))
+
+    out: list = [None] * len(threads)
+    todo: list[int] = []
+    cached = 0
+    for i, raw in enumerate(threads):
+        if unchanged(raw):
+            out[i] = reuse(prev_by_id[f"msg:{raw.get('id')}"])
+            cached += 1
+        else:
+            todo.append(i)
+
+    t1 = time.perf_counter()
+    results = await asyncio.gather(*(fetch_one(threads[i]) for i in todo), return_exceptions=True)
+    t_fetch = time.perf_counter() - t1
+    fetched, kept_old, failed = 0, 0, []
+    for i, res in zip(todo, results):
+        raw = threads[i]
+        if not isinstance(res, BaseException):
+            out[i] = res
+            fetched += 1
+            continue
+        if isinstance(res, asyncio.CancelledError):
+            raise res
+        failed.append(str(raw.get("id")))
+        log.debug("Kunne ikke hente beskeder i tråd %s: %s", raw.get("id"), _describe(res))
+        old = prev_by_id.get(f"msg:{raw.get('id')}")
+        if old and old.get("thread"):
+            out[i] = reuse(old)          # behold forrige version – dens gamle sig gør, at tråden prøves igen næste gang
+            kept_old += 1
+        else:
+            out[i] = make_entry(raw, regarding(raw), [])   # tom tråd prøves igen næste gang
+
+    carried = 0
+    if not info["complete"]:
+        listed = {f"msg:{t.get('id')}" for t in threads}
+        for old in prev_list:            # resten af listen, i samme rækkefølge som sidst
+            if len(out) >= max_threads:
+                break
+            if old["id"] not in listed:
+                out.append(reuse(old))
+                carried += 1
+
+    mode = "fuld gennemgang" if full_sweep else ("stoppede ved uændrede tråde" if info["early_stop"] else "hele listen")
+    log.info("Beskeder: %d tråde (%d hentet, %d uændrede, %d overført fra forrige hentning, %d fejlede) · "
+             "trådliste %d side(r) på %.1f s (%s) · hentning %.1f s",
+             len(out), fetched, cached, carried, len(failed), info["pages"], t_list, mode, t_fetch)
+    if failed:
+        log.warning("Beskeder: %d tråd(e) kunne ikke hentes, %d viser forrige version – prøves igen næste gang: %s",
+                    len(failed), kept_old, ", ".join(failed[:10]) + (" …" if len(failed) > 10 else ""))
+    if report is not None:
+        report.update(info, fetched=fetched, cached=cached, carried=carried, failed=len(failed))
     return out
 
 
@@ -1151,6 +1439,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     """Én hentning. Returnerer status til serveren: {"aula": skipped|ok|login_required|error, "error": str|None, "counts": {...}}."""
     people = People(cfg["people"])
     now = dt.datetime.now(TZ)
+    t_cycle = time.perf_counter()
     start = (now - dt.timedelta(days=cfg.get("days_back", 7))).replace(hour=0, minute=0, second=0, microsecond=0)
     end = (now + dt.timedelta(days=cfg.get("days_ahead", 28))).replace(hour=23, minute=59, second=0, microsecond=0)
 
@@ -1166,6 +1455,8 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     extra_keys = ("tasks", "weekplan", "posts", "messages", "albums")
     extra = {k: previous.get(k, []) for k in extra_keys}
     aula_state, aula_error = "skipped", None
+    last_sweep = previous.get("health", {}).get("aula", {}).get("last_full_sweep")
+    sweep_done = False
     if not use_aula:
         problems.clear("aula.fetch")             # Aula er slået fra – ikke en fejl
     if use_aula:
@@ -1173,7 +1464,9 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
             prev_msgs = previous.get("messages")
             if private_mod.enabled(cfg):                 # private tråde ligger ikke i family.json – hent dem frem, så de ikke hentes forfra
                 prev_msgs = private_mod.hydrate(prev_msgs, private_mod.store_path(cfg))
-            aula = await fetch_aula(cfg, people, start, end, Path("aula_dump.json") if dump else None, previous_messages=prev_msgs)
+            aula = await fetch_aula(cfg, people, start, end, Path("aula_dump.json") if dump else None, previous_messages=prev_msgs,
+                                    full_sweep=_full_sweep_due(last_sweep, now, cfg["aula"]))
+            sweep_done = bool((aula.get("meta") or {}).get("full_sweep_done"))
             events += aula["events"]
             for k in extra_keys:
                 if aula.get(k) is not None:  # None = den del fejlede, behold forrige
@@ -1203,7 +1496,8 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
     now_s = iso(now)
     prev_h = previous.get("health", {})
     health = {"google": {"ok": not google_failed, "failed": google_failed, "last_ok": now_s if not google_failed else prev_h.get("google", {}).get("last_ok")},
-              "aula": {"state": aula_state, "last_ok": now_s if aula_state in ("ok", "skipped") else prev_h.get("aula", {}).get("last_ok")}}
+              "aula": {"state": aula_state, "last_ok": now_s if aula_state in ("ok", "skipped") else prev_h.get("aula", {}).get("last_ok"),
+                       "last_full_sweep": now_s if sweep_done else last_sweep}}
 
     # Forslag til familiekalenderen + manuelle "føj til kalender"-muligheder på beskeder, opslag og ugeplanspunkter
     suggestions_list: list[dict] = []
@@ -1271,6 +1565,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         problems.report("ai.briefing.error", "ai", "Overblikket kunne ikke laves", detail=f"{type(e).__name__}: {e}")
     else:
         problems.clear("ai.briefing.error")
+    log.info("Hentning færdig på %.1f s", time.perf_counter() - t_cycle)
     return {"aula": aula_state, "error": aula_error, "generated": data["generated"], "google_ok": not google_failed,
             "counts": {"events": len(events), **{k: len(extra[k]) for k in extra_keys},
                        "suggestions": sum(1 for x in suggestions_list if x.get("status") == "new")}}

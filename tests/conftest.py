@@ -77,7 +77,7 @@ def fake_aula(monkeypatch):
         prev = None
         down = False
 
-        async def __call__(self, cfg, people, start, end, dump_path=None, previous_messages=None):
+        async def __call__(self, cfg, people, start, end, dump_path=None, previous_messages=None, full_sweep=False):
             self.prev = previous_messages
             if self.down:
                 raise RuntimeError("Aula er nede")
