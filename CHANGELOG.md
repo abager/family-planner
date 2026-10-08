@@ -5,6 +5,19 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Fixed (AI overview)
+- An invalid answer from the language model (not valid JSON) paused all AI for hours and grew with every retry,
+  because the same data gave the same bad answer. Now Gemini is asked to follow a fixed answer format
+  (`responseSchema`) for the overview and the calendar suggestions, and the prompt's format example is valid JSON.
+- An invalid answer is retried once at once. If that also fails, only that content waits (15 min, doubling to 6 h);
+  new data and other AI features carry on. An old pause of this kind is ignored after the update.
+- The log says why AI was not used: the fallback line names the reason and, during a pause, the last error. Reasons
+  that send nothing (missing key, pause, budget) are logged once instead of not at all.
+
+### Added
+- The last invalid answer is saved in `secrets/ai_last_invalid.json` (owner-only, never logged, never served, never
+  in git) so you can see what the model wrote.
+
 ### Changed (desktop, tablet and phone)
 - The whole app now has the kiosk's look: the background is the sky of the focus day's weather (sun, partly cloudy,
   overcast, rain, frost; sage without weather), and 21–06 everything is dark. After 18:00 it is tomorrow's sky, like

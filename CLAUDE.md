@@ -120,7 +120,7 @@ familie_regler.md (free text)   ─┘                                     └�
 
 Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
-`private_messages.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
+`private_messages.json`, `ai_last_invalid.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
 `web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, `web/home_location.json`, `web/weather_cache.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
 `weekplan.json`.
 
@@ -205,13 +205,29 @@ Planned restructuring (do in small steps, tests green after each):
 - Auth: Gemini API key bound to a service account and restricted to the Generative Language API, sent as the
   `x-goog-api-key` header (never in the URL, never logged). No SDK, no ADC/OAuth. The Google Calendar service
   account is separate. Keys with spaces/non-ASCII are rejected as `mangler_noegle` rather than crashing.
-- `Client.generate_json(system, prompt, validate=…, cache_key=…)` returns a dict or raises `AIUnavailable(reason)`.
-  Callers catch it and use their rule-based fallback; they never let it escape.
+- `Client.generate_json(system, prompt, validate=…, cache_key=…, schema=…)` returns a dict or raises
+  `AIUnavailable(reason)`. Callers catch it and use their rule-based fallback; they never let it escape.
+- Always pass a `schema` (Gemini `responseSchema`, OpenAPI subset: `OBJECT`/`ARRAY`/`STRING`, `nullable`). Gemini
+  must then return that shape; Claude ignores it (prompt-driven). `validate` still runs. If the provider rejects the
+  schema with HTTP 400, the same request is repeated once without it (logged). Format examples in prompts must be
+  valid JSON (no `…` placeholders outside strings) – the model copies them.
+- Invalid answer (not JSON, or `validate` raises): retried once immediately; if the retry is also invalid, a pause is
+  set for that content only (`invalid[<cache key>]` in `ai_usage.json`, 15 min doubling to 6 h, `INVALID_BACKOFF`).
+  It never sets the global `backoff_until` – other content and other features keep working. A valid answer for the
+  content removes its mark. A legacy global pause caused by `ugyldigt_svar` (no `pause_reason`) is ignored.
+- The raw invalid answer (last one only) is written to `secrets/ai_last_invalid.json` (`Client(invalid_path=…)`,
+  set by `briefing.ai_client`; 0600; in `DENY_NAMES`, .gitignore, .dockerignore and the pre-commit guard). It holds
+  family data: never log the answer text, only the parse error and the file path.
+- Reasons that send nothing (`mangler_noegle`, `ukendt_udbyder`, `pause`, `dagsbudget`, `minutgraense`, a waiting
+  invalid mark) log one warning per state (`notice` in `ai_usage.json`), not one per fetch. `_fail` and `_ok` reset it.
+- The briefing's fallback log line names the reason; during a pause it also names the last error and when it was
+  (`briefing.why_unavailable`).
 - Cache key = provider + model + system + (cache_key or prompt). Pass a `cache_key` that excludes volatile parts
   (the briefing uses its fingerprint, which ignores the "now" timestamp).
 - Budget day = Pacific time (Google resets free-tier RPD at midnight Pacific). Requests are counted when sent.
-  RPM: wait up to `max_wait_seconds`, else `minutgraense`. Backoff per reason (`BACKOFF`), doubling per consecutive
-  failure; a 429 on a per-day quota pauses until Pacific midnight.
+  RPM: wait up to `max_wait_seconds`, else `minutgraense`. Provider errors (429/402/401/403/5xx/network) set a global
+  backoff per reason (`BACKOFF`, stored with `pause_reason`), doubling per consecutive failure; a 429 on a per-day
+  quota pauses until Pacific midnight.
 - Briefing fallback states in `briefing*.json`: `ai_stale` (last AI briefing for the same period kept; data has
   changed since) and `ai_fallback` (made by `offline_briefing`). Both carry `{reason, since}`. The frontend shows
   the "AI ikke tilgængelig" banner (`#aiBanner`, top of `.wrap`, also in kiosk) for the briefing currently shown.

@@ -100,6 +100,7 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 - Findes der et AI-overblik for samme dag/uge, vises det stadig, og et banner øverst siger *"AI ikke tilgængelig – overblikket er fra kl. … og er måske ikke opdateret"*.
 - Ellers laver appens egne regler overblikket, og banneret siger *"AI ikke tilgængelig – overblikket er lavet af appens egne regler"*.
 - Banneret vises også på kioskskærmen. Den tekniske grund står i serverens log og i `/api/status` (kun efter login).
+- Er svaret ugyldigt (ikke det aftalte JSON-format), prøves der straks én gang til. Fejler det igen, venter appen kun med netop de data (15 min, så længere for hver gang) – nye data og kalenderforslag kan stadig bruge AI. Det seneste ugyldige svar gemmes i `secrets/ai_last_invalid.json`, så man kan se, hvad modellen skrev. Filen indeholder familiens data, kan kun læses af ejeren og kommer aldrig i loggen eller i git.
 
 **`mode = "offline"`:** kun egne regler, intet forlader maskinen. **`mode = "off"`:** intet overblik.
 
@@ -116,7 +117,7 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 
 **Skift udbyder** i `config.toml` under `[ai]`: `provider = "claude"`, `model = "…"` og `api_key_env = "ANTHROPIC_API_KEY"` (nøgle fra platform.claude.com i `.env`). Ældre opsætning med `mode = "claude"` virker stadig.
 
-**Budget:** Svar gemmes i `web/ai_cache.json`, så uændrede data aldrig koster en ny forespørgsel, og forbruget tælles i `web/ai_usage.json`. Dagen tælles i Stillehavstid som hos Google, så budgettet nulstilles ved midnat i Californien (normalt kl. 9 dansk tid). Efter en fejl holder appen pause, før den prøver igen (længere for hver fejl i træk). Begge filer indeholder familiens data og må aldrig i git.
+**Budget:** Svar gemmes i `web/ai_cache.json`, så uændrede data aldrig koster en ny forespørgsel, og forbruget tælles i `web/ai_usage.json`. Dagen tælles i Stillehavstid som hos Google, så budgettet nulstilles ved midnat i Californien (normalt kl. 9 dansk tid). Efter en fejl hos udbyderen (kvote, nøgle, nedbrud, netværk) holder appen pause, før den prøver igen (længere for hver fejl i træk). Grunden står én gang i loggen – også når intet bliver sendt (fx manglende nøgle eller pause), og linjen *Skrev … (uden sprogmodel – AI ikke tilgængelig: …)* siger hvorfor. Begge filer indeholder familiens data og må aldrig i git.
 
 ### Kalenderforslag fra AI
 
