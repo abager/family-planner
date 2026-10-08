@@ -494,8 +494,8 @@ async def _once(client, key: str, factory):
 
 
 def _full_sweep_due(last: str | None, now: dt.datetime, acfg: dict) -> bool:
-    """Skal trådlisten gennemgås helt (fanger slettede/arkiverede tråde)? Én gang i døgnet i nattevinduet,
-    og under alle omstændigheder hvis det er over 36 timer siden (fx hvis maskinen var slukket om natten)."""
+    """Skal der laves en dyb kontrol af beskederne? Den gennemgår hele trådlisten (fanger nye, slettede og arkiverede
+    tråde) og henter indholdet af alle tråde igen (fanger rettede beskeder). Hver `deep_check_minutes` (standard 60)."""
     if not last:
         return True
     try:
@@ -504,10 +504,7 @@ def _full_sweep_due(last: str | None, now: dt.datetime, acfg: dict) -> bool:
         return True
     if last_dt.tzinfo is None:
         last_dt = last_dt.replace(tzinfo=TZ)
-    if now - last_dt > dt.timedelta(hours=36):
-        return True
-    lo, hi = int(acfg.get("full_sweep_from", 2)), int(acfg.get("full_sweep_to", 6))
-    return last_dt.astimezone(TZ).date() < now.astimezone(TZ).date() and lo <= now.astimezone(TZ).hour < hi
+    return now - last_dt >= dt.timedelta(minutes=max(1, int(acfg.get("deep_check_minutes", 60))))
 
 
 async def open_aula_client(cfg: dict):
@@ -525,6 +522,9 @@ async def open_aula_client(cfg: dict):
     return await authenticate_and_create_client(
         acfg["mitid_username"], FileTokenStorage(str(token_path)), **{k: v for k, v in hooks.items() if k in supported},
     )
+
+
+PART_LABELS = {"tasks": "opgaver", "weekplan": "ugeplanen", "posts": "opslag", "messages": "beskeder", "albums": "billeder"}
 
 
 async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, dump_path: Path | None = None,
@@ -629,15 +629,21 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
             ("albums", acfg.get("fetch_gallery", True), lambda: _fetch_gallery(client, profile, owner, people, acfg, media)),
         ]
         part_timeout = float(acfg.get("part_timeout", 900))
+        for key, enabled, _fn in extras:
+            if not enabled:
+                problems.clear(f"aula.part:{key}")          # slået fra i config – ikke en fejl
 
         async def run_part(key: str, fn) -> None:
             t = time.perf_counter()
             try:
                 result[key] = await asyncio.wait_for(fn(), part_timeout)
+                problems.clear(f"aula.part:{key}")
             except Exception as e:  # noqa: BLE001
                 slow = isinstance(e, TimeoutError) and time.perf_counter() - t >= part_timeout - 1
-                log.warning("Aula %s fejlede (%s) – genbruger forrige data", key,
-                            f"tog over {part_timeout:.0f} s" if slow else _describe(e))
+                why = f"tog over {part_timeout:.0f} s" if slow else _describe(e)
+                log.warning("Aula %s fejlede (%s) – genbruger forrige data", key, why)
+                problems.report(f"aula.part:{key}", "aula", f"Aula: {PART_LABELS.get(key, key)} kunne ikke hentes", detail=why,
+                                hint="Appen viser de seneste hentede data for denne del og prøver igen ved næste hentning.")
                 result[key] = None  # None = genbrug forrige data
             finally:
                 timings[key] = time.perf_counter() - t
@@ -1180,7 +1186,8 @@ async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
 
     - Uændrede tråde genbruges fra forrige family.json uden nye kald.
     - Uden full_sweep stopper trådlisten, når den når uændrede tråde, og resten overføres fra forrige hentning.
-      En fuld gennemgang (om natten) fanger slettede og arkiverede tråde.
+    - full_sweep = dyb kontrol (hver time): hele listen gennemgås, og alle tråde hentes igen – så både slettede og
+      arkiverede tråde og rettede beskeder fanges (en rettelse ændrer ikke altid trådens linje i listen).
     - Ændrede tråde og deres billeder hentes samtidigt (loftet over samtidige kald sidder i AulaGate).
     - Kan en tråd ikke hentes, vises forrige version, og tråden prøves igen næste gang.
     """
@@ -1259,7 +1266,7 @@ async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
     todo: list[int] = []
     cached = 0
     for i, raw in enumerate(threads):
-        if unchanged(raw):
+        if not full_sweep and unchanged(raw):
             out[i] = reuse(prev_by_id[f"msg:{raw.get('id')}"])
             cached += 1
         else:
@@ -1296,7 +1303,7 @@ async def _fetch_messages(client, people: People, acfg: dict, media: MediaStore,
                 out.append(reuse(old))
                 carried += 1
 
-    mode = "fuld gennemgang" if full_sweep else ("stoppede ved uændrede tråde" if info["early_stop"] else "hele listen")
+    mode = "dyb kontrol" if full_sweep else ("stoppede ved uændrede tråde" if info["early_stop"] else "hele listen")
     log.info("Beskeder: %d tråde (%d hentet, %d uændrede, %d overført fra forrige hentning, %d fejlede) · "
              "trådliste %d side(r) på %.1f s (%s) · hentning %.1f s",
              len(out), fetched, cached, carried, len(failed), info["pages"], t_list, mode, t_fetch)
