@@ -215,6 +215,15 @@ Planned restructuring (do in small steps, tests green after each):
   set for that content only (`invalid[<cache key>]` in `ai_usage.json`, 15 min doubling to 6 h, `INVALID_BACKOFF`).
   It never sets the global `backoff_until` – other content and other features keep working. A valid answer for the
   content removes its mark. A legacy global pause caused by `ugyldigt_svar` (no `pause_reason`) is ignored.
+- Two reasons for a bad answer: `ugyldigt_svar` (not JSON / wrong shape from the provider) and `fejlede_tjek` (valid
+  JSON, but the caller's `validate` raised – e.g. a time not in the data). Same retry and per-content pause; the
+  mark stores its reason. Neither is shown in the banner.
+- Times in briefing text (`briefing._times`, also used by `calendar_ai.times_in_text`): `kl. 8`, `klokken 13`,
+  `13.00`, `13:00`, plus the END of a range only when it hangs on such a time (`kl. 8-13`, `8.00–13`,
+  `fra kl. 8 til 13`). Bare pairs (`side 12-20`, `13-14`) are not times. Applies to the data and to the model's
+  narrative alike, so a range end in the narrative must also be in the data.
+- Prompts ask for correct Danish (no Norwegian/Swedish words, everyday words, short sentences). Language is never
+  validated – an odd sentence beats falling back to the rules; a bigger model is the fix if it keeps happening.
 - The raw invalid answer (last one only) is written to `secrets/ai_last_invalid.json` (`Client(invalid_path=…)`,
   set by `briefing.ai_client`; 0600; in `DENY_NAMES`, .gitignore, .dockerignore and the pre-commit guard). It holds
   family data: never log the answer text, only the parse error and the file path.

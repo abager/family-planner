@@ -183,6 +183,8 @@ Regler:
 - Kronologisk: fra morgen til aften. Start med det, der skal med ud ad døren, så skoledagen, så eftermiddag
   (afhentning, fritid, aftaler) og til sidst aftenen. I ugens fortælling: dag for dag i rækkefølge; stille dage kan
   samles i én sætning.
+- Skriv korrekt, naturligt dansk (rigsdansk) – aldrig norske eller svenske ord eller stavemåder (fx "på tværs",
+  ikke "på tvers"). Brug almindelige hverdagsord ("vejrudsigten", ikke opfundne vendinger). Korte, enkle sætninger.
 - Tal direkte til forældrene: "I skal huske …", "Monica, du …" (kun når data siger, hvem). Brug fornavne, aldrig
   "barnet". Varm, rolig tone uden floskler, udråbstegn eller emojis.
 - Nævn IKKE det normale skoleskema (fag og tider) – det står allerede i appen. Nævn kun afvigelser fra "skema"
@@ -229,16 +231,27 @@ def build_messages(digest: dict, rules: str, headline: str, mode: str) -> list[d
 SECTION_TITLES = {"Vejr", "Husk", "Skal gøres", "Praktisk info", "Kommende frister"}
 
 
-_TIME = re.compile(r"\bkl\.?\s*(\d{1,2})(?:[.:](\d{2}))?\b|\b(\d{1,2})[.:](\d{2})\b")
+_TIME = re.compile(r"\b(?:kl\.?|klokken)\s*(\d{1,2})(?:[.:](\d{2}))?\b|\b(\d{1,2})[.:](\d{2})\b", re.I)
+# Sluttid i et interval, der hænger på et klokkeslæt: "kl. 8-13", "8.00–13", "fra kl. 8 til 13". Kun lige efter et
+# genkendt klokkeslæt – så "side 12-20" og "13-14" alene stadig ikke tæller som tider.
+_RANGE_END = re.compile(r"\s*(?:-|–|—|til)\s*(?:kl\.?\s*|klokken\s*)?(\d{1,2})(?:[.:](\d{2}))?\b", re.I)
 _FORMATTING = re.compile(r"(^\s*([-*•#>]|\d+\.)\s)|\*\*|__|`", re.M)
 
 
 def _times(text: str) -> set[str]:
+    """Klokkeslæt i teksten som "HH:MM" – også sluttiden i et interval som "kl. 8-13"."""
     out = set()
-    for m in _TIME.finditer(text or ""):
-        h, mi = (m.group(1), m.group(2) or "00") if m.group(1) else (m.group(3), m.group(4))
-        if int(h) <= 23 and int(mi) <= 59:
-            out.add(f"{int(h):02d}:{mi}")
+
+    def add(h: str, mi: str | None) -> None:
+        if int(h) <= 23 and int(mi or 0) <= 59:
+            out.add(f"{int(h):02d}:{mi or '00'}")
+
+    text = text or ""
+    for m in _TIME.finditer(text):
+        add(*((m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))))
+        end = _RANGE_END.match(text, m.end())
+        if end:
+            add(end.group(1), end.group(2))
     return out
 
 

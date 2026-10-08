@@ -119,7 +119,7 @@ def test_private_threads_cpr_and_phone_numbers_never_reach_the_ai(acfg):
 
 @pytest.mark.parametrize("reply,reason", [
     ((200, {"candidates": [{"content": {"parts": [{"text": "Her er overblikket: Carla skal …"}]}, "finishReason": "STOP"}]}), "ugyldigt_svar"),
-    (ok({"afsnit": [{"titel": "Sjove ting", "punkter": []}]}), "ugyldigt_svar"),
+    (ok({"afsnit": [{"titel": "Sjove ting", "punkter": []}]}), "fejlede_tjek"),
     (QUOTA, "kvote"),
     ((402, {"error": {"message": "payment required"}}), "betaling"),
     ((503, {"error": {"message": "unavailable"}}), "serverfejl"),
@@ -187,7 +187,7 @@ def test_unknown_source_ids_are_dropped_but_one_valid_is_needed(acfg):
     assert b["method"] == "ai" and b["kilde_ids"] == ["O1"]
     b = B.make_briefing(acfg, family_data("ny lektie"), "day", now=NOW, force=True,
                         client=client(acfg, Fake(ok({"fortaelling": STORY, "kilder": ["X9"]})), model="anden"))
-    assert b["ai_stale"]["reason"] == "ugyldigt_svar"                  # det gyldige AI-overblik beholdes
+    assert b["ai_stale"]["reason"] == "fejlede_tjek"                   # det gyldige AI-overblik beholdes
 
 
 @pytest.mark.parametrize("story", [
@@ -200,7 +200,7 @@ def test_unknown_source_ids_are_dropped_but_one_valid_is_needed(acfg):
 ], ids=["opdigtet-tid", "punkter", "fed", "for-kort", "for-lang", "tom"])
 def test_a_narrative_that_breaks_the_rules_falls_back(acfg, story):
     b = brief(acfg, Fake(ok({"fortaelling": story, "kilder": ["O1"]})))
-    assert b["method"] == "offline" and b["ai_fallback"]["reason"] == "ugyldigt_svar"
+    assert b["method"] == "offline" and b["ai_fallback"]["reason"] == "fejlede_tjek"
 
 
 def test_times_that_are_in_the_data_are_allowed(acfg):
@@ -424,3 +424,43 @@ def test_the_case_from_the_log_invalid_json_twice_is_saved_and_only_that_data_wa
     b = B.make_briefing(acfg, family_data("Læs side 12-20"), "day", now=NOW + dt.timedelta(minutes=10),
                         client=client(acfg, good))
     assert b["method"] == "ai" and len(good.requests) == 1                 # nye data: spørger med det samme
+
+
+# ---------------------------------------------------------------- klokkeslæt i intervaller
+@pytest.mark.parametrize("text,expected", [
+    ("Omlagt skoledag kl. 8-13 med elevsamtaler", {"08:00", "13:00"}),
+    ("omlagt skoledag 8.00–13 med elevsamtaler", {"08:00", "13:00"}),
+    ("fra kl. 8 til 13", {"08:00", "13:00"}),
+    ("fra kl. 8 til kl. 13.30", {"08:00", "13:30"}),
+    ("vi slutter klokken 13", {"13:00"}),
+    ("Klokken 9.15 – 10", {"09:15", "10:00"}),
+    ("kl 16:00 - 17.45", {"16:00", "17:45"}),
+])
+def test_end_times_of_ranges_tied_to_a_time_count(text, expected):
+    assert B._times(text) == expected
+
+
+@pytest.mark.parametrize("text", ["Læs side 12-20", "13-14", "uge 41-42", "2026-10-13", "omkring 13 børn"])
+def test_bare_numbers_are_still_not_times(text):
+    assert B._times(text) == set()
+
+
+def test_the_case_from_the_log_a_range_in_the_week_plan_is_accepted(acfg):
+    d = family_data()
+    d["weekplan"] = [{"id": "u1", "date": "2026-10-01", "person": "carla", "subject": "Klassen", "category": "info",
+                      "text": "Torsdag er en omlagt skoledag kl. 8-13 med elevsamtaler."}]
+    story = ["Torsdag er en omlagt skoledag for Carla fra kl. 08.00 til kl. 13.00 med elevsamtaler, så husk drikkedunk og fodboldsko."]
+    fake = Fake(ok({"fortaelling": story, "kilder": ["U1", "O1"]}))
+    b = brief(acfg, fake, data=d)
+    assert "kl. 8-13" in fake.requests[0].content.decode("utf-8")       # intervallet når frem til modellen
+    assert b["method"] == "ai"                                          # og sluttiden 13.00 godtages
+
+
+def test_a_narrative_range_end_must_also_be_in_the_data(acfg):
+    story = ["Torsdag skal Carla have drikkedunk og fodboldsko med, og skoledagen går fra kl. 8 til 23."]
+    b = brief(acfg, Fake(ok({"fortaelling": story, "kilder": ["O1"]})))
+    assert b["method"] == "offline" and b["ai_fallback"]["reason"] == "fejlede_tjek"
+
+
+def test_the_prompt_asks_for_correct_danish():
+    assert "korrekt, naturligt dansk" in B.SYSTEM and "norske" in B.SYSTEM

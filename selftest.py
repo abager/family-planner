@@ -241,6 +241,7 @@ AI_HINTS = {
     "serverfejl": "Udbyderen har problemer lige nu. Prøv igen senere.",
     "netvaerk": "Serveren kan ikke nå udbyderen. Tjek internetforbindelsen og evt. firewall.",
     "ugyldigt_svar": "Modellen svarede ikke med gyldigt JSON. Det seneste ugyldige svar ligger i secrets/ai_last_invalid.json. Sker det tit, så prøv en anden model i [ai] model.",
+    "fejlede_tjek": "Modellen svarede, men svaret holdt ikke appens tjek (fx et klokkeslæt, der ikke står i data). Svaret ligger i secrets/ai_last_invalid.json.",
     "ukendt_udbyder": "Sæt [ai] provider til \"gemini\" eller \"claude\".",
 }
 

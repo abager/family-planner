@@ -329,7 +329,8 @@ def test_output_failing_the_callers_validation_is_invalid_and_not_cached(tmp_pat
     c = make(tmp_path, clock, fake)
     with pytest.raises(ai.AIUnavailable) as e:
         c.generate_json("s", "p", validate=need_afsnit)
-    assert e.value.reason == "ugyldigt_svar"
+    assert e.value.reason == "fejlede_tjek"                              # gyldigt JSON, men kalderens tjek sagde nej
+    assert usage(tmp_path)["last_error"]["reason"] == "fejlede_tjek"
     assert not (tmp_path / "ai_cache.json").exists()
 
 

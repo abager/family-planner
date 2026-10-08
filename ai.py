@@ -9,7 +9,7 @@ Alt, der kalder en sprogmodel, går herigennem, så de samme regler gælder over
 - Med `schema` beder vi udbyderen om at overholde et bestemt JSON-format (Gemini: responseSchema). Afviser udbyderen
   formatet (HTTP 400), prøves samme forespørgsel én gang uden.
 - 429/402/401/403/5xx/timeout giver en pause (backoff) for al AI, så en fejl ikke brænder kvoten af.
-- Ugyldigt svar (ikke JSON eller afvist af kalderens tjek) prøves straks én gang til. Fejler det igen, sættes pausen
+- Ugyldigt svar (ikke JSON: `ugyldigt_svar`, eller afvist af kalderens tjek: `fejlede_tjek`) prøves straks én gang til. Fejler det igen, sættes pausen
   kun for netop det indhold – nye data og andre funktioner (fx kalenderforslag) kan stadig spørge.
   Det rå, ugyldige svar gemmes i `ai_last_invalid.json` (kun det seneste, kun lokalt, kun ejeren kan læse det).
 - Grunde, der ikke sender noget (manglende nøgle, pause, budget …), logges én gang – ikke ved hver hentning.
@@ -67,6 +67,7 @@ REASONS = {
     "serverfejl": "udbyderen har problemer (5xx)",
     "netvaerk": "kunne ikke nå udbyderen",
     "ugyldigt_svar": "svaret var ikke gyldigt JSON i det rigtige format",
+    "fejlede_tjek": "svaret holdt ikke appens tjek",
 }
 
 # Pause efter fejl: (første pause i sekunder, højeste pause). Fordobles for hver fejl i træk.
@@ -308,25 +309,27 @@ class Client:
         if not ignore_pause:
             self._check_invalid(ckey)             # samme indhold gav for nylig ugyldigt svar – rejser AIUnavailable
 
-        error, data = "", {}
+        error, reason, data = "", "ugyldigt_svar", {}
         for attempt in (1, 2):                    # et ugyldigt svar prøves straks én gang til
             self._admit(ignore_pause)             # budget, pause og minutgrænse – rejser AIUnavailable
             data, schema = self._post(provider, key, system, prompt, schema, ignore_pause)
+            reason = "ugyldigt_svar"
             try:
                 result = parse_json(provider.text(data))
                 if validate:
+                    reason = "fejlede_tjek"       # gyldigt JSON – men kalderens tjek siger nej
                     validate(result)
             except (ValueError, KeyError, TypeError, AttributeError) as e:
                 error = str(e)[:200]
                 if attempt == 1:
-                    log.info("AI: ugyldigt svar (%s) – prøver én gang til", error)
+                    log.info("AI: %s (%s) – prøver én gang til", REASONS[reason], error)
                 continue
             self._ok(ckey)
             if not ignore_pause:                  # selvtestens svar skal ikke fylde i cachen
                 self._cache_put(ckey, result)
             return result
         self._save_invalid(data, error)
-        self._fail_invalid(ckey, error)
+        self._fail_invalid(ckey, error, reason)
 
     def cache_get(self, key: str) -> dict | None:
         """Gemt svar for ét punkt (fx et kalendertjek af én besked), uafhængigt af hvilken samlet forespørgsel det kom fra."""
@@ -396,7 +399,7 @@ class Client:
         u = self._usage()
         until = u.get("backoff_until")
         if until and not ignore_pause and dt.datetime.fromisoformat(until) > now:
-            if not u.get("pause_reason") and (u.get("last_error") or {}).get("reason") == "ugyldigt_svar":
+            if not u.get("pause_reason") and (u.get("last_error") or {}).get("reason") in ("ugyldigt_svar", "fejlede_tjek"):
                 u.update(backoff_until=None, failures=0)   # pause fra en ældre version, der pausede al AI ved ugyldigt svar
                 _write(self.usage_path, u)
             else:
@@ -444,9 +447,9 @@ class Client:
     def _check_invalid(self, ckey: str) -> None:
         mark = (self._usage().get("invalid") or {}).get(ckey)
         if mark and dt.datetime.fromisoformat(mark["until"]) > self.clock():
-            self._unavailable("ugyldigt_svar", f"samme data gav ugyldigt svar – prøver igen efter {mark['until']}")
+            self._unavailable(mark.get("reason", "ugyldigt_svar"), f"samme data gav ugyldigt svar – prøver igen efter {mark['until']}")
 
-    def _fail_invalid(self, ckey: str, detail: str):
+    def _fail_invalid(self, ckey: str, detail: str, reason: str = "ugyldigt_svar"):
         """To ugyldige svar i træk: pause for netop dette indhold. Al anden AI kører videre."""
         now = self.clock()
         u = self._usage()
@@ -455,14 +458,14 @@ class Client:
         n = (marks.get(ckey) or {}).get("n", 0) + 1
         first, cap = INVALID_BACKOFF
         until = now + dt.timedelta(seconds=min(cap, first * 2 ** (n - 1)))
-        marks[ckey] = {"n": n, "until": until.isoformat(timespec="seconds")}
+        marks[ckey] = {"n": n, "until": until.isoformat(timespec="seconds"), "reason": reason}
         u.update(invalid=marks, notice=None,
-                 last_error={"reason": "ugyldigt_svar", "detail": detail, "at": now.isoformat(timespec="seconds")})
+                 last_error={"reason": reason, "detail": detail, "at": now.isoformat(timespec="seconds")})
         _write(self.usage_path, u)
         saved = f" – svaret er gemt i {self.invalid_path}" if self.invalid_path else ""
         log.warning("AI ikke tilgængelig: %s (%s) – samme data prøves igen efter %s%s",
-                    REASONS["ugyldigt_svar"], detail, u["invalid"][ckey]["until"], saved)
-        raise AIUnavailable("ugyldigt_svar", detail)
+                    REASONS[reason], detail, u["invalid"][ckey]["until"], saved)
+        raise AIUnavailable(reason, detail)
 
     def _save_invalid(self, data: dict, error: str) -> None:
         """Det rå svar, så man kan se, hvad modellen skrev. Kun det seneste; aldrig i loggen."""

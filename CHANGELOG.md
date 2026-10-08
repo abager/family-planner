@@ -14,6 +14,14 @@ All notable changes to this project. Versions are git tags. The format is loosel
 - The log says why AI was not used: the fallback line names the reason and, during a pause, the last error. Reasons
   that send nothing (missing key, pause, budget) are logged once instead of not at all.
 
+- A correct overview was rejected when the data gave a time as a range ("kl. 8-13"): the end time 13.00 did not
+  count as being in the data. The time check now also reads range ends tied to a time ("kl. 8-13", "8.00–13",
+  "fra kl. 8 til 13") and "klokken 13". Bare number pairs ("side 12-20") still do not count.
+- The log separates an answer that is not valid JSON ("svaret var ikke gyldigt JSON …") from valid JSON that fails
+  the app's check ("svaret holdt ikke appens tjek …").
+- The overview prompt asks for correct, natural Danish (no Norwegian or Swedish words, everyday words, short
+  sentences); calendar suggestion titles likewise.
+
 ### Added
 - The last invalid answer is saved in `secrets/ai_last_invalid.json` (owner-only, never logged, never served, never
   in git) so you can see what the model wrote.

@@ -100,7 +100,7 @@ Hver besked får en kategori (skal gøres, arrangement, hilsen, info eller priva
 - Findes der et AI-overblik for samme dag/uge, vises det stadig, og et banner øverst siger *"AI ikke tilgængelig – overblikket er fra kl. … og er måske ikke opdateret"*.
 - Ellers laver appens egne regler overblikket, og banneret siger *"AI ikke tilgængelig – overblikket er lavet af appens egne regler"*.
 - Banneret vises også på kioskskærmen. Den tekniske grund står i serverens log og i `/api/status` (kun efter login).
-- Er svaret ugyldigt (ikke det aftalte JSON-format), prøves der straks én gang til. Fejler det igen, venter appen kun med netop de data (15 min, så længere for hver gang) – nye data og kalenderforslag kan stadig bruge AI. Det seneste ugyldige svar gemmes i `secrets/ai_last_invalid.json`, så man kan se, hvad modellen skrev. Filen indeholder familiens data, kan kun læses af ejeren og kommer aldrig i loggen eller i git.
+- Er svaret ugyldigt (ikke det aftalte JSON-format, eller det holder ikke appens tjek – fx et klokkeslæt, der ikke står i data), prøves der straks én gang til. Fejler det igen, venter appen kun med netop de data (15 min, så længere for hver gang) – nye data og kalenderforslag kan stadig bruge AI. Det seneste ugyldige svar gemmes i `secrets/ai_last_invalid.json`, så man kan se, hvad modellen skrev. Filen indeholder familiens data, kan kun læses af ejeren og kommer aldrig i loggen eller i git.
 
 **`mode = "offline"`:** kun egne regler, intet forlader maskinen. **`mode = "off"`:** intet overblik.
 

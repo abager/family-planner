@@ -44,7 +44,7 @@ Du får en liste af punkter. For hvert punkt svarer du med:
 Regler:
 - Brug KUN oplysninger fra punktets tekst. Gæt aldrig dato, tid eller sted. Står der ingen tid, så "hele_dagen": true.
 - Datoer som ÅÅÅÅ-MM-DD. Relative datoer ("næste torsdag", "i morgen") regnes ud fra "skrevet".
-- "hvem": fornavne fra punktets "hvem". "titel": kort og konkret, højst 60 tegn, uden barnets navn.
+- "hvem": fornavne fra punktets "hvem". "titel": kort og konkret, højst 60 tegn, uden barnets navn, på korrekt dansk.
 - "citat": den korte sætning i teksten, som aktiviteten bygger på (ordret).
 - Højst 3 nye pr. punkt. Ingen fund: tomme lister.
 
