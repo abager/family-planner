@@ -5,6 +5,11 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (progress)
+- The progress bars moved out of the status line: a small ring left of the gear now shows the overall progress
+  (weighted with each part's own percentage), and tapping it opens the per-type bars. Nothing else on the page
+  moves when a fetch starts or ends. Red if a part failed, ✓ for a few seconds afterwards, then hidden.
+
 ### Added (progress bars)
 - While the server fetches, the status line shows one compact progress bar per data type instead of the spinning
   icon: a real percentage where the amount is known (Google calendars, message threads, albums, overview), a busy

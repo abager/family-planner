@@ -58,7 +58,7 @@ Hver del kan slås fra i `config.toml`. Børnenes ikoner (`icon`) sættes også 
 - Beskeder hentes trinvist: tråde, der ikke har ændret sig, genbruges uden nye kald. Én gang i timen laves en **dyb kontrol**, hvor alle tråde hentes igen, så rettede og slettede beskeder også kommer med inden for en time (`deep_check_minutes`).
 - Fejler en del (fx billederne), vises de forrige data for den del, og fejlen står under ⚠ ved titlen, til det virker igen.
 - Loggen slutter med, hvor lang tid hver del tog, og hvor mange kald, genforsøg og timeouts der var.
-- Mens der hentes, viser statuslinjen en bjælke for hver datatype (Google, Aula-kalender, opgaver, ugeplan, opslag, beskeder, billeder, kalenderforslag, vejr og overblik). Kendes mængden, vises en rigtig procent (fx beskeder: 12 af 40 tråde), ellers en "henter"-animation. En del, der fejler, bliver rød. Når hentningen er færdig, står bjælkerne et par sekunder som færdige og forsvinder så. Ikke på kioskskærmen.
+- Mens der hentes, står en lille ring til venstre for tandhjulet og fyldes op med den samlede fremdrift – uden at noget andet på siden flytter sig. Tryk på den for at se en bjælke for hver datatype (Google, Aula-kalender, opgaver, ugeplan, opslag, beskeder, billeder, kalenderforslag, vejr og overblik): rigtig procent, hvor mængden kendes (fx beskeder: 12 af 40 tråde), ellers en "henter"-animation. Fejler en del, bliver ringen og bjælken røde. Bagefter viser ringen ✓ et par sekunder og forsvinder (et åbent vindue lukker med den). Ikke på kioskskærmen.
 
 ## Lektie-genkendelse (homework.py)
 
