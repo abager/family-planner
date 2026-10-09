@@ -219,3 +219,26 @@ def test_the_runner_hands_full_on_to_the_fetch_once(cfg, monkeypatch):
     asyncio.run(runner.safe_run(False, True))
     asyncio.run(runner.safe_run(False))
     assert calls == [{"full": True}, {}]
+
+
+def test_the_weather_is_fetched_alongside_the_rest(cfg, monkeypatch):
+    import time as _time
+    seen = {}
+
+    def slow_weather(cfg, now):
+        seen["weather_start"] = _time.perf_counter()
+        _time.sleep(0.4)
+        return {"kilde": "MET Norway", "dage": []}
+
+    async def slow_google(cfg, people, start, end, failed=None):
+        seen["google_start"] = _time.perf_counter()
+        await asyncio.sleep(0.4)
+        return []
+    monkeypatch.setattr(F, "_fetch_weather", slow_weather)
+    monkeypatch.setattr(F, "fetch_google", slow_google)
+    t = _time.perf_counter()
+    asyncio.run(F.run_once(cfg, False))
+    took = _time.perf_counter() - t
+    assert abs(seen["weather_start"] - seen["google_start"]) < 0.2      # startet samtidigt …
+    assert took < 0.75                                                   # … ikke efter hinanden (0,8 s)
+    assert json.loads(Path(cfg["output"]).read_text())["weather"] == {"kilde": "MET Norway", "dage": []}

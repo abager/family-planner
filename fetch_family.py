@@ -1473,6 +1473,22 @@ def analyse_messages(cfg: dict, msgs: list[dict], events: list[dict]) -> tuple[l
 
 
 # ---------------------------------------------------------------- main
+def _fetch_weather(cfg: dict, now: dt.datetime) -> dict | None:
+    """Vejret til family.json (groft dagsresumé, aldrig placeringen; None uden hjem). Kører i en tråd, sideløbende med
+    resten af hentningen, og må aldrig fejle – en fejl står under ⚠ ved titlen."""
+    progress.begin("vejr")
+    try:
+        import weather
+        data = weather.for_family(cfg, now)               # slået fra i config → None (og ingen fejl)
+        progress.finish("vejr", ok="weather" not in {p["key"] for p in problems.snapshot()})
+        return data
+    except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
+        log.warning("Vejret sprunget over: %s", e)
+        problems.report("weather", "weather", "Vejret kunne ikke laves", detail=f"{type(e).__name__}: {e}")
+        progress.finish("vejr", ok=False)
+        return None
+
+
 def _progress_parts(cfg: dict, use_aula: bool) -> list[str]:
     """De dele, denne hentning henter – kun dem får en bjælke i appen."""
     acfg = cfg.get("aula", {})
@@ -1508,6 +1524,8 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
     out_path = Path(cfg.get("output", "web/family.json"))
     previous = json.loads(out_path.read_text("utf-8")) if out_path.exists() else {}
     progress.start(_progress_parts(cfg, use_aula))
+    # Vejret afhænger ikke af de andre data: hent det i en tråd sideløbende med Google og Aula
+    weather_task = asyncio.create_task(asyncio.to_thread(_fetch_weather, cfg, now))
 
     google_failed: list[str] = []
     events = await fetch_google(cfg, people, start, end, google_failed)
@@ -1586,16 +1604,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
             log.warning("Kunne ikke finde kalenderforslag: %s", e)
             progress.finish("kalenderforslag", ok=False)
     events.sort(key=lambda x: x["start"])
-    progress.begin("vejr")
-    try:
-        import weather
-        weather_data = weather.for_family(cfg, now)        # groft dagsresumé, aldrig placeringen; None uden hjem
-        progress.finish("vejr", ok="weather" not in {p["key"] for p in problems.snapshot()})
-    except Exception as e:  # noqa: BLE001 – vejret er et ekstra og må aldrig vælte hentningen
-        log.warning("Vejret sprunget over: %s", e)
-        problems.report("weather", "weather", "Vejret kunne ikke laves", detail=f"{type(e).__name__}: {e}")
-        progress.finish("vejr", ok=False)
-        weather_data = None
+    weather_data = await weather_task                       # hentet sideløbende med resten (startet øverst)
     data = {
         "generated": iso(now),
         "people": people.public(),

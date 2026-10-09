@@ -148,7 +148,7 @@ def test_after_a_fetch_the_ring_stays_and_shows_the_last_fetch_with_times(make_p
     open_pop(page)
     b = {x["label"]: x for x in bars(page)}
     times = page.eval_on_selector_all("#progPop .pg .ms", "els => els.map(e => e.textContent)")
-    assert times == ["820 ms", "45,2 s", "900,0 s"]
+    assert [t for t in times if t] == ["820 ms", "45,2 s", "900,0 s"]
     assert b["Google"]["text"] == "færdig på 820 ms" and b["Billeder"]["text"] == "fejlede på 900,0 s"
     assert "Seneste hentning kl. 09.58 · 52,3 s" in page.inner_text("#progPop .progtitle")
 
@@ -157,7 +157,7 @@ def test_times_are_only_shown_for_finished_or_failed_parts(make_page):
     page, *_ = make_page(fetching([dict(part("aula.messages", "Beskeder", "running", 5, 10), ms=None),
                                    dict(part("google", "Google", "done", 1, 1), ms=300)]), now=NOW)
     open_pop(page)
-    assert page.eval_on_selector_all("#progPop .pg .ms", "els => els.map(e => e.textContent)") == ["300 ms"]
+    assert page.eval_on_selector_all("#progPop .pg .ms", "els => els.map(e => e.textContent)") == ["", "300 ms"]
 
 
 def test_without_any_fetch_yet_the_popup_says_so(make_page):
@@ -186,7 +186,7 @@ def test_the_full_fetch_button_starts_a_full_fetch_and_the_popup_follows_it(make
     page.wait_for_timeout(300)
     assert fake.refreshes == [{"full": True, "csrf": True}]
     assert page.locator("#progPop").is_visible() and [b["label"] for b in bars(page)] == ["Google", "Beskeder"]
-    assert not page.locator("#progFull").is_enabled() and page.locator("#progFull").inner_text() == "Henter …"
+    assert not page.locator("#progFull").is_enabled() and page.locator("#progFull").inner_text() == "Tving fuld hentning"
 
 
 def test_the_full_fetch_button_is_disabled_while_fetching(make_page):
@@ -218,3 +218,42 @@ def test_the_ring_never_covers_the_title_or_the_warning(make_page, w, h):
         b = page.locator(sel).bounding_box()
         assert b["x"] + b["width"] <= r["x"] or b["y"] + b["height"] <= r["y"] or r["y"] + r["height"] <= b["y"], sel
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+
+
+
+def test_the_bars_line_up_whatever_state_the_parts_are_in(make_page):
+    parts = PARTS + [dict(part("kalenderforslag", "Kalenderforslag", "done"), ms=12345)]
+    page, *_ = make_page(fetching(parts), now=NOW)
+    open_pop(page)
+    xs = page.eval_on_selector_all("#progPop .pg .bar", "els => els.map(e => Math.round(e.getBoundingClientRect().x))")
+    ws = page.eval_on_selector_all("#progPop .pg .bar", "els => els.map(e => Math.round(e.getBoundingClientRect().width))")
+    assert len(set(xs)) == 1 and len(set(ws)) == 1, (xs, ws)          # samme plads: venter, henter, færdig, fejlet
+
+
+def test_force_full_fetch_is_a_link_at_the_bottom_and_grey_while_fetching(make_page):
+    page, *_ = make_page(fetching(), now=NOW)
+    open_pop(page)
+    link = page.locator("#progFull")
+    style = link.evaluate("e => {const c=getComputedStyle(e); return {line:c.textDecorationLine, border:c.borderTopWidth, bg:c.backgroundColor}}")
+    assert style["border"] == "0px" and style["bg"] in ("rgba(0, 0, 0, 0)", "transparent")   # ligner et link, ikke en knap
+    last = page.eval_on_selector("#progPop", "e => e.lastElementChild.id")
+    assert last == "progFull" and not link.is_enabled()
+    idle = fetching()
+    idle.running, idle.progress = False, {"running": False, "finished": NOW.isoformat(), "ms": 1, "parts": []}
+    page2, *_ = make_page(idle, now=NOW)
+    open_pop(page2)
+    l2 = page2.locator("#progFull")
+    assert l2.is_enabled() and l2.evaluate("e => getComputedStyle(e).textDecorationLine") == "underline"
+    grey = link.evaluate("e => getComputedStyle(e).color")
+    assert grey != l2.evaluate("e => getComputedStyle(e).color")         # grå, mens der hentes
+
+
+@pytest.mark.parametrize("w", [1280, 820, 390])
+def test_the_popup_fits_the_screen_and_no_name_is_cut_off(make_page, w):
+    parts = [dict(part("kalenderforslag", "Kalenderforslag", "done"), ms=2100), dict(part("aula.albums", "Billeder", "failed"), ms=7300),
+             part("aula.kalender", "Aula-kalender")]
+    page, *_ = make_page(fetching(parts), now=NOW, width=w, height=800)
+    open_pop(page)
+    pop = page.locator("#progPop").bounding_box()
+    assert pop["x"] >= 0 and pop["x"] + pop["width"] <= w
+    assert page.evaluate("[...document.querySelectorAll('#progPop .pl')].every(e => e.scrollWidth <= e.clientWidth)")
