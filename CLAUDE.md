@@ -313,6 +313,18 @@ it used to be 1680px wide with a smaller title and no date line, which made the 
 Only `padding-bottom` is tighter so the split view fits the screen; `sizeMail()` sizes the panes from where the
 header ends. On phones (`max-width:699px`) the header is still hidden in Beskeder to give room to the messages.
 
+## Feed layout (Oct 2026)
+
+The feed is one column in the full `.wrap` width (user decision: no masonry/grid, keep chronological order); text
+inside cards is capped at 78ch. Photo strips size from the card, not the viewport: `.car` is an inline-size
+container, `.photos` gets `--base` 1/2/3 at <600/600+/1000+ px card width (`--ar` 1 → 1.25 portrait) and `--n` (photo
+count) inline, so fewer photos than `--base` share the width at the same height. `.photos.one` (single photo) is full
+width, height `clamp(240px,56cqw,min(60vh,640px))`, `object-fit:contain` over a blurred `img.bg` copy.
+`wireTrack()` works in steps of one photo (width + gap) and pages of as many as fit, so it serves both the feed
+strip and the full-screen viewer; one global resize listener calls each track's `_trackUpdate`.
+`html{scrollbar-gutter:stable}` (mouse devices only) keeps every view at the same horizontal position whether the
+page scrolls or not; without it Beskeder (which never scrolls) sat half a scrollbar to the right on Windows.
+
 ## Progress while fetching (`progress.py`, Oct 2026)
 
 User decisions (revised): a progress ring left of the gear (`#progWrap`, `position:absolute` in the header so

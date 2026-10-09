@@ -41,6 +41,9 @@ body.night{color-scheme:dark;
   --know:rgba(141,178,242,.14); --warn:#F2A08A; --rain:#8DB2F2;
   background:var(--paper)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
+/* Plads til rullebjælken på alle sider, så indholdet står samme sted, uanset om siden ruller (Windows' faste
+   rullebjælker). Kun med mus – på touch ligger rullebjælken oven på indholdet og fylder intet. */
+@media (hover:hover) and (pointer:fine){html:not(:has(body.kiosk)){scrollbar-gutter:stable}}   /* kiosken ruller aldrig */
 /* Rolige scrollbars: tynde og i temaets farver */
 :root{--sb:color-mix(in srgb,var(--ink) 22%,transparent)}
 *{scrollbar-width:thin;scrollbar-color:var(--sb) transparent}
@@ -344,9 +347,8 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .chip .av{background:color-mix(in srgb,var(--c) 22%,var(--surface));color:var(--ink);border:2px solid var(--c)}
 .lane .who .pav{margin-bottom:4px}
 /* Feed */
-.feedwrap{max-width:560px;margin:0 auto}
-@media (min-width:1100px){.feedwrap{max-width:720px}}
-@media (min-width:1600px){.feedwrap{max-width:860px}}
+.feedwrap{max-width:none}                 /* feedet bruger hele sidebredden ligesom de andre sider; teksten holdes i læsebredde */
+.feedwrap .cbody > *,.feedwrap .cfoot{max-width:78ch}
 .fsearch{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .fsearch input{flex:1;min-width:0;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
 .fsearch input:focus-visible{outline:3px solid #2F6FDE;outline-offset:1px}
@@ -366,10 +368,20 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .kind{display:inline-flex;align-items:center;gap:5px;font:700 .78rem var(--body);padding:4px 10px;border-radius:999px;white-space:nowrap}
 .kind.post{background:color-mix(in srgb,#D9971E 20%,var(--surface));color:var(--ink)}
 .kind.album{background:color-mix(in srgb,#1F9E89 20%,var(--surface));color:var(--ink)}
-.photos{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;background:#000;scrollbar-width:none}
+/* Billedstribe: på telefon ét kvadratisk billede ad gangen; i bredere kort 2 (fra 600 px) eller 3 (fra 1000 px)
+   portrætbilleder (4:5) side om side. Har et opslag færre billeder end der er plads til, deler de bredden i samme
+   højde. Ét enkelt billede vises i fuld bredde med begrænset højde – hele billedet, med en sløret kopi bagved. */
+.car{container-type:inline-size}
+.photos{--base:1;--ar:1;--per:min(var(--base),var(--n,1));display:flex;gap:2px;overflow-x:auto;scroll-snap-type:x mandatory;background:#000;scrollbar-width:none;
+  height:min(calc(100cqw / var(--base) * var(--ar)),70vh,760px)}
+@container (min-width:600px){.photos{--base:2;--ar:1.25}}
+@container (min-width:1000px){.photos{--base:3;--ar:1.25}}
 .photos::-webkit-scrollbar{display:none}
-.photos button{all:unset;cursor:zoom-in;flex:0 0 100%;scroll-snap-align:center;aspect-ratio:1/1;max-height:min(70vh,760px);display:block}
+.photos button{all:unset;cursor:zoom-in;flex:0 0 calc((100% - (var(--per) - 1) * 2px) / var(--per));scroll-snap-align:start;height:100%;display:block;position:relative;overflow:hidden}
 .photos img{width:100%;height:100%;object-fit:cover;display:block}
+.photos.one{height:clamp(240px,56cqw,min(60vh,640px))}
+.photos.one img{position:relative;object-fit:contain}
+.photos.one img.bg{position:absolute;inset:0;object-fit:cover;filter:blur(24px) brightness(.7);transform:scale(1.15)}
 .pcount{font-size:.78rem;color:var(--muted);padding:6px 14px 0}
 /* Karrusel med tydelige swipe-markeringer */
 .car{position:relative}
@@ -381,6 +393,7 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .arr svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .arr.prev{left:10px}.arr.next{right:10px}
 .arr[hidden]{display:grid;opacity:0;pointer-events:none}
+.ctr[hidden],.cdots[hidden]{display:none}
 .ctr{position:absolute;top:10px;right:10px;z-index:2;background:rgba(15,20,30,.5);color:#fff;font:700 .78rem var(--body);padding:3px 9px;border-radius:999px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .cdots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:5px;z-index:2;pointer-events:none}
 .cdots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.5);box-shadow:0 0 2px rgba(0,0,0,.4);transition:transform .15s,background .15s}
@@ -1796,7 +1809,7 @@ const CHEV = d => `<svg viewBox="0 0 24 24"><path d="${d==="prev"?"m15 5-7 7 7 7
 function carousel(id, imgs){
   const many = imgs.length>1;
   return `<div class="car" data-car="${esc(id)}">
-    <div class="photos">${imgs.map((src,i)=>`<button data-idx="${i}" aria-label="Åbn billede ${i+1} af ${imgs.length} i stor visning"><img src="${esc(src)}" alt="" loading="lazy" draggable="false"></button>`).join("")}</div>
+    <div class="photos${many?"":" one"}" style="--n:${imgs.length}">${imgs.map((src,i)=>`<button data-idx="${i}" aria-label="Åbn billede ${i+1} af ${imgs.length} i stor visning">${many?"":`<img class="bg" src="${esc(src)}" alt="" loading="lazy" draggable="false">`}<img src="${esc(src)}" alt="" loading="lazy" draggable="false"></button>`).join("")}</div>
     ${many?`<button class="arr prev" aria-label="Forrige billede" hidden>${CHEV("prev")}</button>
     <button class="arr next" aria-label="Næste billede">${CHEV("next")}</button>
     <span class="ctr">1/${imgs.length}</span>
@@ -1805,23 +1818,31 @@ function carousel(id, imgs){
 }
 // Fælles logik for en scroll-snap-bane med pile, tæller og prikker
 function wireTrack(track, {prev, next, ctr, dots, onIndex}){
+  // Virker både med ét billede pr. skærmfuld (fuldskærm, telefon) og med flere side om side (feedet på store skærme):
+  // et "trin" er ét billede inkl. mellemrum, og pilene springer en hel skærmfuld.
   const n = track.children.length;
-  const idx = () => Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
-  const go = i => track.scrollTo({left: Math.max(0, Math.min(n-1, i)) * track.clientWidth, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+  const step = () => (track.children[0]?.offsetWidth || track.clientWidth) + (parseFloat(getComputedStyle(track).columnGap) || 0);
+  const per = () => Math.max(1, Math.round((track.clientWidth + (parseFloat(getComputedStyle(track).columnGap) || 0)) / Math.max(1, step())));
+  const last = () => Math.max(0, n - per());
+  const idx = () => Math.min(last(), Math.round(track.scrollLeft / Math.max(1, step())));
+  const go = i => track.scrollTo({left: Math.max(0, Math.min(last(), i)) * step(), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
   const update = () => {
-    const i = idx();
+    const i = idx(), k = per();
     if(prev) prev.hidden = i<=0;
-    if(next) next.hidden = i>=n-1;
-    if(ctr) ctr.textContent = `${i+1}/${n}`;
-    if(dots) [...dots.children].forEach((d,k)=>d.classList.toggle("on", k===Math.min(i, dots.children.length-1)));
+    if(next) next.hidden = i>=last();
+    if(ctr){ ctr.textContent = k>1 ? `${i+1}–${Math.min(n,i+k)}/${n}` : `${i+1}/${n}`; ctr.hidden = k>=n; }
+    if(dots) [...dots.children].forEach((d,j)=>d.classList.toggle("on", j>=Math.min(i, dots.children.length-1) && j<Math.min(i+k, dots.children.length)));
+    if(dots) dots.hidden = k>=n;
     onIndex && onIndex(i);
   };
   let raf; track.addEventListener("scroll", ()=>{cancelAnimationFrame(raf); raf=requestAnimationFrame(update);}, {passive:true});
-  if(prev) prev.onclick = e => { e.stopPropagation(); go(idx()-1); };
-  if(next) next.onclick = e => { e.stopPropagation(); go(idx()+1); };
+  track._trackUpdate = update;                                           // fælles resize-lytter nedenfor (ingen lyttere pr. kort)
+  if(prev) prev.onclick = e => { e.stopPropagation(); go(idx()-per()); };
+  if(next) next.onclick = e => { e.stopPropagation(); go(idx()+per()); };
   update();
   return {go, idx, update};
 }
+let trackRaf; addEventListener("resize", ()=>{ cancelAnimationFrame(trackRaf); trackRaf=requestAnimationFrame(()=>document.querySelectorAll(".photos, #lbTrack").forEach(t=>t._trackUpdate && t._trackUpdate())); }, {passive:true});
 function initCarousel(el, open){
   const track = el.querySelector(".photos");
   wireTrack(track, {prev: el.querySelector(".arr.prev"), next: el.querySelector(".arr.next"), ctr: el.querySelector(".ctr"), dots: el.querySelector(".cdots")});

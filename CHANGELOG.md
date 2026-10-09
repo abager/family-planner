@@ -8,6 +8,16 @@ All notable changes to this project. Versions are git tags. The format is loosel
 ### Changed (messages layout)
 - Beskeder now has the same page width (1280px) and the same header (title size, date line, spacing) as the other
   sections on tablet and desktop, so nothing jumps when switching views. On phones the header stays hidden there.
+- Beskeder no longer sits a few pixels further right than the other views with a mouse/Windows scrollbar: the page
+  always keeps room for the scrollbar (`scrollbar-gutter: stable`, only on mouse devices).
+
+### Changed (feed layout)
+- The feed uses the full page width (one column, newest first); post text stays at a readable width (78ch).
+- Posts and albums with several photos show a strip of portrait photos (4:5): 3 side by side on wide screens, 2 on
+  iPad portrait, 1 square photo on phones as before. Scroll sideways for the rest; the arrows jump a screenful and
+  the counter shows the visible photos ("4–6/8"). Fewer photos than room share the width at the same height.
+- A single photo is shown in full width with limited height, uncropped, with a blurred copy behind it.
+- Tapping a photo still opens it in full screen, where you can swipe through all of them.
 
 ### Changed (minor UI, round 2)
 - The bars in the progress popup line up in fixed columns, whether a part is waiting, fetching or done.
