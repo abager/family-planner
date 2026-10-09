@@ -694,6 +694,44 @@ body.kiosk dialog .k-dh{margin:.9em 0 .2em;font-size:.9em;color:var(--muted)}
 .evnote.warn{color:var(--text);background:color-mix(in srgb,#D9971E 14%,var(--surface));border:1px solid color-mix(in srgb,#D9971E 40%,var(--line));border-radius:10px;padding:8px 12px}
 .evtarget{margin:0 0 10px;font-size:.88rem}
 .evtarget b{font-weight:700}
+/* Komme/Gå: én linje pr. barn under navnet (I dag), i telefonlisten og på kiosken; panelet i #detail */
+.dpresrow{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));padding-bottom:8px}
+.dpc{padding:0 6px;min-width:0}
+.dpres,.lpres,.k-pres{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;max-width:100%;line-height:1.3;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dpres,.lpres{padding:3px 10px;border-radius:999px;font-size:.78rem;background:color-mix(in srgb,var(--c,var(--muted)) 10%,var(--solid));box-shadow:inset 0 0 0 1px var(--line)}
+.dpres::before,.k-pres::before{content:"";flex:none;width:.5em;height:.5em;border-radius:50%;background:var(--muted)}
+.dpres.in::before,.k-pres.in::before{background:var(--accent)}
+.dpres.sick,.lpres.sick,.k-pres.sick{color:var(--warn);font-weight:700}
+.dpres.sick::before,.k-pres.sick::before{background:var(--warn)}
+.dpres:focus-visible,.lpres:focus-visible,.k-pres:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px}
+.lpresrow{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.lpres .pav{width:1.5em;height:1.5em;font-size:.68rem;flex:none}
+.k-pres{display:flex;font-size:.85em;margin:.15em 0 0;color:var(--muted)}
+.k-pres.in{color:var(--ink)}
+.ph{margin:14px 0 6px;font:700 .95rem var(--body)}
+.pdays,.pvac{list-style:none;margin:0;padding:0}
+.pdays li{display:grid;grid-template-columns:5.5em minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.pdays .pd{color:var(--muted);font-variant-numeric:tabular-nums}
+.pdays small{color:var(--muted)}
+.pdays .pc{display:block}
+.pvac li{padding:4px 0}
+.pstatus{margin:6px 0}
+.pstatus.sick{color:var(--warn)}
+.pacts{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px}
+.pwarn{color:var(--warn);font-weight:700}
+.pbusy{padding:20px 0;font-weight:700}
+.punlock{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;align-items:end}
+.punlock label{grid-column:1/-1;font-weight:700}
+.punlock .meta{grid-column:1/-1;margin:0}
+.punlock input,.pedit input:not([type=radio]),.pedit select{box-sizing:border-box;width:100%;min-height:40px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--solid);color:var(--ink);font:inherit}
+.pedit label{display:block;margin:0 0 10px;font-weight:700}
+.pedit .prow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.prep{border:0;padding:0;margin:0 0 8px}
+.prep legend{font-weight:700;padding:0;margin-bottom:4px}
+.prep label{display:flex;align-items:center;gap:8px;font-weight:400;margin:0 0 4px}
+.btn.small{min-height:32px;padding:4px 12px;font-size:.85rem}
+.linkbtn{all:unset;cursor:pointer;color:var(--accent);font-weight:700;text-decoration:underline}
+.linkbtn:focus-visible{outline:3px solid #2F6FDE;outline-offset:2px;border-radius:4px}
 .everr{margin:0 0 8px;color:#C23A15;font-weight:700;min-height:1.2em}
 .evbtns{display:flex;gap:10px;flex-wrap:wrap;position:sticky;bottom:-22px;background:var(--solid);padding:12px 0 2px;margin-top:8px;border-top:1px solid var(--line)}
 #evDlg .evbtns button{margin:0}
@@ -982,7 +1020,12 @@ button,a,.chip,.pill{touch-action:manipulation}
   "tasks":   [{ "id":"t1", "title":"…", "due":"YYYY-MM-DD", "person":"p3", "kind":"lektie|husk|besked", "source":"aula" }],
   "weekplan":[{ "id":"w1", "person":"p3", "date":"YYYY-MM-DD"|null, "dayLabel":"…", "title":"…", "label":"…", "text":"…", "source":"meebook" }],
   "posts":   [{ "id":"po1", "title":"…", "author":"…", "timestamp":"ISO", "important":false, "text":"…", "people":["p3"] }],
-  "messages":[{ "id":"m1", "subject":"…", "from":"…", "timestamp":"ISO", "unread":true, "text":"…", "people":["p3"]|["family"] }]
+  "messages":[{ "id":"m1", "subject":"…", "from":"…", "timestamp":"ISO", "unread":true, "text":"…", "people":["p3"]|["family"] }],
+  "presence":[{ "person":"p3", "institution":"…", "today":{ "date":"YYYY-MM-DD", "status":"present|sick|checked_out|…", "statusText":"…",
+                "checkIn":"HH:MM", "checkOut":"HH:MM", "entry":"HH:MM", "exit":"HH:MM", "exitWith":"Navn (Mor)" },
+                "days":[{ "date":"YYYY-MM-DD", "entry":"HH:MM", "exit":"HH:MM", "activity":0, "exitWith":"…", "comment":"…",
+                "repeat":"never|weekly|every_2_weeks", "vacation":false }], "pickup":["Navn (Mor)"], "vacations":[…],
+                "can":{ "sick":true, "times":true }, "activities":[0,1,2,3] }]   (Komme/Gå, kun børn med modulet)
 }
 ------------------------------------------------------------------------------------ */
 
@@ -1135,7 +1178,17 @@ function demoData(){
   ];
   const suggestions=[];                 // kun aflysninger/flytninger vises (på beskeden); demoen har ingen
   messages[0].cal=[{id:"ev_demo0000001",title:"Tur til Naturcentret",calendar_title:"Carla: Tur til Naturcentret",start:ymd(addDays(wk,3)),end:ymd(addDays(wk,3)),start_time:"08:30",end_time:"13:00",all_day:false,location:"Naturcentret",people:["carla"],description:"Fra Aula-besked «Tur til Naturcentret»",exists:false,source:{type:"message",id:"m1",title:"Tur til Naturcentret",label:"Aula-besked"}}];
-  return {generated:new Date().toISOString(),people,events,tasks,weekplan,posts,messages,albums,suggestions,demo:true};
+  // Komme/Gå (presence.py): Hugo og Carla har SFO; Leo har ikke modulet endnu og står derfor ikke her
+  const pToday=new Date(), pDays=(exit,who)=>[...Array(8)].map((_,i)=>{ const d=ymd(addDays(pToday,i)), wkend=[0,6].includes(addDays(pToday,i).getDay());
+    return wkend?null:{date:d,templateId:i+1,entry:"08:00",exit:i===2?"14:00":exit,activity:who?0:2,exitWith:who||null,comment:i===2?"Til tandlæge":null,repeat:"weekly",repeatFrom:null,repeatTo:null,vacation:false,spareTime:null}; }).filter(Boolean);
+  const pCan={sick:true,times:true,pickupType:true}, pWhoList=["Monica (Mor)","Andreas (Far)"];
+  const presence=[
+    {person:"hugo",institution:"SFO Solsikken",today:{date:ymd(pToday),status:"present",statusText:"Til stede",checkIn:"07:52",checkOut:null,entry:"08:00",exit:"15:00",exitWith:null,comment:null,location:null},
+     days:pDays("15:00",null),pickup:pWhoList,vacations:[],can:pCan,activities:[0,1,2,3]},
+    {person:"carla",institution:"SFO Solsikken",today:{date:ymd(pToday),status:"not_present",statusText:"Ikke kommet",checkIn:null,checkOut:null,entry:"08:00",exit:"15:30",exitWith:"Monica (Mor)",comment:null,location:null},
+     days:pDays("15:30","Monica (Mor)"),pickup:pWhoList,vacations:[{title:"Juleferie",start:"2026-12-21",end:"2027-01-01",missingAnswer:true,deadline:null}],can:pCan,activities:[0,2,3]}
+  ];
+  return {generated:new Date().toISOString(),people,events,tasks,weekplan,posts,messages,albums,suggestions,presence,demo:true};
 }
 
 const state = { data:null, view:"today", weekStart:startOfWeek(new Date()), hidden:new Set() };
@@ -1597,6 +1650,8 @@ function renderDayLanes(day, isToday, now){
     return `<div class="hl" style="top:${((hh-from)*60/span*100).toFixed(3)}%"><time>${pad(hh)}</time>${x?`<span class="hw" title="${esc(`${x.temp} grader${x.regn>=0.1?`, ${wxMm(x.regn)} mm regn`:""}`)}"><span aria-hidden="true">${esc(x.ikon)}</span> ${x.temp}°</span>${x.regn>=0.1?`<span class="hr">${wxMm(x.regn)} mm</span>`:""}`:""}</div>`; }).join("");
   const lines=hours.map(hh=>`<div class="hline" style="top:${((hh-from)*60/span*100).toFixed(3)}%"></div>`).join("");
   const heads=ppl.map(p=>`<div class="dh" style="--c:${p.color}">${pav(p)}<span>${esc(p.name)}</span></div>`).join("");
+  const presCells=ppl.map(p=>`<div class="dpc">${presButton(p, day, "dpres", k=>`data-d="${dKey(k)}"`)}</div>`);
+  const presRow=presCells.some(x=>x!=='<div class="dpc"></div>') ? `<div class="dax"></div><div class="dpresrow">${presCells.join("")}</div>` : "";
   const allRow=lanes.map(l=>`<div class="dad">${l.allDay.filter(i=>i.kind!=="fam").map(i=>dayChip(i)).join("")}</div>`).join("");
   const body=lanes.map(l=>`<div class="dlane" style="--c:${l.p.color}" data-person="${esc(l.p.id)}">${l.timed.filter(i=>!(i.kind==="fam"&&spanning.has(i.ev.id))).map(i=>dayBlock(i,from,span,nowMin,isToday)).join("")}</div>`).join("");
   const span1=[...spanning].map(id=>{ const it={...all.find(i=>i.ev?.id===id), col:0, ncol:1, p:null}; return dayBlock(it,from,span,nowMin,isToday); }).join("");
@@ -1604,7 +1659,7 @@ function renderDayLanes(day, isToday, now){
   const empty = !all.length && !lanes.some(l=>l.allDay.length) ? `<p class="empty dnone">Intet på programmet ${dayWord()}</p>` : "";
   const hasAll = lanes.some(l=>l.allDay.some(i=>i.kind!=="fam")) || famAllDay.length;
   box.innerHTML=`<div class="dgrid" style="--n:${ppl.length};--hours:${to-from}">
-      <div class="dax"></div><div class="dheads">${heads}</div>
+      <div class="dax"></div><div class="dheads">${heads}</div>${presRow}
       ${hasAll?`<div class="dax dallh">Hele dagen</div><div class="dallday">${famAllDay.length?`<div class="dfam">${famAllDay.map(i=>dayChip(i)).join("")}</div>`:""}<div class="dads">${allRow}</div></div>`:""}
       <div class="dax daxis" aria-hidden="true">${axis}</div>
       <div class="dbody">${lines}<div class="dcols">${body}</div><div class="dspan">${span1}</div>${nowLine}</div>
@@ -1635,7 +1690,8 @@ function dayList(lanes, famAllDay, day, isToday, now){
     html+=`<li><button type="button" class="lrow${past?" past":""}" data-d="${r.k}"><time>${minHM(r.s).replace(":",".")}</time><span class="lt">${esc(r.title)}${r.sub?`<small>${esc(r.sub)}</small>`:""}</span><span class="lw">${who}</span></button></li>`;
   }
   if(!nowDone && list.length) html+=`<li class="lnow" aria-hidden="true"><span>Nu ${hm(now)}</span></li>`;
-  return `<div class="dlist">${chips.length?`<div class="lchips">${[...new Map(chips.map(c=>[c.ev?.id||c.w?.id,c])).values()].map(c=>dayChip(c,true)).join("")}</div>`:""}<ul class="lrows" aria-label="Dagens program">${html}</ul></div>`;
+  const presStrip=lanes.map(l=>presButton(l.p, day, "lpres", k=>`data-d="${dKey(k)}"`).replace('class="lpres', `style="--c:${l.p.color}" class="lpres`).replace(/(<span class="sronly">)/, `${pav(l.p)}$1`)).filter(Boolean).join("");
+  return `<div class="dlist">${presStrip?`<div class="lpresrow">${presStrip}</div>`:""}${chips.length?`<div class="lchips">${[...new Map(chips.map(c=>[c.ev?.id||c.w?.id,c])).values()].map(c=>dayChip(c,true)).join("")}</div>`:""}<ul class="lrows" aria-label="Dagens program">${html}</ul></div>`;
 }
 // Husk og lektier: fokusdagen og de to næste dage – samme regel som kiosken (en opgave står kun på den første dag, den gælder)
 function renderDayHusk(day){
@@ -1668,6 +1724,177 @@ function clampBrief(el){
   b.onclick=()=>{ state.briefOpen=!state.briefOpen; clampBrief(el); };
   body.after(b);
 }
+// ---------- Komme/Gå (presence.py): én linje i barnets bane, et panel med status, tider, sygemelding og fortryd.
+// Skrivning kun via serveren med en personlig skrivekode – aldrig på kiosken (dér er linjen kun til at læse).
+const P_ACT={0:"Hentes af",1:"Går selv",2:"Sendes hjem",3:"Går hjem med"}, P_NAME=new Set([0,3]);
+const P_REP={never:"Kun denne dag",weekly:"Hver uge",every_2_weeks:"Hver anden uge"};
+const P_IN=new Set(["present","fieldtrip","sleeping","spare_time_activity","physical_placement"]);
+const presOf = id => (state.data?.presence||[]).find(c=>c.person===id) || null;
+const presDay = (c,key) => (c?.days||[]).find(d=>d.date===key) || null;
+const pWho = n => { const m=/\(([^)]+)\)\s*$/.exec(n||""); return m ? m[1] : String(n||"").split(" ")[0]; };   // "Mor Test (Mor)" → "Mor"
+const pDate = key => { const d=new Date(key+"T12:00"); return `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`; };
+const pDateLong = key => { const d=new Date(key+"T12:00"); return `${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`; };
+function presPlan(d){
+  if(!d) return "";
+  if(d.vacation) return "Ferie";
+  if(!d.exit) return "";
+  const t=hhmm(d.exit);
+  return d.activity===0 ? `Hentes ${t}${d.exitWith?` af ${pWho(d.exitWith)}`:""}` : d.activity===1 ? `Går selv ${t}`
+       : d.activity===2 ? `Sendes hjem ${t}` : d.activity===3 ? `Går hjem med ${pWho(d.exitWith)} ${t}` : `Går ${t}`;
+}
+function presDesc(d){              // "08.00–15.30 · Hentes af Mor Test (Mor)" – til panelet og bekræftelsen
+  if(!d || !d.entry) return d?.vacation ? "Ferie" : "Ingen tider";
+  return `${hhmm(d.entry)}–${hhmm(d.exit)} · ${P_ACT[d.activity]||"Går"}${d.exitWith&&P_NAME.has(d.activity)?` ${d.exitWith}`:""}`;
+}
+// Linjen i banen/kolonnen: dagens faktiske status (kun i dag), ellers planen for dagen. null = intet at vise.
+function presLine(c, day){
+  const key=ymd(day), t=c.today||{}, now=t.date===key && key===ymd(new Date()), plan=presPlan(presDay(c,key));
+  if(now && t.status==="sick") return {text:"Syg", cls:"sick"};
+  if(now && t.status==="reported_absent") return {text:"Meldt fravær", cls:"sick"};
+  if(now && t.status==="checked_out") return {text:`Gået hjem${t.checkOut?` ${hhmm(t.checkOut)}`:""}`, cls:"out"};
+  if(now && P_IN.has(t.status)) return {text:[t.status==="present"?(t.checkIn?`Kom ${hhmm(t.checkIn)}`:"Til stede"):t.statusText, plan].filter(Boolean).join(" · "), cls:"in"};
+  return plan ? {text:plan, cls:""} : null;
+}
+function presButton(p, day, cls, keyFn){
+  const c=presOf(p.id); if(!c) return "";
+  const l=presLine(c,day); if(!l) return "";
+  return `<button type="button" class="${cls} ${l.cls}" ${keyFn(()=>openPresence(p.id))}><span class="sronly">Komme/Gå for ${esc(p.name)}: </span>${esc(l.text)}</button>`;
+}
+
+// ----- panelet
+let pres=null;            // {person, mode, date, draft, err, busy}
+const presW = () => state.presW || {};
+const canWrite = () => !state.kiosk && !!state.server && presW().enabled && presW().configured;
+async function presStatus(){
+  if(!state.server) return;
+  try{ const r=await fetch("api/presence/write/status",{cache:"no-store"}); if(r.ok) state.presW=await r.json(); }catch{}
+  clearTimeout(presStatus._t);
+  if(state.presW?.unlocked) presStatus._t=setTimeout(()=>{ presStatus().then(()=>pres&&presRender()); }, (state.presW.expires_in+1)*1000);
+}
+async function presLog(){
+  pres.log=null;
+  if(!presW().unlocked) return;
+  try{ const r=await fetch(`api/presence/log?person=${encodeURIComponent(pres.person)}`,{cache:"no-store"}); if(r.ok) pres.log=await r.json(); }catch{}
+}
+async function openPresence(pid){
+  const p=person(pid); if(!p || !presOf(pid)) return;
+  pres={person:pid, mode:"view", err:"", busy:false};
+  const html=()=>presHtml();
+  if(state.kiosk){ kDetail(`${p.name}: Komme/Gå`, html()); return; }
+  openDetail(`${p.name}: Komme/Gå`, html());
+  if(state.server){ await presStatus(); await presLog(); presRender(); }
+}
+function presRender(){
+  if(!pres || !document.getElementById("detail").open) return;
+  document.getElementById("dBody").innerHTML=presHtml();
+  const f=document.querySelector("#dBody [autofocus]"); if(f) f.focus();
+}
+function presHtml(){
+  const c=presOf(pres.person), p=person(pres.person), t=c.today||{}, today=ymd(new Date());
+  const err = pres.err ? `<p class="everr" role="alert">${esc(pres.err)}</p>` : "";
+  if(pres.mode==="busy") return `<p class="pbusy" role="status">Gemmer i Aula …</p>`;
+  if(pres.mode==="edit") return presEditHtml(c,p)+err;
+  if(pres.mode==="confirm") return `<div class="pconfirm"><p>${pres.confirm.html}</p>${pres.confirm.warn?`<p class="pwarn">${esc(pres.confirm.warn)}</p>`:""}
+    <div class="evbtns"><button type="button" class="btn primary" data-pa="do" autofocus>${esc(pres.confirm.ok)}</button><button type="button" class="btn" data-pa="back">Tilbage</button></div></div>${err}`;
+  const status = t.date===today && t.status ? `<p class="pstatus ${t.status==="sick"?"sick":""}"><b>I dag:</b> ${esc(t.statusText||t.status)}${t.checkIn?` · kom ${hhmm(t.checkIn)}`:""}${t.checkOut?` · gik ${hhmm(t.checkOut)}`:""}${t.location?` · ${esc(t.location)}`:""}</p>` : "";
+  const w=canWrite(), unlocked=w && presW().unlocked;
+  const rows=(c.days||[]).filter(d=>d.date>=today).map(d=>`<li><span class="pd">${esc(pDate(d.date))}</span><span class="pt">${esc(presDesc(d))}${d.repeat&&d.repeat!=="never"?` <small>${esc(P_REP[d.repeat].toLowerCase())}</small>`:""}${d.comment?`<small class="pc">${esc(d.comment)}</small>`:""}</span>${unlocked&&c.can?.times!==false?`<button type="button" class="btn small" data-pa="edit" data-date="${esc(d.date)}" aria-label="Ret ${esc(pDateLong(d.date))}">Ret</button>`:""}</li>`).join("");
+  const vac=(c.vacations||[]).filter(v=>v.start).map(v=>`<li>${esc(v.title)}: ${esc(pDate(v.start))}–${esc(pDate(v.end||v.start))}${v.missingAnswer?` · <b>mangler svar</b> (svar i Aula)`:""}</li>`).join("");
+  let acts="";
+  if(w && !unlocked) acts=`<form class="punlock" data-pform="unlock" novalidate><label for="pCode">Din kode til Komme/Gå</label>
+      <input id="pCode" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" inputmode="numeric">
+      <button type="submit" class="btn primary">Lås op</button><p class="meta">Med koden kan du melde syg og ændre tider. Den låses igen efter få minutter.</p></form>`;
+  if(unlocked){
+    const b=[];
+    if(c.can?.sick!==false && t.date===today) b.push(t.status==="sick" ? `<button type="button" class="btn" data-pa="unsick">Fortryd sygemelding</button>` : `<button type="button" class="btn primary" data-pa="sick">Meld syg i dag</button>`);
+    const u=pres.log?.undo;
+    if(u) b.push(`<button type="button" class="btn" data-pa="undo">Fortryd seneste ændring</button>`);
+    acts=`<div class="pacts">${b.join("")}</div>${u?`<p class="meta">Seneste ændring: ${esc(u.text||"")} – ${esc(u.byName||"")} kl. ${esc(hm(new Date(u.at)))}</p>`:""}
+      <p class="meta">Låst op som ${esc(presW().whoName||"")} · <button type="button" class="linkbtn" data-pa="lock">Lås</button></p>`;
+  }
+  return `${c.institution?`<p class="meta">${esc(c.institution)}</p>`:""}${status}
+    <h4 class="ph">Planlagt</h4>${rows?`<ul class="pdays">${rows}</ul>`:`<p class="empty">Ingen planlagte tider.</p>`}
+    ${vac?`<h4 class="ph">Ferie</h4><ul class="pvac">${vac}</ul>`:""}${acts}${err}`;
+}
+function presEditHtml(c,p){
+  const d=pres.draft, acts=(c.activities||[0,1,2,3]).filter(a=>P_ACT[a]);
+  const who=(c.pickup||[]).map(n=>`<option${n===d.exitWith?" selected":""}>${esc(n)}</option>`).join("");
+  return `<form class="pedit" data-pform="edit" novalidate><h4 class="ph">${esc(pDateLong(d.date))}</h4>
+    <div class="prow"><label>Kommer<input type="time" id="pEntry" value="${esc(d.entry||"08:00")}" required autofocus></label>
+    <label>Går<input type="time" id="pExit" value="${esc(d.exit||"16:00")}" required></label></div>
+    <label>Afhentning<select id="pAct">${acts.map(a=>`<option value="${a}"${a===d.activity?" selected":""}>${esc(P_ACT[a])}</option>`).join("")}</select></label>
+    <label id="pWhoL"${P_NAME.has(d.activity)?"":" hidden"}>Hvem henter<select id="pWho"><option value="">Vælg …</option>${who}</select></label>
+    <label>Kommentar til institutionen<input id="pComment" maxlength="250" value="${esc(d.comment||"")}"></label>
+    <fieldset class="prep"><legend>Gælder</legend>${Object.entries(P_REP).map(([k,v])=>`<label><input type="radio" name="pRep" value="${k}"${(d.repeat||"never")===k?" checked":""}> ${esc(v)}</label>`).join("")}</fieldset>
+    <p class="pwarn" id="pRepWarn"${(d.repeat||"never")==="never"?" hidden":""}>Ændrer ugeskemaet fra ${esc(pDateLong(d.date))} og frem.</p>
+    <div class="evbtns"><button type="submit" class="btn primary">Fortsæt</button><button type="button" class="btn" data-pa="back">Annullér</button></div></form>`;
+}
+function presConfirm(kind){
+  const c=presOf(pres.person), p=person(pres.person), today=ymd(new Date());
+  if(kind==="sick") pres.confirm={kind, ok:"Ja, meld syg", html:`Meld <b>${esc(p.name)}</b> syg i dag?`, warn:"Institutionen får besked med det samme. Sygemeldingen gælder kun i dag."};
+  if(kind==="unsick") pres.confirm={kind, ok:"Ja, fortryd", html:`Fortryd sygemeldingen af <b>${esc(p.name)}</b>?`, warn:"Institutionen ser ændringen med det samme."};
+  if(kind==="undo"){ const u=pres.log?.undo; pres.confirm={kind, ok:"Ja, fortryd", html:`Fortryd: ${esc(u?.text||"")}?`, warn:`Den tidligere værdi skrives tilbage i Aula.`}; }
+  if(kind==="day"){ const d=pres.draft, before=presDay(c,d.date);
+    pres.confirm={kind, ok:"Ja, gem i Aula", html:`<b>${esc(p.name)}, ${esc(pDateLong(d.date))}</b><br>${esc(presDesc(before))} → <b>${esc(presDesc(d))}</b>${d.comment?`<br>Kommentar: ${esc(d.comment)}`:""}`,
+      warn: d.repeat!=="never" ? `${P_REP[d.repeat]} fra ${pDateLong(d.date)}: ugeskemaet ændres fra den dag og frem.` : (before?.repeat && before.repeat!=="never" ? "Dagen er en del af en gentagelse. Kun denne dag ændres." : "")}; }
+  pres.mode="confirm"; pres.err=""; presRender();
+}
+async function presDo(){
+  const k=pres.confirm.kind, body={person:pres.person};
+  const path = k==="sick"||k==="unsick" ? "api/presence/sick" : k==="undo" ? "api/presence/undo" : "api/presence/day";
+  if(k==="sick"||k==="unsick") body.sick = k==="sick";
+  if(k==="day") Object.assign(body, pres.draft);
+  pres.mode="busy"; presRender();
+  try{
+    const j=await calPost(path, body);
+    if(j.child){ const list=state.data.presence||(state.data.presence=[]); const i=list.findIndex(x=>x.person===j.child.person); if(i<0) list.push(j.child); else list[i]=j.child; }
+    toast(`Gemt i Aula: ${j.text||"ændringen"}`);
+    pres.mode="view"; pres.err=""; await presLog();
+    if(state.view==="today" && !state.kiosk) renderToday();
+  }catch(x){
+    pres.err=x.message; pres.mode = k==="day" ? "edit" : "view";
+    await presStatus();                                     // fx udløbet kode: vis kodefeltet igen
+  }
+  presRender();
+}
+const dBodyEl=document.getElementById("dBody");
+dBodyEl.addEventListener("click", e=>{
+  const b=e.target.closest("[data-pa]"); if(!b || !pres) return;
+  const a=b.dataset.pa;
+  if(a==="sick"||a==="unsick"||a==="undo") return presConfirm(a);
+  if(a==="do") return presDo();
+  if(a==="back"){ pres.mode = pres.mode==="confirm"&&pres.confirm?.kind==="day" ? "edit" : "view"; pres.err=""; return presRender(); }
+  if(a==="lock"){ fetch("api/presence/write/lock",{method:"POST",headers:{"X-Requested-With":"familieplan"}}).catch(()=>{}).finally(()=>presStatus().then(()=>{ pres.log=null; presRender(); })); return; }
+  if(a==="edit"){ const c=presOf(pres.person), d=presDay(c,b.dataset.date)||{date:b.dataset.date};
+    pres.draft={date:d.date, entry:d.entry||"08:00", exit:d.exit||"16:00", activity:d.activity??(c.activities||[0])[0], exitWith:d.exitWith||"", comment:d.comment||"", repeat:"never"};
+    pres.mode="edit"; pres.err=""; presRender(); }
+});
+dBodyEl.addEventListener("change", e=>{
+  if(!pres || pres.mode!=="edit") return;
+  if(e.target.id==="pAct") document.getElementById("pWhoL").hidden=!P_NAME.has(+e.target.value);
+  if(e.target.name==="pRep") document.getElementById("pRepWarn").hidden=e.target.value==="never";
+});
+dBodyEl.addEventListener("submit", async e=>{
+  const f=e.target.closest("[data-pform]"); if(!f || !pres) return;
+  e.preventDefault();
+  if(f.dataset.pform==="unlock"){
+    try{ await calPost("api/presence/write/unlock",{code:document.getElementById("pCode").value}); pres.err=""; await presStatus(); await presLog(); }
+    catch(x){ pres.err=x.message; }
+    return presRender();
+  }
+  const v=id=>document.getElementById(id).value, act=+v("pAct");
+  const d={...pres.draft, entry:v("pEntry"), exit:v("pExit"), activity:act, exitWith:P_NAME.has(act)?v("pWho"):"", comment:v("pComment").trim(),
+           repeat:(f.querySelector("[name=pRep]:checked")||{}).value||"never"};
+  pres.draft=d;
+  pres.err = !d.entry||!d.exit ? "Udfyld begge tider." : d.entry>=d.exit ? "Gåtiden skal ligge efter kommetiden." : P_NAME.has(act)&&!d.exitWith ? "Vælg, hvem der henter." : "";
+  if(pres.err) return presRender();
+  presConfirm("day");
+});
+document.getElementById("detail").addEventListener("close",()=>{ pres=null; });
+document.addEventListener("visibilitychange",()=>{          // skærmen slukker / appen skiftes: lås skrivningen
+  if(document.visibilityState==="hidden" && state.presW?.unlocked){ fetch("api/presence/write/lock",{method:"POST",headers:{"X-Requested-With":"familieplan"}}).catch(()=>{}); state.presW.unlocked=false; }
+});
+
 function renderToday(){
   dItems=new Map();
   const fday=focusDay(), now=new Date(), isToday=dayOffset()===0;
@@ -2266,7 +2493,8 @@ function kPersonCol(p,day,now,isToday){
   }
   const span = ls.length ? `<div class="k-span">${hhmm(ls[0].start)}–${hhmm(ls.map(lessonEnd).sort().pop())}</div>` : "";
   const more = kKey(()=>kDetail(`${p.name} ${dayWord()}`, kDl(list)));
-  return `<article class="k-person" style="--c:${p.color}" data-person="${esc(p.id)}"><h3>${pav(p)}${esc(p.name)}</h3>${span}
+  const presK = presButton(p, day, "k-pres", k=>`data-k="${kKey(k)}"`);
+  return `<article class="k-person" style="--c:${p.color}" data-person="${esc(p.id)}"><h3>${pav(p)}${esc(p.name)}</h3>${span}${presK}
     <ul class="k-rows">${rows.map(r=>`<li class="k-trim">${r.html}</li>`).join("") || `<li class="k-none">Intet på programmet</li>`}</ul>
     <button type="button" class="k-more" data-k="${more}" hidden></button></article>`;
 }

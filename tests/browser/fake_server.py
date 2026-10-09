@@ -29,6 +29,12 @@ class FakeServer:
         self.unlocked = False
         self.expires = 600
         self.family_gets = 0
+        # Komme/Gå: skrivning slået til og koder sat; "1111" er Andreas, "2222" Monica
+        self.pw = {"enabled": True, "configured": True}
+        self.pcodes = {"1111": ("andreas", "Andreas"), "2222": ("monica", "Monica")}
+        self.pwho: tuple[str, str] | None = None
+        self.pfail: tuple[int, str] | None = None        # (status, fejltekst) for næste skrivning
+        self.pundo: dict | None = None
         self.calls: list[tuple[str, str, dict | None]] = []
 
     # ---- opsætning
@@ -120,4 +126,40 @@ class FakeServer:
             return self._json(route, {"unlocked": False})
         if path == "/api/private":
             return self._json(route, {"messages": self.private_full, "expires_in": 600}) if self.unlocked else self._json(route, {"error": "locked"}, 403)
+        if path.startswith("/api/presence/"):
+            return self._presence(route, path, m, body or {})
         route.fulfill(status=404, body="")
+
+    def _presence(self, route, path, m, body):
+        if path == "/api/presence/write/status":
+            return self._json(route, {**self.pw, "unlocked": bool(self.pwho), "who": self.pwho and self.pwho[0],
+                                      "whoName": self.pwho and self.pwho[1], "expires_in": 600 if self.pwho else 0})
+        if path == "/api/presence/write/unlock":
+            if body.get("code") not in self.pcodes:
+                return self._json(route, {"error": "Forkert kode."}, 403)
+            self.pwho = self.pcodes[body["code"]]
+            return self._json(route, {"unlocked": True, "who": self.pwho[0], "whoName": self.pwho[1], "expires_in": 600})
+        if path == "/api/presence/write/lock":
+            self.pwho = None
+            return self._json(route, {"unlocked": False})
+        if path == "/api/presence/log":
+            return self._json(route, {"log": [], "undo": self.pundo}) if self.pwho else self._json(route, {"error": "locked"}, 403)
+        if not self.pwho:
+            return self._json(route, {"error": "Skriv din kode for at ændre Komme/Gå.", "locked": True}, 403)
+        if self.pfail:
+            st, msg = self.pfail
+            self.pfail = None
+            return self._json(route, {"error": msg}, st)
+        child = next(c for c in self.family["presence"] if c["person"] == body.get("person"))
+        if path == "/api/presence/sick":
+            child["today"] = {**child["today"], "status": "sick" if body.get("sick") else "not_present",
+                              "statusText": "Syg" if body.get("sick") else "Ikke kommet"}
+            text = "Sygemeldt" if body.get("sick") else "Sygemelding fortrudt"
+        elif path == "/api/presence/day":
+            day = next(d for d in child["days"] if d["date"] == body["date"])
+            day.update({k: body[k] for k in ("entry", "exit", "activity", "exitWith", "comment", "repeat")})
+            text = f"{body['entry']}–{body['exit']}"
+        else:
+            text = "Fortrød"
+        self.pundo = {"id": "u1", "text": text, "at": "2026-10-01T08:12:00+02:00", "byName": self.pwho[1]}
+        return self._json(route, {"ok": True, "child": child, "text": text})

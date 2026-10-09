@@ -79,3 +79,26 @@ def test_the_progress_ring_and_its_bars_are_accessible(make_page, site, hour):
     page.click("#progBtn")
     opened = page.evaluate(f"axe.run(document.getElementById('progWrap'),{rules}).then(r=>r.violations.map(v=>v.id))")
     assert page.locator("#progPop .pg").count() == 5 and closed == [] and opened == [], (closed, opened)
+
+
+@pytest.mark.parametrize("hour", [10, 22])
+def test_the_komme_gaa_line_and_panel_are_accessible(make_page, site, hour):
+    page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, hour, 0), fixed=True, goto=False)
+    page.goto(site.url + "/index.html")
+    fake.use_demo(page)
+    page.reload()
+    page.wait_for_timeout(500)
+    page.add_script_tag(content=Path(AXE).read_text())
+    rules = "{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','best-practice']}}"
+    run = lambda sel: page.evaluate(f"axe.run(document.querySelector('{sel}'),{rules}).then(r=>r.violations.map(v=>v.id))")
+    found = {"linjer": run("#dayLanes")}
+    page.locator("#dayLanes .dpres").first.click()
+    page.wait_for_timeout(300)
+    found["kode"] = run("#detail")
+    page.fill("#pCode", "1111")
+    page.click(".punlock button[type=submit]")
+    page.wait_for_timeout(300)
+    found["oplåst"] = run("#detail")
+    page.locator("[data-pa=edit]").first.click()
+    found["ret"] = run("#detail")
+    assert all(v == [] for v in found.values()), found
