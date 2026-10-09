@@ -5,6 +5,11 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (minor UI, round 2)
+- The bars in the progress popup line up in fixed columns, whether a part is waiting, fetching or done.
+- "Tving fuld hentning" is now a link at the bottom of the popup, greyed out while fetching.
+- The weather is fetched alongside Google and Aula instead of after them.
+
 ### Changed (minor UI)
 - The progress ring is always shown (not only while fetching); tapping it when idle shows the last fetch.
 - Each finished or failed part shows how long it took ("820 ms", "45,2 s"), and the popup shows the total.

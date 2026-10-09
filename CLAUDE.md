@@ -286,6 +286,8 @@ Planned restructuring (do in small steps, tests green after each):
   strings (`_describe`). `_once` runs shared work once per fetch even when several parts ask at the same time.
 - The parts (tasks, weekplan, posts, messages, albums) run concurrently, each with `part_timeout`; a failing part
   keeps its previous data (`None`) and is listed under ⚠ as `aula.part:<key>` until it works again.
+- Weather (MET Norway) does not depend on the other data, so `run_once` starts `_fetch_weather` in a thread
+  (`asyncio.to_thread`) right after `progress.start` and awaits it just before writing family.json.
 - Messages are incremental: a thread whose list entry is unchanged (`sig` = `_thread_sig`) is reused without calls,
   and the list stops after `messages_stop_after_unchanged` unchanged threads in a row; the rest is carried over.
 - Deep check (user decision: every hour, `deep_check_minutes`, `health.aula.last_full_sweep`): the whole list is read
@@ -314,9 +316,10 @@ The ring is ALWAYS there when the app runs on the server (user decision, replace
 server there is none. Tapping it opens `#progPop` (same menu style as the gear) with one bar per data type – during a
 fetch the live bars, otherwise the last fetch ("Seneste hentning kl. HH.MM · 52,3 s"). Each finished or failed part
 shows its time (`ms` from `progress.py`; format: under 1 s in ms, else seconds with one decimal: "820 ms", "45,2 s");
-running parts show no time. Esc/outside tap closes the popup; if it was open while a fetch ended, it closes ~4 s
-later by itself; opened later to look at the last fetch, it stays. "Tving fuld hentning" in the popup (disabled while
-fetching, no confirmation): POST `/api/refresh?full=true` (CSRF header) → `Runner.trigger(full=True)` →
+running parts show no time. Each row is a grid with fixed columns (name · bar · status · time), so the bars sit
+in the same place whatever the state; the popup is 340 px (full width minus a margin on phones). Esc/outside tap closes the popup; if it was open while a fetch ended, it closes ~4 s
+later by itself; opened later to look at the last fetch, it stays. "Tving fuld hentning" is a link at the bottom of
+the popup (a `<button>` styled as a link; grey and disabled while fetching, no confirmation): POST `/api/refresh?full=true` (CSRF header) → `Runner.trigger(full=True)` →
 `run_once(full=True)`: Aula deep check of all threads + `make_briefing(force=True)` → `generate_json(fresh=True)`
 (skips the AI cache; pause and daily budget still apply). The popup stays open and follows the fetch.
 The bars themselves (from the first version) are unchanged: one per data type the fetch actually
