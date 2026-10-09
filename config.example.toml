@@ -174,3 +174,16 @@ evening_hour = 18
 # Sæt protect = false KUN hvis du bruger appen uden serveren (så kan intet beskyttes alligevel).
 [private]
 protect = true
+
+# Komme/Gå fra Aula (presence.py): hvornår børnene kommer og går, hvem der henter, sygemelding.
+# Børn uden Komme/Gå i deres institution springes over og dukker op af sig selv, når det slås til.
+# Skrivning (sygemeld, ret tider, fortryd) kræver write_enabled = true OG en personlig skrivekode pr. voksen i .env:
+# FAMILIEPLAN_WRITE_CODE_ANDREAS, FAMILIEPLAN_WRITE_CODE_MONICA (navnet er personens id med store bogstaver).
+# Kioskvisningen viser kun – den kan aldrig skrive. Komme/gå-data sendes aldrig til sprogmodellen.
+[presence]
+enabled = true
+write_enabled = false    # slå først til, når du har set, at læsningen virker på jeres data
+days_ahead = 7           # planlagte tider så mange dage frem i appen
+edit_days_ahead = 60     # så langt frem kan en dag ændres
+unlock_minutes = 10      # skrivekoden udløber efter så mange minutter (og når skærmen slukker)
+lock_wait_seconds = 60   # så længe en ændring venter på en igangværende hentning, før den beder dig prøve igen

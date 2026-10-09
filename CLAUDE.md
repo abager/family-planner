@@ -70,6 +70,8 @@ No duplicates on one screen: a week-plan item that produced tasks (task id `<pla
   `private_messages.json` next to the Aula tokens (outside the served folder) and is only returned by the server
   after a separate code (`FAMILIEPLAN_PRIVATE_CODE`). See `private.py`.
 - Private threads are never sent to an LLM and never produce tasks or events.
+- Komme/Gå data (`family.json` → `presence`) is never sent to an LLM (user decision). `briefing.build_digest` picks
+  its fields one by one; never add `presence` there (tested in `test_presence.py`).
 - Everything sent to an LLM goes through `briefing._scrub` (CPR numbers, phone numbers, mail addresses).
   `familie_regler.md` is sent as written.
 - **AI provider terms (user's informed choice):** Google Gemini **free tier**. Google may use free-tier input to
@@ -114,13 +116,14 @@ familie_regler.md (free text)   ─┘                                     └�
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Praktisk info", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
 | `private.py` | Storage and gating of private threads |
+| `presence.py` | Aula Komme/Gå: per-child fetch (status, planned days, pickup list, vacations, permissions), validated writes (sick, day/repeat, undo) read back from Aula, change log |
 | `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
 | `selftest.py` | Checks a real setup end-to-end (Aula login, Google write, ntfy, permissions) |
 | `web/index.html` | The whole frontend (~170 KB, inline CSS/JS). Contains demo data used when no server is present |
 
 Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
-`private_messages.json`, `ai_last_invalid.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
+`private_messages.json`, `ai_last_invalid.json`, `presence_log.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
 `web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, `web/home_location.json`, `web/weather_cache.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
 `weekplan.json`.
 
@@ -166,6 +169,10 @@ Version: **v0.7.0** (first version in git; previously developed as zip files).
   calendar name ("Oprettes i Familiekalender") where the app shows the fixed term "familiekalenderen".
 
 Known gaps and open work:
+
+- **Komme/Gå has only been tested against a simulated Aula.** Writing ships switched off (`write_enabled = false`).
+  First real check: read only (do the lines match Aula?), then one change on an unimportant day, then a sick report
+  and its undo. Watch the repeat semantics (see the Komme/Gå section).
 
 - **Weather has only been tested against a simulated MET Norway.** DMI was dropped 2026-10-03 (HTTP 400 on a wrong
   parameter name, then 429 "Server is busy"). Response shape from MET's Locationforecast 2.0 docs. First real
@@ -294,6 +301,42 @@ Planned restructuring (do in small steps, tests green after each):
   AND every thread is fetched again (no reuse), because an edit to an older message does not always change the
   thread's list entry. Images are cached on disk by id, so the deep check costs message calls, not downloads.
 - Not yet run against the real Aula at the time of writing (only simulated in `tests/test_aula_fetch.py`).
+
+## Komme/Gå (`presence.py`, Oct 2026)
+
+User decisions: all three children are covered (Hugo and Carla have it now, Leo later – children without the module
+are skipped silently and appear by themselves); all write actions; only the two adults may write, with **one write code
+each** (`FAMILIEPLAN_WRITE_CODE_<ID>`, adults = `role = "adult"`) so the log knows who; repeats (weekly / every 2
+weeks) included; the kiosk shows Komme/Gå read-only; not sent to the AI; fetched with the normal 15-minute cycle (no
+faster polling). Tabulex ("Fravær – forældreindberetning") later: one sick report must then reach both systems – the
+sick action is one server action so a second target can be added there.
+
+- Read: the `presence` part in `fetch_aula` (own progress bar `aula.presence`, `[presence] enabled`). Per child:
+  `get_daily_overview`, `get_presence_templates` (today..+`days_ahead`), `get_presence_configuration` (once for all),
+  `get_pickup_responsibles`, `get_vacation_registrations`. Each call fails on its own (`_safe`); overview None and no
+  templates = no Komme/Gå. Times are stored `HH:MM` (`hhmm`), shown `08.00`.
+- Permissions: guardian dashboard `report_sick` / `pickup_times` / `pickup_type`; `editable` → allowed, `readable` /
+  `deactivated` → hidden, **unknown → allowed** (Aula refuses itself; same as the package's CLI). Pickup types from the
+  config flags (`pickup`, `selfDecider`, `goHomeWith`; "sendes hjem" always).
+- Write (`server.py` `/api/presence/*`): `write_enabled` (default false) + `WriteGate` cookie `fp_write` (HMAC with the
+  person id, `unlock_minutes`, SameSite=Strict, same 5-try lockout as the private code). Every write takes
+  `runner.lock` (same Aula login as the fetch, like `ReadMarker`), waits at most `lock_wait_seconds`, then 503.
+  The child is looked up in `family.json`; its `can` flags are checked before Aula is asked.
+- `Writer`: sick → `update_presence_status([id], SICK)`; take back → PRESENT if the child was present, else
+  NOT_PRESENT. Day → reads the day's template directly from Aula and sends `update_presence_template` with its
+  `template_id` and the repeat pattern (exactly like the package's CLI). `exitWith` must be a name from Aula's pickup
+  list, relation suffix included ("Navn (Mor)"). After every write the child is fetched again; if Aula does not show
+  the change → 502 "viser den ikke endnu" and **nothing is logged**. Success patches `family.json` in place.
+- Log `secrets/presence_log.json` (0600, last 500, in DENY_NAMES/.gitignore/.dockerignore/pre-commit): who, what, when,
+  before/after. Undo = only the latest non-undone change for a child whose day hasn't passed, and only while Aula still
+  shows what we wrote (`_still_ours`; otherwise 409 – never overwrite a change made in Aula or by the institution
+  since); writes the before values back (a sick report only the same day). A day with no times before can't be rolled back (user is told to edit it).
+- Frontend: `presLine` (status today, otherwise `presPlan`), `presButton` in `.dpresrow` (lanes), `.lpresrow`
+  (phone list), `.k-pres` (kiosk, via `kDetail`, never actions). Panel = `#detail` with `presHtml` modes
+  view / edit / confirm / busy, delegated handlers on `#dBody` (`data-pa`, `data-pform`). `canWrite()` is false on the
+  kiosk and without a server. The write cookie is locked on `visibilitychange` → hidden.
+- **Only tested against a simulated Aula** (`tests/presence_fake.py`, built from the package's own models). Unverified:
+  the real response shapes, and above all how Aula treats editing one day of a repeating series via `template_id`.
 
 ## Day view heading
 

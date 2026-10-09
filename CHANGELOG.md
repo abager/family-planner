@@ -5,6 +5,21 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (Komme/Gå from Aula)
+- Each child with Komme/Gå gets a line under the name in I dag (phones: a strip above the list) and in the kiosk
+  column: today's real status ("Kom 07.52", "Syg", "Gået hjem 14.52"), otherwise the plan ("Hentes 15.30 af Mor").
+  Children whose institution has no Komme/Gå are skipped and appear by themselves once it is switched on.
+- Tapping the line opens a panel: status, planned times for the next week (with repeats and comments), vacations.
+- With `[presence] write_enabled = true` and a personal write code per adult (`FAMILIEPLAN_WRITE_CODE_<ID>`), parents
+  can report a child sick today (and take it back), change entry/exit time, pickup type, who picks up and the comment
+  for a day – just that day, weekly or every other week – and undo the latest change. Every change asks for
+  confirmation, is read back from Aula before it is reported as saved, and is logged with who made it
+  (`secrets/presence_log.json`). The kiosk only shows; it can never write.
+- Not possible (Aula/package limits): sick reports for a future day, creating vacations. Tabulex absence reporting
+  is not included yet.
+- Komme/Gå data is never sent to the language model.
+- Self-test checks the write codes when writing is on.
+
 ### Changed (messages layout)
 - Beskeder now has the same page width (1280px) and the same header (title size, date line, spacing) as the other
   sections on tablet and desktop, so nothing jumps when switching views. On phones the header stays hidden there.
