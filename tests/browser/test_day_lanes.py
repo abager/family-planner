@@ -104,3 +104,12 @@ def test_an_ipad_in_portrait_keeps_the_lanes(make_page):
     page = open_day(make_page, on(2, 10), width=820, height=1180)
     assert page.is_visible("#dayLanes .dgrid") and page.is_hidden("#dayLanes .dlist")
     assert len(lanes(page)) == 5
+
+
+def test_the_day_heading_is_gone_but_still_there_for_screen_readers(make_page):
+    page, *_ = make_page(now=dt.datetime(2026, 10, 1, 10, 0), fixed=True)
+    box = page.locator(".dayhead").bounding_box()
+    assert box["width"] <= 1 and box["height"] <= 1                    # ikke synlig …
+    assert page.locator("#dayTitle").evaluate("e => e.tagName") == "H2" and page.locator("#daySub").text_content()   # … men i strukturen
+    brief, lanes = page.locator("#todayView").bounding_box(), page.locator(".dboard").bounding_box()
+    assert lanes["y"] - brief["y"] < 400                                # indholdet starter øverst i visningen

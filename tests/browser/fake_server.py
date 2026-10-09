@@ -16,6 +16,8 @@ class FakeServer:
         self.mark_read = True
         self.problems: list[dict] = []                  # /api/status: aktuelle fejl i integrationerne
         self.running = False                            # /api/status: henter serveren lige nu?
+        self.refreshes: list[dict] = []                 # POST /api/refresh: {"full": bool, "csrf": bool}
+        self.on_refresh = None                          # kaldes ved POST /api/refresh (fx for at starte en "hentning")
         self.progress: dict = {"running": False, "parts": []}   # /api/status: fremdrift pr. datatype
         self.cal = {"enabled": True, "problem": None, "calendar_id": "family123@group.calendar.google.com", "calendar_name": "Familiekalender",
                     "default_people": ["family"], "created": {}, "dismissed": [], "applied": [], "by_source": {}}
@@ -67,6 +69,12 @@ class FakeServer:
                 return route.fulfill(status=404, body="")
             return self._json(route, {"mark_read_enabled": self.mark_read, "running": self.running, "runs": 1, "aula": "ok", "pending_reads": 0, "mark_error": None, "aula_enabled": True,
                                      "weather": self.weather_status, "problems": self.problems, "progress": self.progress})
+        if path == "/api/refresh" and m == "POST":
+            q = urlparse(req.url).query
+            self.refreshes.append({"full": "full=true" in q, "csrf": req.headers.get("x-requested-with") == "familieplan"})
+            if self.on_refresh:
+                self.on_refresh(self)
+            return self._json(route, {"ok": True, "full": "full=true" in q})
         if path == "/api/home-location":
             if m == "POST":
                 if not (54.4 <= body["lat"] <= 57.9):

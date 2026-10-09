@@ -312,10 +312,12 @@ class Client:
 
     # ----- offentligt
     def generate_json(self, system: str, prompt: str, *, validate: Callable[[dict], None] | None = None,
-                      cache_key: str | None = None, ignore_pause: bool = False, schema: dict | None = None) -> dict:
+                      cache_key: str | None = None, ignore_pause: bool = False, schema: dict | None = None,
+                      fresh: bool = False) -> dict:
         """Svaret som dict. Rejser AIUnavailable, hvis der ikke kan svares (kalderen bruger så sin reserve).
         schema: JSON-formatet, svaret skal have (Gemini overholder det; Claude styres af prompten).
-        ignore_pause: kun til selvtesten – prøv selvom en tidligere fejl har sat en pause (budgettet gælder stadig)."""
+        ignore_pause: kun til selvtesten – prøv selvom en tidligere fejl har sat en pause (budgettet gælder stadig).
+        fresh: spørg modellen igen i stedet for at bruge cachen (svaret gemmes stadig). Pause og budget gælder."""
         provider = PROVIDERS.get(self.s.provider)
         if provider is None:
             self._unavailable("ukendt_udbyder", self.s.provider)
@@ -326,7 +328,7 @@ class Client:
             self._unavailable("mangler_noegle", f"{self.s.api_key_env} indeholder ugyldige tegn (mellemrum, æøå …)")
 
         ckey = content_key(self.s.provider, self.s.model, system, cache_key or prompt)
-        hit = None if ignore_pause else self._cache_get(ckey)
+        hit = None if ignore_pause or fresh else self._cache_get(ckey)
         if hit is not None:
             log.info("AI: svar fra cache")
             return hit

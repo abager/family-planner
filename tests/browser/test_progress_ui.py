@@ -1,4 +1,4 @@
-"""Ring ved tandhjulet, mens serveren henter (samlet fremdrift), og bjælker pr. datatype i et lille vindue ved tryk."""
+"""Ring ved tandhjulet (altid til stede; under en hentning den samlede fremdrift) og bjælker pr. datatype med tid i et lille vindue ved tryk."""
 from __future__ import annotations
 
 import datetime as dt
@@ -12,8 +12,8 @@ pytestmark = pytest.mark.browser
 NOW = dt.datetime(2026, 10, 1, 10, 0).astimezone()
 
 
-def part(key, label, state="running", done=None, total=None):
-    return {"key": key, "label": label, "state": state, "done": done, "total": total}
+def part(key, label, state="running", done=None, total=None, ms=None):
+    return {"key": key, "label": label, "state": state, "done": done, "total": total, "ms": ms}
 
 
 PARTS = [part("google", "Google", "done", 2, 2), part("aula.kalender", "Aula-kalender"),
@@ -51,8 +51,8 @@ def test_a_ring_appears_next_to_the_gear_while_fetching_and_nothing_else_moves(m
     fake = fetching()
     fake.running, fake.progress = False, {"running": False, "parts": []}
     page, *_ = make_page(fake, now=NOW)
-    before = page.evaluate("[...document.querySelectorAll('header > *, main, .tabs')].map(e=>JSON.stringify(e.getBoundingClientRect()))")
-    assert ring(page) is None
+    before = page.evaluate("[...document.querySelectorAll('header > *:not(#progWrap), main, .tabs')].map(e=>JSON.stringify(e.getBoundingClientRect()))")
+    assert "idle" in ring(page)["cls"] and ring(page)["label"].startswith("Ingen hentning endnu")
     page.evaluate("state.server.running=true; state.server.progress={running:true,parts:[{key:'google',label:'Google',state:'running',done:1,total:2}]}; renderProgress()")
     r, g = page.locator("#progBtn").bounding_box(), page.locator("#menuBtn").bounding_box()
     assert r["x"] + r["width"] <= g["x"] + 1 and abs((r["y"] + r["height"] / 2) - (g["y"] + g["height"] / 2)) < 8
@@ -124,18 +124,80 @@ def test_the_open_popup_follows_the_fetch_and_closes_a_few_seconds_after_it_ends
     page.wait_for_timeout(200)
     assert bars(page)[0]["shown"] == "80 %" and page.locator("#progPop").is_visible()     # forbliver åben
     fake.running = False
-    fake.progress = {"running": False, "parts": [part("aula.messages", "Beskeder", "done", 10, 10)]}
+    fake.progress = {"running": False, "finished": NOW.isoformat(), "ms": 52300,
+                     "parts": [dict(part("aula.messages", "Beskeder", "done", 10, 10), ms=4312)]}
     page.clock.run_for(1600)
     page.wait_for_timeout(300)
-    assert "finished" in ring(page)["cls"] and bars(page)[0]["text"] == "færdig"           # ✓ et par sekunder …
+    assert "finished" in ring(page)["cls"] and bars(page)[0]["text"] == "færdig på 4,3 s"   # ✓ et par sekunder …
     page.clock.run_for(4500)
     page.wait_for_timeout(200)
-    assert ring(page) is None and page.locator("#progPop").count() == 0                    # … så er begge væk
+    assert not page.locator("#progPop").is_visible()                                       # … så lukker vinduet
+    r = ring(page)
+    assert r is not None and "idle" in r["cls"] and r["pct"] == 100                         # og ringen bliver
 
 
-def test_no_ring_when_nothing_is_being_fetched(make_page):
+def test_after_a_fetch_the_ring_stays_and_shows_the_last_fetch_with_times(make_page):
     fake = fetching()
-    fake.running, fake.progress = False, {"running": False, "parts": PARTS}
+    fake.running = False
+    fake.progress = {"running": False, "finished": "2026-10-01T09:58:00+02:00", "ms": 52300, "parts": [
+        dict(part("google", "Google", "done", 2, 2), ms=820), dict(part("aula.messages", "Beskeder", "done", 40, 40), ms=45210),
+        dict(part("aula.albums", "Billeder", "failed"), ms=900000)]}
+    page, *_ = make_page(fake, now=NOW)
+    r = ring(page)
+    assert "idle" in r["cls"] and "failed" in r["cls"] and "Seneste hentning kl. 09.58 (52,3 s)" in r["label"]
+    open_pop(page)
+    b = {x["label"]: x for x in bars(page)}
+    times = page.eval_on_selector_all("#progPop .pg .ms", "els => els.map(e => e.textContent)")
+    assert times == ["820 ms", "45,2 s", "900,0 s"]
+    assert b["Google"]["text"] == "færdig på 820 ms" and b["Billeder"]["text"] == "fejlede på 900,0 s"
+    assert "Seneste hentning kl. 09.58 · 52,3 s" in page.inner_text("#progPop .progtitle")
+
+
+def test_times_are_only_shown_for_finished_or_failed_parts(make_page):
+    page, *_ = make_page(fetching([dict(part("aula.messages", "Beskeder", "running", 5, 10), ms=None),
+                                   dict(part("google", "Google", "done", 1, 1), ms=300)]), now=NOW)
+    open_pop(page)
+    assert page.eval_on_selector_all("#progPop .pg .ms", "els => els.map(e => e.textContent)") == ["300 ms"]
+
+
+def test_without_any_fetch_yet_the_popup_says_so(make_page):
+    fake = fetching()
+    fake.running, fake.progress = False, {"running": False, "parts": []}
+    page, *_ = make_page(fake, now=NOW)
+    open_pop(page)
+    assert "ikke hentet data" in page.inner_text("#progPop")
+
+
+def test_the_full_fetch_button_starts_a_full_fetch_and_the_popup_follows_it(make_page):
+    fake = fetching()
+    fake.running = False
+    fake.progress = {"running": False, "finished": NOW.isoformat(), "ms": 1000, "parts": [dict(part("google", "Google", "done", 1, 1), ms=500)]}
+
+    def start(f):
+        f.running = True
+        f.progress = {"running": True, "parts": [part("google", "Google", "running", 0, 1), part("aula.messages", "Beskeder")]}
+    fake.on_refresh = start
+    page, *_ = make_page(fake, now=NOW)
+    open_pop(page)
+    btn = page.locator("#progFull")
+    assert btn.inner_text() == "Tving fuld hentning" and btn.is_enabled()
+    btn.click()
+    page.clock.run_for(600)
+    page.wait_for_timeout(300)
+    assert fake.refreshes == [{"full": True, "csrf": True}]
+    assert page.locator("#progPop").is_visible() and [b["label"] for b in bars(page)] == ["Google", "Beskeder"]
+    assert not page.locator("#progFull").is_enabled() and page.locator("#progFull").inner_text() == "Henter …"
+
+
+def test_the_full_fetch_button_is_disabled_while_fetching(make_page):
+    page, *_ = make_page(fetching(), now=NOW)
+    open_pop(page)
+    assert not page.locator("#progFull").is_enabled()
+
+
+def test_no_ring_without_a_server(make_page):
+    fake = fetching()
+    fake.server = False
     page, *_ = make_page(fake, now=NOW)
     assert ring(page) is None
 

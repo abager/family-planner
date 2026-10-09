@@ -414,7 +414,7 @@ def make_briefing(cfg: dict, data: dict, mode: str = "day", now: dt.datetime | N
     try:
         result = client.generate_json(SYSTEM, messages[0]["content"], schema=SCHEMA,
                                       validate=lambda r: validate_narrative(r, digest["_refs"], data_text, mode),
-                                      cache_key="|".join([fingerprint, mode, headline, *period]))
+                                      cache_key="|".join([fingerprint, mode, headline, *period]), fresh=force)
     except ai.AIUnavailable as e:
         why = why_unavailable(e, client)
         problems.report(pkey, "ai", f"{what} er lavet uden AI" if not old_ai else f"{what} kunne ikke opdateres med AI",

@@ -184,11 +184,13 @@ class Runner:
         self.sf = ops.StateFile(self.out_dir / "server_state.json")
         self.wake = asyncio.Event()
         self.interactive_next = False
+        self.full_next = False                     # "Tving fuld hentning": dyb kontrol af beskeder + nyt AI-overblik
         self.error_backoff = 5.0
         self.lock = asyncio.Lock()
 
-    def trigger(self, interactive: bool = False) -> None:
+    def trigger(self, interactive: bool = False, full: bool = False) -> None:
         self.interactive_next = self.interactive_next or interactive
+        self.full_next = self.full_next or full
         self.wake.set()
 
     def wait_seconds(self, now: datetime | None = None) -> float:
@@ -210,13 +212,14 @@ class Runner:
             except asyncio.TimeoutError:
                 pass
             interactive, self.interactive_next = self.interactive_next, False
+            full, self.full_next = self.full_next, False
             self.wake.clear()
-            await self.safe_run(interactive)
+            await self.safe_run(interactive, full)
 
-    async def safe_run(self, interactive: bool = False) -> None:
+    async def safe_run(self, interactive: bool = False, full: bool = False) -> None:
         """En uventet fejl må aldrig slå planlæggeren ihjel: log den, vis den i status, og kør videre ved næste tur."""
         try:
-            await self.run(interactive)
+            await (self.run(interactive, full=True) if full else self.run(interactive))
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
@@ -227,7 +230,7 @@ class Runner:
             self.hooks.interactive = False
             await asyncio.sleep(self.error_backoff)
 
-    async def run(self, interactive: bool = False) -> None:
+    async def run(self, interactive: bool = False, full: bool = False) -> None:
         async with self.lock:
             st = self.state
             before = st.aula                       # tilstanden FØR kørslen – hooks ændrer den undervejs
@@ -236,7 +239,9 @@ class Runner:
             st.login = State.idle_login()
             timeout = self.s.login_timeout if interactive else self.s.run_timeout
             try:
-                res = await asyncio.wait_for(fetch_family.run_once(self.cfg, self.s.use_aula), timeout)
+                fetch = (fetch_family.run_once(self.cfg, self.s.use_aula, full=True) if full
+                         else fetch_family.run_once(self.cfg, self.s.use_aula))
+                res = await asyncio.wait_for(fetch, timeout)
                 st.last_success = now_iso()
             except asyncio.TimeoutError:
                 waited_for_login = st.login["active"]
@@ -703,9 +708,10 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         return {"messages": pgate.messages(), "expires_in": pgate.remaining(request.cookies.get(PRIV_COOKIE))}
 
     @app.post("/api/refresh")
-    async def refresh():
-        runner.trigger(interactive=False)
-        return {"ok": True}
+    async def refresh(full: bool = False):
+        """Hent nu. full=true ("Tving fuld hentning" i appen): dyb kontrol af alle beskedtråde og nyt AI-overblik."""
+        runner.trigger(interactive=False, full=full)
+        return {"ok": True, "full": full}
 
     # ----- hjemmets placering til vejret (sættes én gang med knappen i indstillinger)
     @app.get("/api/home-location")

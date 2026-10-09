@@ -1495,8 +1495,10 @@ def _progress_parts(cfg: dict, use_aula: bool) -> list[str]:
     return keys
 
 
-async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
-    """Én hentning. Returnerer status til serveren: {"aula": skipped|ok|login_required|error, "error": str|None, "counts": {...}}."""
+async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = False) -> dict:
+    """Én hentning. Returnerer status til serveren: {"aula": skipped|ok|login_required|error, "error": str|None, "counts": {...}}.
+    full=True (knappen "Tving fuld hentning"): dyb kontrol af alle beskedtråde og nyt AI-overblik, uanset hvornår det
+    sidst blev lavet (AI'ens pause og dagsbudget gælder stadig)."""
     people = People(cfg["people"])
     now = dt.datetime.now(TZ)
     t_cycle = time.perf_counter()
@@ -1526,7 +1528,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
             if private_mod.enabled(cfg):                 # private tråde ligger ikke i family.json – hent dem frem, så de ikke hentes forfra
                 prev_msgs = private_mod.hydrate(prev_msgs, private_mod.store_path(cfg))
             aula = await fetch_aula(cfg, people, start, end, Path("aula_dump.json") if dump else None, previous_messages=prev_msgs,
-                                    full_sweep=_full_sweep_due(last_sweep, now, cfg["aula"]))
+                                    full_sweep=full or _full_sweep_due(last_sweep, now, cfg["aula"]))
             sweep_done = bool((aula.get("meta") or {}).get("full_sweep_done"))
             events += aula["events"]
             for k in extra_keys:
@@ -1622,10 +1624,10 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False) -> dict:
         import briefing
         if briefing.assistant_mode(acfg) != "off":
             progress.begin("overblik", 2)
-            briefing.make_briefing(cfg, data, "day")
+            briefing.make_briefing(cfg, data, "day", force=full)
             progress.step("overblik", 1)
             wk = {**cfg, "assistant": {**acfg, "min_minutes_between": acfg.get("week_min_minutes_between", 360)}}
-            briefing.make_briefing(wk, data, "week")
+            briefing.make_briefing(wk, data, "week", force=full)
             progress.finish("overblik")
     except SystemExit as e:
         log.warning("Overblik springes over: %s", e)

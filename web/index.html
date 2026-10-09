@@ -109,6 +109,8 @@ header{position:relative}
 .progring .track{fill:none;stroke:color-mix(in srgb,var(--ink) 14%,transparent);stroke-width:3}
 .progring .val{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .5s ease}
 .progring.failed{color:var(--warn)}
+.progring.idle{color:var(--muted)}
+.progring.idle.failed{color:var(--warn)}
 .progring .tick{display:none}
 .progring.finished svg{display:none}
 .progring.finished .tick{display:block;font-weight:800;font-size:1rem}
@@ -117,6 +119,10 @@ header{position:relative}
 .progpop .prog{flex-direction:column;align-items:stretch;gap:6px;margin:0}
 .progpop .pg{justify-content:space-between;font-size:.8rem}
 .progpop .pg .bar{width:90px;margin-left:auto}
+.progpop .pg .ms{min-width:4.2em;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-weight:400}
+.progpop .progempty{margin:0;font-size:.8rem;color:var(--muted)}
+.progpop .progfull{margin-top:10px;width:100%;justify-content:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-weight:600;color:var(--ink)}
+.progpop .progfull:disabled{color:var(--muted);cursor:default}
 body.kiosk #progWrap{display:none}
 .prog{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:flex-end;margin-top:6px}
 .pg{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted);white-space:nowrap}
@@ -815,7 +821,7 @@ button,a,.chip,.pill{touch-action:manipulation}
 
   <main id="main">
   <section id="todayView" class="today">
-    <div class="dayhead"><h2 id="dayTitle">I dag</h2><span class="dsub" id="daySub"></span></div>
+    <div class="dayhead sronly"><h2 id="dayTitle">I dag</h2><span class="dsub" id="daySub"></span></div><!-- kun for skærmlæsere: overblikkets overskrift viser dagen -->
     <div class="panel brief hidden" id="briefDay"></div>
     <div class="dboard">
       <div class="dlanes" id="dayLanes" aria-labelledby="dayTitle"></div>
@@ -1206,49 +1212,71 @@ async function watchRun(){
   } finally { runWatch=false; }
   await load();
 }
-// ---- Ring ved tandhjulet, mens serveren henter: samlet fremdrift (vægtet med delenes egne procenter).
-// Tryk viser bjælkerne pr. datatype. Efter hentningen: ✓ (eller rød ved fejl) i et par sekunder, så forsvinder den
-// – og et åbent vindue lukker med den.
+// ---- Ring ved tandhjulet: altid til stede (når appen kører på serveren). Under en hentning fyldes den med den samlede
+// fremdrift (vægtet med delenes egne procenter); bagefter ✓ i et par sekunder og så en rolig, fuld ring – rød, hvis
+// noget fejlede. Tryk viser bjælkerne pr. datatype med tiden for hver del (seneste hentning, når der ikke hentes).
 const PROG_LINGER=4000, RING_C=2*Math.PI*8;
-let progShownUntil=0, progWasRunning=false, progTimer=null, progOpen=false;
+let progShownUntil=0, progWasRunning=false, progTimer=null, progOpen=false, progAutoClose=false;
 function progOverall(parts){
   if(!parts.length) return 0;
   const v=p=> p.state==="done"||p.state==="failed" ? 1 : p.state==="waiting" ? 0 : p.total>0 ? Math.min(1,p.done/p.total) : 0.5;
   return parts.reduce((a,p)=>a+v(p),0)/parts.length;
 }
+const fmtMs = ms => ms==null ? "" : ms<1000 ? `${Math.round(ms)} ms` : `${(ms/1000).toFixed(1).replace(".",",")} s`;
 function renderProgress(){
   const wrap=document.getElementById("progWrap"); if(!wrap) return;
-  const pr=state.server?.progress, running=!!(state.server?.running || pr?.running), now=Date.now();
-  if(progWasRunning && !running){ progShownUntil=now+PROG_LINGER; clearTimeout(progTimer); progTimer=setTimeout(renderProgress, PROG_LINGER+50); }
+  if(!state.server){ wrap.innerHTML=""; progOpen=false; return; }        // uden server (statisk brug): ingen ring
+  const pr=state.server.progress, running=!!(state.server.running || pr?.running), now=Date.now();
+  if(progWasRunning && !running){
+    progShownUntil=now+PROG_LINGER; progAutoClose=progOpen;            // var vinduet åbent under hentningen, lukker det
+    clearTimeout(progTimer); progTimer=setTimeout(()=>{ if(progAutoClose){ progOpen=false; progAutoClose=false; } renderProgress(); }, PROG_LINGER+50);
+  }
   progWasRunning=running;
-  const parts=pr?.parts||[];
-  if(!parts.length || (!running && now>progShownUntil)){ wrap.innerHTML=""; progOpen=false; return; }
-  const pct=Math.round(100*(running ? progOverall(parts) : 1)), failed=parts.some(p=>p.state==="failed");
-  const label=running ? `Henter data – ${pct} %${failed?", noget fejlede":""}` : (failed ? "Hentning færdig – noget fejlede" : "Hentning færdig");
-  const cls=["progring", failed?"failed":"", running?"":"finished"].join(" ");
+  const parts=pr?.parts||[], failed=parts.some(p=>p.state==="failed"), justDone=!running && now<=progShownUntil;
+  const pct=Math.round(100*(running ? progOverall(parts) : parts.length ? 1 : 0));
+  const last=pr?.finished ? `kl. ${hm(new Date(pr.finished))}` : "";
+  const label=running ? `Henter data – ${pct} %${failed?", noget fejlede":""}`
+    : !parts.length ? "Ingen hentning endnu"
+    : `Seneste hentning ${last}${pr?.ms!=null?` (${fmtMs(pr.ms)})`:""}${failed?" – noget fejlede":""}`;
+  const cls=["progring", failed?"failed":"", running?"":justDone?"finished":"idle"].join(" ").replace(/ +/g," ").trim();
+  const title=running ? `Henter data · ${pct} %` : !parts.length ? "Ingen hentning endnu" : `Seneste hentning ${last}${pr?.ms!=null?` · ${fmtMs(pr.ms)}`:""}`;
   wrap.innerHTML=`<button type="button" class="${cls}" id="progBtn" aria-label="${label} – vis detaljer" title="${label}" aria-expanded="${progOpen}" aria-controls="progPop">`
     + `<svg viewBox="0 0 20 20" aria-hidden="true"><circle class="track" cx="10" cy="10" r="8"/>`
     + `<circle class="val" cx="10" cy="10" r="8" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${(RING_C*(1-pct/100)).toFixed(2)}"/></svg>`
     + `<span class="tick" aria-hidden="true">${failed?"!":"✓"}</span></button>`
-    + `<div class="menu progpop" id="progPop"${progOpen?"":" hidden"}><p class="progtitle">${running?`Henter data · ${pct} %`:"Hentning færdig"}</p>`
-    + `<div class="prog" role="group" aria-label="${running?"Henter data":"Hentning færdig"}">${parts.map(progItem).join("")}</div></div>`;
+    + `<div class="menu progpop" id="progPop"${progOpen?"":" hidden"}><p class="progtitle">${esc(title)}</p>`
+    + (parts.length ? `<div class="prog" role="group" aria-label="${running?"Henter data":"Seneste hentning"}">${parts.map(progItem).join("")}</div>`
+                    : `<p class="progempty">Serveren har ikke hentet data, siden den blev startet.</p>`)
+    + `<button type="button" class="srvbtn progfull" id="progFull"${running?" disabled":""} title="Henter alt nu: alle beskedtråde og et nyt AI-overblik">`
+    + `${running?"Henter …":"Tving fuld hentning"}</button></div>`;
+  document.getElementById("progFull").addEventListener("click", forceFullFetch);
   document.getElementById("progBtn").addEventListener("click", e=>{
-    e.stopPropagation(); progOpen=!progOpen;
+    e.stopPropagation(); progOpen=!progOpen; progAutoClose=false;
     document.getElementById("progPop").hidden=!progOpen; e.currentTarget.setAttribute("aria-expanded",String(progOpen));
   });
+}
+// "Tving fuld hentning": vinduet forbliver åbent, og bjælkerne og tiderne følger hentningen
+async function forceFullFetch(){
+  const b=document.getElementById("progFull"); if(b){ b.disabled=true; b.textContent="Starter …"; }
+  progOpen=true; progAutoClose=false;
+  try{ await fetch("api/refresh?full=true",{method:"POST",headers:{"X-Requested-With":"familieplan"}}); }catch{}
+  for(let i=0;i<10 && !state.server?.running;i++){ await new Promise(r=>setTimeout(r,500)); await loadServer(); }
+  renderProgress(); watchRun();
 }
 document.addEventListener("pointerdown",e=>{ if(progOpen && !e.target.closest?.("#progWrap")){ progOpen=false; renderProgress(); } });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && progOpen){ progOpen=false; renderProgress(); document.getElementById("progBtn")?.focus(); } });
 function progItem(p){
   const known=p.state==="running" && p.total>0, pct=known ? Math.round(100*p.done/p.total) : null;
   const cls=p.state==="failed"?"failed":p.state==="done"?"done":p.state==="waiting"?"wait":known?"":"ind";
-  const text=p.state==="failed"?"fejlede":p.state==="done"?"færdig":p.state==="waiting"?"venter":known?`${p.done} af ${p.total}`:"henter …";
+  const took=(p.state==="done"||p.state==="failed") && p.ms!=null ? ` på ${fmtMs(p.ms)}` : "";
+  const text=(p.state==="failed"?"fejlede":p.state==="done"?"færdig":p.state==="waiting"?"venter":known?`${p.done} af ${p.total}`:"henter …")+took;
   const shown=p.state==="failed"?"fejlede":p.state==="done"?"✓":known?`${pct} %`:p.state==="waiting"?"":"…";
   const val=p.state==="done"?100:known?pct:p.state==="waiting"?0:null;
   return `<span class="pg ${cls}" role="progressbar" aria-label="${esc(p.label)}" aria-valuemin="0" aria-valuemax="100"`
     + (val!==null?` aria-valuenow="${val}"`:"") + ` aria-valuetext="${esc(text)}" title="${esc(p.label)}: ${esc(text)}">`
     + `${esc(p.label)}<span class="bar"><span class="fill"${known?` style="width:${pct}%"`:""}></span></span>`
-    + `<span class="pct" aria-hidden="true">${shown}</span></span>`;
+    + `<span class="pct" aria-hidden="true">${shown}</span>`
+    + ((p.state==="done"||p.state==="failed") && p.ms!=null ? `<span class="ms">${fmtMs(p.ms)}</span>` : "") + `</span>`;
 }
 // Vejret (MET Norway) for en dag, hvis prognosen dækker den. Kun det grove resumé – placeringen er aldrig i family.json.
 function weatherFor(day){ return (state.data?.weather?.dage||[]).find(d=>d.dato===ymd(day)) || null; }
