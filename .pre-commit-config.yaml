@@ -45,6 +45,7 @@ repos:
             .*home_location\.json|
             .*weather_cache\.json|
             .*private_messages\.json|
+            .*presence_log\.json|
             .*aula_tokens\.json|
             .*google_service_account\.json|
             .*session\.key|

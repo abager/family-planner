@@ -87,15 +87,38 @@ def check_access(settings) -> list[Result]:
     code = settings.private_code
     out.append(Result(OK if len(code) >= 4 else WARN, "Kode til private samtaler", "sat" if len(code) >= 4 else "ikke sat – private samtaler kan ikke åbnes i appen",
                       "" if len(code) >= 4 else "Sæt FAMILIEPLAN_PRIVATE_CODE (mindst 4 tegn, helst en anden end adgangskoden) – " + WHERE.format(env="FAMILIEPLAN_PRIVATE_CODE")))
+    out += check_write_codes(settings, pw, code)
     out.append(Result(OK if settings.public_url else WARN, "Offentlig adresse", settings.public_url or "ikke sat",
                       "" if settings.public_url else "Uden server.public_url kan push-beskeder ikke åbne appen ved et tryk."))
+    return out
+
+
+def check_write_codes(settings, password: str = "", private_code: str = "") -> list[Result]:
+    """Komme/Gå-skrivekoder: kun relevant, når skrivning er slået til. Én pr. voksen, mindst 4 tegn, alle forskellige."""
+    if not settings.presence.get("write_enabled"):
+        return [Result(OK, "Komme/Gå-skrivning", "slået fra ([presence] write_enabled = false)")]
+    import server
+    codes = settings.write_codes
+    missing = [who for who, c in codes.items() if len(c) < 4]
+    given = [c for c in codes.values() if len(c) >= 4]
+    clash = len(set(given)) < len(given) or any(c in (password, private_code) for c in given if c)
+    if not given:
+        return [Result(FAIL, "Komme/Gå-skrivekoder", "ingen sat – ingen kan ændre noget",
+                       "Sæt " + ", ".join(server.write_code_env(w) for w in codes) + " (mindst 4 tegn hver) – "
+                       + WHERE.format(env=server.write_code_env(next(iter(codes), "navn"))))]
+    out = [Result(WARN if missing else OK, "Komme/Gå-skrivekoder",
+                  f"sat for {len(given)} voksne" + (f" – mangler for {', '.join(missing)}" if missing else ""),
+                  ("Sæt " + ", ".join(server.write_code_env(w) for w in missing) + " (mindst 4 tegn).") if missing else "")]
+    if clash:
+        out.append(Result(FAIL, "Komme/Gå-skrivekoder", "to koder er ens, eller en kode er den samme som adgangskoden/koden til private samtaler",
+                          "Giv hver voksen sin egen kode – ellers kan loggen ikke se, hvem der ændrede hvad."))
     return out
 
 
 def check_permissions(cfg: dict) -> list[Result]:
     if os.name != "posix":
         return []
-    files = [Path(cfg.get("aula", {}).get("token_file", "secrets/aula_tokens.json")), private_mod.store_path(cfg), private_mod.store_path(cfg).parent / "ai_last_invalid.json", Path(cfg.get("calendar_write", {}).get("service_account_file", "secrets/google_service_account.json"))]
+    files = [Path(cfg.get("aula", {}).get("token_file", "secrets/aula_tokens.json")), private_mod.store_path(cfg), private_mod.store_path(cfg).parent / "ai_last_invalid.json", private_mod.store_path(cfg).parent / "presence_log.json", Path(cfg.get("calendar_write", {}).get("service_account_file", "secrets/google_service_account.json"))]
     loose = [str(f) for f in files if f.exists() and f.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO)]
     return [Result(WARN if loose else OK, "Rettigheder på nøglefiler", "for åbne: " + ", ".join(loose) if loose else "kun ejeren kan læse dem",
                    "Kør: chmod 600 " + " ".join(loose) if loose else "")]

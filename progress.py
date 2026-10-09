@@ -23,6 +23,7 @@ LABELS = {
     "aula.posts": "Opslag",
     "aula.messages": "Beskeder",
     "aula.albums": "Billeder",
+    "aula.presence": "Komme/Gå",
     "kalenderforslag": "Kalenderforslag",
     "vejr": "Vejr",
     "overblik": "Overblik",

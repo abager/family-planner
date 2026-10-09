@@ -34,6 +34,7 @@ import private as private_mod
 import problems
 import progress
 import messages as msg_analysis
+import presence as presence_mod
 import schedule
 import suggestions as sugg_store
 
@@ -529,14 +530,15 @@ async def open_aula_client(cfg: dict):
     )
 
 
-PART_LABELS = {"tasks": "opgaver", "weekplan": "ugeplanen", "posts": "opslag", "messages": "beskeder", "albums": "billeder"}
+PART_LABELS = {"tasks": "opgaver", "weekplan": "ugeplanen", "posts": "opslag", "messages": "beskeder", "albums": "billeder",
+               "presence": "komme/gå"}
 
 
 async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, dump_path: Path | None = None,
                      previous_messages: list[dict] | None = None, full_sweep: bool = True) -> dict:
     acfg = cfg["aula"]
     events: list[dict] = []
-    result: dict = {"tasks": [], "weekplan": [], "posts": [], "messages": [], "albums": []}
+    result: dict = {"tasks": [], "weekplan": [], "posts": [], "messages": [], "albums": [], "presence": []}
     meta = {"full_sweep_done": False}
     timings: dict[str, float] = {}
     t_start = time.perf_counter()
@@ -634,6 +636,9 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
             ("messages", acfg.get("fetch_messages", True),
              lambda: _fetch_messages(client, people, acfg, media, previous_messages, full_sweep=full_sweep, report=msg_report)),
             ("albums", acfg.get("fetch_gallery", True), lambda: _fetch_gallery(client, profile, owner, people, acfg, media)),
+            ("presence", presence_mod.settings(cfg)["enabled"],
+             lambda: presence_mod.fetch(client, profile, owner,      # kun profile.children bruges
+                                        dt.datetime.now(TZ).date(), presence_mod.settings(cfg)["days_ahead"])),
         ]
         part_timeout = float(acfg.get("part_timeout", 900))
         for key, enabled, _fn in extras:
@@ -1497,6 +1502,8 @@ def _progress_parts(cfg: dict, use_aula: bool) -> list[str]:
         keys.append("aula.kalender")
         keys += [f"aula.{k}" for k, flag in (("tasks", "fetch_tasks"), ("weekplan", "fetch_weekplan"), ("posts", "fetch_posts"),
                                              ("messages", "fetch_messages"), ("albums", "fetch_gallery")) if acfg.get(flag, True)]
+        if presence_mod.settings(cfg)["enabled"]:
+            keys.append("aula.presence")
     if cfg.get("suggestions", {}).get("enabled", True):
         keys.append("kalenderforslag")
     try:
@@ -1533,7 +1540,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
         kept = [e for e in previous.get("events", []) if e.get("source") == "google" and e.get("calendar") == name and not str(e.get("id", "")).startswith("gc:")]
         events += kept
         log.warning("Beholder %d aftaler fra Google-kalenderen «%s» fra forrige kørsel", len(kept), name)
-    extra_keys = ("tasks", "weekplan", "posts", "messages", "albums")
+    extra_keys = ("tasks", "weekplan", "posts", "messages", "albums", "presence")
     extra = {k: previous.get(k, []) for k in extra_keys}
     aula_state, aula_error = "skipped", None
     last_sweep = previous.get("health", {}).get("aula", {}).get("last_full_sweep")
@@ -1614,6 +1621,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
         "posts": extra["posts"],
         "messages": (private_mod.protect(extra["messages"], private_mod.store_path(cfg)) if private_mod.enabled(cfg) else extra["messages"]),
         "albums": extra["albums"],
+        "presence": extra["presence"],          # Komme/Gå pr. barn (presence.py) – aldrig sendt til sprogmodellen
         "suggestions": suggestions_list,
         "health": health,
         "weather": weather_data,

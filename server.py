@@ -42,6 +42,7 @@ from fastapi.staticfiles import StaticFiles
 
 import fetch_family
 import ops
+import presence as presence_mod
 import private as private_mod
 import problems
 import progress
@@ -51,11 +52,12 @@ TZ = ZoneInfo("Europe/Copenhagen")
 APP_WEB = Path(__file__).resolve().parent / "web"
 COOKIE = "fp_session"
 PRIV_COOKIE = "fp_private"
+WRITE_COOKIE = "fp_write"
 # Filer med personlige data eller nøgler må aldrig udleveres af den statiske del – uanset hvor datamappen ligger
 DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json",
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json", "ai_last_invalid.json",
-              "home_location.json", "weather_cache.json",
+              "home_location.json", "weather_cache.json", "presence_log.json",
 }
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
@@ -92,6 +94,14 @@ class Settings:
         self.stale_hours = float(s.get("stale_alert_hours", 4))     # 0 = slå tilsynet fra
         self.private_code = os.environ.get("FAMILIEPLAN_PRIVATE_CODE", "")
         self.private_minutes = float(s.get("private_unlock_minutes", 10))
+        # Skrivekoder til Komme/Gå: én pr. voksen (FAMILIEPLAN_WRITE_CODE_ANDREAS …), så loggen ved, hvem der ændrede hvad
+        self.write_codes = {p["id"]: os.environ.get(write_code_env(p["id"]), "") for p in cfg.get("people", [])
+                            if p.get("role") == "adult"}
+        self.presence = presence_mod.settings(cfg)
+
+
+def write_code_env(person_id: str) -> str:
+    return "FAMILIEPLAN_WRITE_CODE_" + re.sub(r"[^A-Z0-9]", "_", person_id.upper())
 
 
 in_night = ops.in_night
@@ -450,6 +460,48 @@ class PrivateGate:
         return os.path.basename(url_path) in self._names
 
 
+class WriteGate:
+    """Skrivekoder til Komme/Gå: én pr. voksen. Oplåsningen udløber efter få minutter og husker, hvem der låste op.
+
+    Kioskvisningen er kun en visning i browseren – det er koden, der beskytter. Uden en gyldig skrive-cookie afviser
+    serveren enhver ændring, uanset hvilken enhed der spørger."""
+
+    def __init__(self, codes: dict[str, str], secret: bytes, minutes: float, names: dict[str, str]):
+        self.codes = {who: c for who, c in codes.items() if len(c) >= 4}
+        self.minutes, self.names = minutes, names
+        material = b"".join(f"{w}={hashlib.sha256(c.encode()).hexdigest()};".encode() for w, c in sorted(self.codes.items()))
+        self.key = hmac.new(secret, b"write:" + material, hashlib.sha256).digest()   # skiftes en kode, udløber alle oplåsninger
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.codes)
+
+    def token(self, who: str) -> str:
+        exp = int(time.time() + self.minutes * 60)
+        msg = f"{exp}.{who}"
+        return f"{msg}.{hmac.new(self.key, msg.encode(), hashlib.sha256).hexdigest()}"
+
+    def who(self, token: str | None) -> str | None:
+        try:
+            exp, who, sig = (token or "").split(".", 2)
+            ok = hmac.compare_digest(sig, hmac.new(self.key, f"{exp}.{who}".encode(), hashlib.sha256).hexdigest())
+            return who if ok and who in self.codes and int(exp) > time.time() else None
+        except ValueError:
+            return None
+
+    def remaining(self, token: str | None) -> int:
+        return max(0, int((token or "0").split(".", 1)[0]) - int(time.time())) if self.who(token) else 0
+
+    def check_code(self, given: str) -> str | None:
+        """Hvis kode det er (person-id), eller None. Sammenligner alle koder, så svartiden ikke afslører noget."""
+        hit = None
+        g = hashlib.sha256(given.encode()).digest()
+        for who, code in self.codes.items():
+            if hmac.compare_digest(g, hashlib.sha256(code.encode()).digest()):
+                hit = who
+        return hit
+
+
 class Guard:
     def __init__(self, password: str, secret: bytes, settings: Settings, no_auth: bool):
         self.password, self.no_auth, self.s = password, no_auth, settings
@@ -556,6 +608,10 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
     runner = Runner(cfg, settings, state, hooks)
     guard = Guard(password, secret, settings, no_auth)
     pgate = PrivateGate(settings.private_code, secret, settings.private_minutes, private_mod.store_path(cfg))
+    wgate = WriteGate(settings.write_codes, secret, settings.presence["unlock_minutes"],
+                      {p["id"]: p.get("name", p["id"]) for p in cfg.get("people", [])})
+    changelog = presence_mod.ChangeLog(presence_mod.log_path(cfg))
+    people_obj = fetch_family.People(cfg.get("people", []))
     out_dir = Path(cfg.get("output", "web/family.json")).resolve().parent
     (out_dir / "media").mkdir(parents=True, exist_ok=True)
     marker = ReadMarker(cfg, settings, state, runner, out_dir)
@@ -706,6 +762,123 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         if not pgate.valid(request.cookies.get(PRIV_COOKIE)):
             return JSONResponse({"error": "locked"}, status_code=403)
         return {"messages": pgate.messages(), "expires_in": pgate.remaining(request.cookies.get(PRIV_COOKIE))}
+
+    # ----- Komme/Gå: skrivning kræver write_enabled + en personlig skrivekode (aldrig fra kiosken)
+    def _write_status(request: Request) -> dict:
+        tok = request.cookies.get(WRITE_COOKIE)
+        who = wgate.who(tok)
+        return {"enabled": settings.presence["write_enabled"] and settings.use_aula, "configured": wgate.configured,
+                "unlocked": bool(who), "who": who, "whoName": wgate.names.get(who) if who else None,
+                "expires_in": wgate.remaining(tok)}
+
+    @app.get("/api/presence/write/status")
+    async def presence_write_status(request: Request):
+        return _write_status(request)
+
+    @app.post("/api/presence/write/unlock")
+    async def presence_write_unlock(request: Request):
+        if not wgate.configured:
+            return JSONResponse({"error": "Der er ikke sat skrivekoder på serveren (FAMILIEPLAN_WRITE_CODE_<NAVN>, mindst 4 tegn)."}, status_code=400)
+        ip = "write:" + (request.client.host if request.client else "?")
+        if guard.blocked(ip):
+            return JSONResponse({"error": "For mange forsøg. Vent et par minutter."}, status_code=429)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        who = wgate.check_code(str(body.get("code", "")) if isinstance(body, dict) else "")
+        if not who:
+            guard.failed(ip)
+            log.warning("Forkert skrivekode til Komme/Gå fra %s", ip)
+            return JSONResponse({"error": "Forkert kode."}, status_code=403)
+        log.info("Komme/Gå låst op til skrivning af %s", who)
+        resp = JSONResponse({"unlocked": True, "who": who, "whoName": wgate.names.get(who), "expires_in": int(wgate.minutes * 60)})
+        resp.set_cookie(WRITE_COOKIE, wgate.token(who), max_age=int(wgate.minutes * 60), httponly=True, samesite="strict",
+                        secure=request.url.scheme == "https")
+        return resp
+
+    @app.post("/api/presence/write/lock")
+    async def presence_write_lock():
+        resp = JSONResponse({"unlocked": False})
+        resp.delete_cookie(WRITE_COOKIE)
+        return resp
+
+    @app.get("/api/presence/log")
+    async def presence_log(request: Request, person: str | None = None):
+        if not wgate.who(request.cookies.get(WRITE_COOKIE)):
+            return JSONResponse({"error": "locked"}, status_code=403)
+        rows = changelog.recent(person, 10)
+        undo = changelog.last_undoable(person, datetime.now(TZ).date()) if person else None
+        return {"log": [{**{k: r.get(k) for k in ("id", "at", "date", "action", "text", "person", "undone")},
+                         "by": r.get("by"), "byName": wgate.names.get(r.get("by"), r.get("by"))} for r in rows],
+                "undo": ({"id": undo["id"], "text": undo.get("text"), "at": undo.get("at"),
+                          "byName": wgate.names.get(undo.get("by"), undo.get("by"))} if undo else None)}
+
+    def _family() -> dict:
+        try:
+            return json.loads((out_dir / "family.json").read_text("utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    async def _presence_write(request: Request, action):
+        """Fælles ramme for alle skrivninger: tjek adgang, find barnet, brug Aula-loginet alene, læs tilbage, log."""
+        if not (settings.presence["write_enabled"] and settings.use_aula):
+            return JSONResponse({"error": "Ændringer i Komme/Gå er slået fra ([presence] write_enabled)."}, status_code=403)
+        who = wgate.who(request.cookies.get(WRITE_COOKIE))
+        if not who:
+            return JSONResponse({"error": "Skriv din kode for at ændre Komme/Gå.", "locked": True}, status_code=403)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Ugyldig forespørgsel."}, status_code=400)
+        person = str(body.get("person", ""))
+        child = next((c for c in _family().get("presence", []) if c.get("person") == person), None)
+        if child is None:
+            return JSONResponse({"error": "Barnet har ikke Komme/Gå."}, status_code=404)
+        try:
+            await asyncio.wait_for(runner.lock.acquire(), settings.presence.get("lock_wait_seconds", 60))
+        except asyncio.TimeoutError:
+            return JSONResponse({"error": "Appen henter fra Aula lige nu. Prøv igen om lidt."}, status_code=503)
+        try:
+            fetch_family.auth_hooks.interactive = False
+            async with await fetch_family.open_aula_client(cfg) as client:
+                writer = presence_mod.Writer(client, changelog, settings.presence["days_ahead"], settings.presence["edit_days_ahead"])
+                child_id = await writer.child_id(person, people_obj)
+                fresh, row = await action(writer, child_id, person, body, child, who, datetime.now(TZ))
+        except presence_mod.PresenceError as e:
+            log.warning("Komme/Gå-ændring afvist for %s (%s): %s", person, who, e.message)
+            return JSONResponse({"error": e.message}, status_code=e.status)
+        except fetch_family.LoginRequired:
+            return JSONResponse({"error": "Aula-login er udløbet. Log ind med MitID og prøv igen.", "action": "auth"}, status_code=409)
+        except Exception as e:  # noqa: BLE001 – Aulas egen fejl vises (renset), aldrig en stak
+            log.warning("Komme/Gå-ændring fejlede for %s: %s: %s", person, type(e).__name__, problems.scrub(str(e)))
+            return JSONResponse({"error": f"Aula afviste ændringen: {problems.scrub(str(e))[:200] or type(e).__name__}"}, status_code=502)
+        finally:
+            runner.lock.release()
+        if fresh:
+            presence_mod.patch_family(out_dir / "family.json", fresh)
+        log.info("Komme/Gå: %s ændrede %s (%s): %s", who, person, row.get("action"), row.get("text"))
+        return {"ok": True, "child": fresh, "text": row.get("text")}
+
+    @app.post("/api/presence/sick")
+    async def presence_sick(request: Request):
+        async def act(w, cid, person, body, child, who, now):
+            return await w.set_sick(cid, person, bool(body.get("sick", True)), who, now, child)
+        return await _presence_write(request, act)
+
+    @app.post("/api/presence/day")
+    async def presence_day(request: Request):
+        async def act(w, cid, person, body, child, who, now):
+            return await w.set_day(cid, person, body, child, who, now)
+        return await _presence_write(request, act)
+
+    @app.post("/api/presence/undo")
+    async def presence_undo(request: Request):
+        async def act(w, cid, person, body, child, who, now):
+            return await w.undo(cid, person, child, who, now)
+        return await _presence_write(request, act)
 
     @app.post("/api/refresh")
     async def refresh(full: bool = False):

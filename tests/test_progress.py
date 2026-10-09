@@ -55,7 +55,7 @@ def test_parts_that_never_finished_count_as_failed_when_the_fetch_ends():
 def test_the_parts_follow_the_config():
     cfg = {"google": [{"name": "x"}], "aula": {"fetch_gallery": False, "fetch_tasks": False}, "assistant": {"mode": "off"},
            "weather": {"enabled": False}, "suggestions": {"enabled": False}}
-    assert F._progress_parts(cfg, True) == ["google", "aula.kalender", "aula.weekplan", "aula.posts", "aula.messages"]
+    assert F._progress_parts(cfg, True) == ["google", "aula.kalender", "aula.weekplan", "aula.posts", "aula.messages", "aula.presence"]
     assert F._progress_parts(cfg, False) == ["google"]
 
 
