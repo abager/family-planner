@@ -306,6 +306,13 @@ overview's own heading is enough, also in the evening when the view shows tomorr
 The header weather folds out on every page, including Beskeder (a `body.mode-mail #wxHeadPanel{display:none}` rule
 used to hide it); toggling it in the messages view calls `sizeMail()` so the split view still fits the screen.
 
+## Messages view layout
+
+Beskeder uses the same `.wrap` width and header as every other view on tablet/desktop (user decision, Oct 2026:
+it used to be 1680px wide with a smaller title and no date line, which made the page jump when switching views).
+Only `padding-bottom` is tighter so the split view fits the screen; `sizeMail()` sizes the panes from where the
+header ends. On phones (`max-width:699px`) the header is still hidden in Beskeder to give room to the messages.
+
 ## Progress while fetching (`progress.py`, Oct 2026)
 
 User decisions (revised): a progress ring left of the gear (`#progWrap`, `position:absolute` in the header so

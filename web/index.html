@@ -418,11 +418,9 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .private{display:flex;align-items:center;gap:10px;color:var(--muted);font-style:italic}
 .private button{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-style:normal}
 .pill.sugg{border-left-style:dashed}
-/* Beskeder: liste + læserude som i Outlook */
-body.mode-mail .wrap{max-width:1680px;padding-bottom:12px}
-body.mode-mail header{margin-bottom:10px}
-body.mode-mail h1{font-size:1.6rem}
-body.mode-mail .sub{display:none}
+/* Beskeder: liste + læserude som i Outlook. Samme bredde og samme top som de andre sider (kun bunden er
+   strammere, så ruderne fylder skærmen ud); på telefon skjules toppen længere nede. */
+body.mode-mail .wrap{padding-bottom:12px}
 .mail{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);height:var(--mailh,70vh);min-height:420px;
   background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden}
 .mlist{display:flex;flex-direction:column;border-right:1px solid var(--line);min-height:0}

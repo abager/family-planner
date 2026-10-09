@@ -5,6 +5,10 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (messages layout)
+- Beskeder now has the same page width (1280px) and the same header (title size, date line, spacing) as the other
+  sections on tablet and desktop, so nothing jumps when switching views. On phones the header stays hidden there.
+
 ### Changed (minor UI, round 2)
 - The bars in the progress popup line up in fixed columns, whether a part is waiting, fetching or done.
 - "Tving fuld hentning" is now a link at the bottom of the popup, greyed out while fetching.
