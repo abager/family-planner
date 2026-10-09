@@ -60,7 +60,7 @@ def test_the_warning_symbol_and_its_dialog_are_accessible(make_page, site, hour)
 
 
 @pytest.mark.parametrize("hour", [10, 22])
-def test_the_progress_bars_are_accessible(make_page, site, hour):
+def test_the_progress_ring_and_its_bars_are_accessible(make_page, site, hour):
     page, fake, _ = make_page(now=dt.datetime(2026, 10, 1, hour, 0), fixed=True, goto=False)
     page.goto(site.url + "/index.html")
     fake.use_demo(page)
@@ -75,5 +75,7 @@ def test_the_progress_bars_are_accessible(make_page, site, hour):
     page.wait_for_timeout(500)
     page.add_script_tag(content=Path(AXE).read_text())
     rules = "{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','best-practice']}}"
-    found = page.evaluate(f"axe.run(document.getElementById('status'),{rules}).then(r=>r.violations.map(v=>v.id))")
-    assert page.locator("#status .pg").count() == 5 and found == [], found
+    closed = page.evaluate(f"axe.run(document.getElementById('progWrap'),{rules}).then(r=>r.violations.map(v=>v.id))")
+    page.click("#progBtn")
+    opened = page.evaluate(f"axe.run(document.getElementById('progWrap'),{rules}).then(r=>r.violations.map(v=>v.id))")
+    assert page.locator("#progPop .pg").count() == 5 and closed == [] and opened == [], (closed, opened)
