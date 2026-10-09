@@ -5,6 +5,16 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Changed (minor UI)
+- The progress ring is always shown (not only while fetching); tapping it when idle shows the last fetch.
+- Each finished or failed part shows how long it took ("820 ms", "45,2 s"), and the popup shows the total.
+- "Tving fuld hentning" button in the progress popup: fetches everything now, with a deep check of all message
+  threads and a fresh AI overview (`POST /api/refresh?full=true`). AI pause and daily budget still apply.
+- The "I dag / fredag 9. oktober" heading above the overview is removed (kept for screen readers).
+
+### Fixed
+- The header weather could not be folded out in the messages view; it now works on every page.
+
 ### Changed (progress)
 - The progress bars moved out of the status line: a small ring left of the gear now shows the overall progress
   (weighted with each part's own percentage), and tapping it opens the per-type bars. Nothing else on the page

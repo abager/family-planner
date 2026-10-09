@@ -58,7 +58,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 | **Overblik** | Only the assistant's day/week summary | (not for the app in general) |
 | **Hele familien** | Everyone | Familien, Fælles |
 | **Adgangskode** / **Kode til private samtaler** | Login / unlocking private threads | |
-| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status ("Opdateret …") – while the server fetches, a progress ring sits left of the gear (no spinner, nothing in the status line) – warnings live under ⚠ at the title | Menu, Opdatér nu (removed: the server fetches by itself) |
+| **Indstillinger** (gear icon, header top-right on all sizes) | All actions (Kioskvisning, Sæt hjem for vejret, Log ud). The status line shows only status ("Opdateret …") – a progress ring always sits left of the gear (no spinner, nothing in the status line) – warnings live under ⚠ at the title | Menu, Opdatér nu (removed: the server fetches by itself) |
 
 Formats: clock times `08.00` everywhere (kiosk clock too); dates `man 12/10` in lists, `mandag 12. oktober` in details.
 No duplicates on one screen: a week-plan item that produced tasks (task id `<plan id>:<n>`) is shown only as a task
@@ -293,14 +293,33 @@ Planned restructuring (do in small steps, tests green after each):
   thread's list entry. Images are cached on disk by id, so the deep check costs message calls, not downloads.
 - Not yet run against the real Aula at the time of writing (only simulated in `tests/test_aula_fetch.py`).
 
+## Day view heading
+
+The visible "I dag / fredag 9. oktober" heading above the overview is gone (user decision, Oct 2026: the
+overview's own heading is enough, also in the evening when the view shows tomorrow). `.dayhead` stays in the DOM as
+`.sronly` so screen readers and `aria-labelledby="dayTitle"` keep working.
+
+## Weather in the messages view
+
+The header weather folds out on every page, including Beskeder (a `body.mode-mail #wxHeadPanel{display:none}` rule
+used to hide it); toggling it in the messages view calls `sizeMail()` so the split view still fits the screen.
+
 ## Progress while fetching (`progress.py`, Oct 2026)
 
 User decisions (revised): a progress ring left of the gear (`#progWrap`, `position:absolute` in the header so
 nothing else in the layout moves) shows the overall progress, weighted with the parts' own percentages (done or
 failed = 1, waiting = 0, running with a total = done/total, running without = 0.5). Red if any part failed; ✓ for
-~4 s after the fetch (`PROG_LINGER`), then hidden. Hidden whenever nothing is fetched. Tapping it opens `#progPop`
-(same menu style as the gear) with one bar per data type; Esc/outside tap closes it; it closes by itself with the
-ring. The bars themselves (from the first version) are unchanged: one per data type the fetch actually
+~4 s after the fetch (`PROG_LINGER`), then a calm full ring (`.idle`, muted; red if the last fetch had a failure).
+The ring is ALWAYS there when the app runs on the server (user decision, replaces "hidden when idle"); without a
+server there is none. Tapping it opens `#progPop` (same menu style as the gear) with one bar per data type – during a
+fetch the live bars, otherwise the last fetch ("Seneste hentning kl. HH.MM · 52,3 s"). Each finished or failed part
+shows its time (`ms` from `progress.py`; format: under 1 s in ms, else seconds with one decimal: "820 ms", "45,2 s");
+running parts show no time. Esc/outside tap closes the popup; if it was open while a fetch ended, it closes ~4 s
+later by itself; opened later to look at the last fetch, it stays. "Tving fuld hentning" in the popup (disabled while
+fetching, no confirmation): POST `/api/refresh?full=true` (CSRF header) → `Runner.trigger(full=True)` →
+`run_once(full=True)`: Aula deep check of all threads + `make_briefing(force=True)` → `generate_json(fresh=True)`
+(skips the AI cache; pause and daily budget still apply). The popup stays open and follows the fetch.
+The bars themselves (from the first version) are unchanged: one per data type the fetch actually
 runs (Google, Aula-kalender, Opgaver, Ugeplan, Opslag, Beskeder, Billeder, Kalenderforslag, Vejr, Overblik –
 parts switched off in config get no bar, `fetch_family._progress_parts`). Real percentage where the total is
 known (Google: calendars, Beskeder: threads to fetch once the list is read, Billeder: albums, Overblik: day +
