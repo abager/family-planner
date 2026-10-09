@@ -516,7 +516,6 @@ dialog button{margin-top:14px;border:0;background:var(--ink);color:var(--paper);
 .wxi{font-size:1.3em;line-height:1}
 .wxpanel{margin:-8px 0 18px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .wxpanel[hidden]{display:none}
-body.mode-mail #wxHeadPanel{display:none}
 .wxtxt{margin:0 0 8px;color:var(--muted)}
 .wxtxt b{color:var(--ink)}
 .wxh{list-style:none;margin:0;padding:0 0 4px;display:flex;gap:4px;overflow-x:auto;overscroll-behavior-x:contain}
@@ -1277,7 +1276,10 @@ function renderWeatherHead(){
     +`<span class="wxi" aria-hidden="true">${esc(w.ikon||"")}</span><span>${wxTemp(w)}</span>${label?`<small>${label}</small>`:""}`
     +`<span class="sronly">, ${esc(w.tekst)}. Vejret time for time</span></button>`;
   panel.innerHTML=wxHoursHtml(w, day); panel.hidden=!open;
-  document.getElementById("wxHeadBtn").onclick=()=>{ state.wxOpen.head=!state.wxOpen.head; renderWeatherHead(); };
+  document.getElementById("wxHeadBtn").onclick=()=>{
+    state.wxOpen.head=!state.wxOpen.head; renderWeatherHead();
+    if(state.view==="mail") sizeMail();                // beskedvisningen fylder skærmen: tilpas højden, når panelet åbner/lukker
+  };
 }
 
 

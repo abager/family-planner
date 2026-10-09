@@ -1,4 +1,5 @@
 """Vejret på kioskskærmen og knappen "Brug min placering som hjem". Simuleret server og placering."""
+import pytest
 import datetime as dt
 
 NOW = dt.datetime(2026, 10, 1, 7, 30)
@@ -199,3 +200,25 @@ def test_a_tap_outside_the_details_closes_them(make_page, site):
     page.mouse.click(5, 5)
     page.wait_for_timeout(200)
     assert not page.evaluate("detail.open")
+
+
+
+@pytest.mark.parametrize("view", ["v-today", "v-week", "v-mail", "v-aula"])
+def test_the_weather_folds_out_the_same_way_on_every_page(make_page, site, view):
+    page, _ = app(make_page, site, {"kilde": "MET Norway", "dage": [DAY_H]})
+    page.click(f"#{view}")
+    page.wait_for_timeout(200)
+    page.click("#wxHeadBtn")
+    assert page.locator("#wxHeadBtn").get_attribute("aria-expanded") == "true" and page.is_visible("#wxHeadPanel")
+    assert page.locator("#wxHeadPanel .wxh li").count() > 0
+    page.click("#wxHeadBtn")
+    assert page.is_hidden("#wxHeadPanel")
+
+
+def test_the_messages_view_still_fits_the_screen_with_the_weather_open(make_page, site):
+    page, _ = app(make_page, site, {"kilde": "MET Norway", "dage": [DAY_H]})
+    page.click("#v-mail")
+    page.wait_for_timeout(200)
+    page.click("#wxHeadBtn")
+    page.wait_for_timeout(100)
+    assert page.evaluate("document.getElementById('mail').getBoundingClientRect().bottom <= innerHeight + 1")
