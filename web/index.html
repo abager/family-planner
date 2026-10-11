@@ -719,6 +719,9 @@ body.kiosk dialog .k-dh{margin:.9em 0 .2em;font-size:.9em;color:var(--muted)}
 .pstatus.sick{color:var(--warn)}
 .pacts{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px}
 .pwarn{color:var(--warn);font-weight:700}
+.pres-res{list-style:none;margin:12px 0 6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.pres-res li{padding:2px 0}.pres-res .ok{color:var(--accent);font-weight:700}.pres-res .bad{color:var(--warn);font-weight:700}
+.btn[disabled]{opacity:.6;cursor:not-allowed}
 .pbusy{padding:20px 0;font-weight:700}
 .punlock{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;align-items:end}
 .punlock label{grid-column:1/-1;font-weight:700}
@@ -1025,7 +1028,9 @@ button,a,.chip,.pill{touch-action:manipulation}
                 "checkIn":"HH:MM", "checkOut":"HH:MM", "entry":"HH:MM", "exit":"HH:MM", "exitWith":"Navn (Mor)" },
                 "days":[{ "date":"YYYY-MM-DD", "entry":"HH:MM", "exit":"HH:MM", "activity":0, "exitWith":"…", "comment":"…",
                 "repeat":"never|weekly|every_2_weeks", "vacation":false }], "pickup":["Navn (Mor)"], "vacations":[…],
-                "can":{ "sick":true, "times":true }, "activities":[0,1,2,3] }]   (Komme/Gå, kun børn med modulet)
+                "can":{ "sick":true, "times":true }, "activities":[0,1,2,3] }],   (Komme/Gå, kun børn med modulet)
+  "absence":[{ "person":"p3", "school":"…", "class":"3A", "date":"YYYY-MM-DD", "schoolDay":true|false|null, "sick":false,
+                "reason":"Sygdom|Lovligt|Ulovligt"|null, "text":"Meldt syg"|null }]   (skolefravær i dag fra Tabulex; aldrig CPR)
 }
 ------------------------------------------------------------------------------------ */
 
@@ -1188,7 +1193,12 @@ function demoData(){
     {person:"carla",institution:"SFO Solsikken",today:{date:ymd(pToday),status:"not_present",statusText:"Ikke kommet",checkIn:null,checkOut:null,entry:"08:00",exit:"15:30",exitWith:"Monica (Mor)",comment:null,location:null},
      days:pDays("15:30","Monica (Mor)"),pickup:pWhoList,vacations:[{title:"Juleferie",start:"2026-12-21",end:"2027-01-01",missingAnswer:true,deadline:null}],can:pCan,activities:[0,2,3]}
   ];
-  return {generated:new Date().toISOString(),people,events,tasks,weekplan,posts,messages,albums,suggestions,presence,demo:true};
+  // Skolefravær (tabulex.py): Hugo og Carla går i skole; ingen er meldt syg, og i dag er en skoledag (også i weekender i demoen)
+  const absence=[
+    {person:"carla",school:"Solsikkeskolen",class:"3A",date:ymd(pToday),schoolDay:true,sick:false,reason:null,text:null},
+    {person:"hugo",school:"Solsikkeskolen",class:"6B",date:ymd(pToday),schoolDay:true,sick:false,reason:null,text:null}
+  ];
+  return {generated:new Date().toISOString(),people,events,tasks,weekplan,posts,messages,albums,suggestions,presence,absence,demo:true};
 }
 
 const state = { data:null, view:"today", weekStart:startOfWeek(new Date()), hidden:new Set() };
@@ -1730,6 +1740,8 @@ const P_ACT={0:"Hentes af",1:"Går selv",2:"Sendes hjem",3:"Går hjem med"}, P_N
 const P_REP={never:"Kun denne dag",weekly:"Hver uge",every_2_weeks:"Hver anden uge"};
 const P_IN=new Set(["present","fieldtrip","sleeping","spare_time_activity","physical_placement"]);
 const presOf = id => (state.data?.presence||[]).find(c=>c.person===id) || null;
+const absOf = id => { const a=(state.data?.absence||[]).find(x=>x.person===id); return a && a.date===ymd(new Date()) ? a : null; };   // kun dagens
+const NO_PRES = {today:{}, days:[], vacations:[], pickup:[], can:{sick:false, times:false}};     // barn med skolefravær, men uden Komme/Gå
 const presDay = (c,key) => (c?.days||[]).find(d=>d.date===key) || null;
 const pWho = n => { const m=/\(([^)]+)\)\s*$/.exec(n||""); return m ? m[1] : String(n||"").split(" ")[0]; };   // "Mor Test (Mor)" → "Mor"
 const pDate = key => { const d=new Date(key+"T12:00"); return `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`; };
@@ -1747,17 +1759,23 @@ function presDesc(d){              // "08.00–15.30 · Hentes af Mor Test (Mor)
   return `${hhmm(d.entry)}–${hhmm(d.exit)} · ${P_ACT[d.activity]||"Går"}${d.exitWith&&P_NAME.has(d.activity)?` ${d.exitWith}`:""}`;
 }
 // Linjen i banen/kolonnen: dagens faktiske status (kun i dag), ellers planen for dagen. null = intet at vise.
-function presLine(c, day){
-  const key=ymd(day), t=c.today||{}, now=t.date===key && key===ymd(new Date()), plan=presPlan(presDay(c,key));
-  if(now && t.status==="sick") return {text:"Syg", cls:"sick"};
+function presLine(c, day, a){
+  const key=ymd(day), isToday=key===ymd(new Date()), t=c.today||{}, now=t.date===key && isToday, plan=presPlan(presDay(c,key));
+  const sch = isToday ? a : null;                  // skolens status gælder kun i dag
+  const kgSick = now && t.status==="sick";
+  if(kgSick || sch?.sick){
+    if(sch && kgSick && !sch.sick && sch.schoolDay!==false) return {text:"Syg · ikke meldt til skolen", cls:"sick"};
+    if(sch?.sick && !kgSick && c!==NO_PRES) return {text:"Syg hos skolen · ikke i Komme/Gå", cls:"sick"};
+    return {text:"Syg", cls:"sick"};
+  }
   if(now && t.status==="reported_absent") return {text:"Meldt fravær", cls:"sick"};
   if(now && t.status==="checked_out") return {text:`Gået hjem${t.checkOut?` ${hhmm(t.checkOut)}`:""}`, cls:"out"};
   if(now && P_IN.has(t.status)) return {text:[t.status==="present"?(t.checkIn?`Kom ${hhmm(t.checkIn)}`:"Til stede"):t.statusText, plan].filter(Boolean).join(" · "), cls:"in"};
   return plan ? {text:plan, cls:""} : null;
 }
 function presButton(p, day, cls, keyFn){
-  const c=presOf(p.id); if(!c) return "";
-  const l=presLine(c,day); if(!l) return "";
+  const a=absOf(p.id), c=presOf(p.id) || (a ? NO_PRES : null); if(!c) return "";
+  const l=presLine(c,day,a); if(!l) return "";
   return `<button type="button" class="${cls} ${l.cls}" ${keyFn(()=>openPresence(p.id))}><span class="sronly">Komme/Gå for ${esc(p.name)}: </span>${esc(l.text)}</button>`;
 }
 
@@ -1777,11 +1795,12 @@ async function presLog(){
   try{ const r=await fetch(`api/presence/log?person=${encodeURIComponent(pres.person)}`,{cache:"no-store"}); if(r.ok) pres.log=await r.json(); }catch{}
 }
 async function openPresence(pid){
-  const p=person(pid); if(!p || !presOf(pid)) return;
+  const p=person(pid); if(!p || !(presOf(pid) || absOf(pid))) return;
   pres={person:pid, mode:"view", err:"", busy:false};
   const html=()=>presHtml();
-  if(state.kiosk){ kDetail(`${p.name}: Komme/Gå`, html()); return; }
-  openDetail(`${p.name}: Komme/Gå`, html());
+  const title = presOf(pid) ? `${p.name}: Komme/Gå` : `${p.name}: Fravær`;
+  if(state.kiosk){ kDetail(title, html()); return; }
+  openDetail(title, html());
   if(state.server){ await presStatus(); await presLog(); presRender(); }
 }
 function presRender(){
@@ -1790,13 +1809,15 @@ function presRender(){
   const f=document.querySelector("#dBody [autofocus]"); if(f) f.focus();
 }
 function presHtml(){
-  const c=presOf(pres.person), p=person(pres.person), t=c.today||{}, today=ymd(new Date());
+  const hasPres=!!presOf(pres.person), c=presOf(pres.person)||NO_PRES, a=absOf(pres.person), p=person(pres.person), t=c.today||{}, today=ymd(new Date());
   const err = pres.err ? `<p class="everr" role="alert">${esc(pres.err)}</p>` : "";
-  if(pres.mode==="busy") return `<p class="pbusy" role="status">Gemmer i Aula …</p>`;
+  if(pres.mode==="busy") return `<p class="pbusy" role="status">${esc(pres.busyText||"Gemmer i Aula …")}</p>`;
   if(pres.mode==="edit") return presEditHtml(c,p)+err;
   if(pres.mode==="confirm") return `<div class="pconfirm"><p>${pres.confirm.html}</p>${pres.confirm.warn?`<p class="pwarn">${esc(pres.confirm.warn)}</p>`:""}
     <div class="evbtns"><button type="button" class="btn primary" data-pa="do" autofocus>${esc(pres.confirm.ok)}</button><button type="button" class="btn" data-pa="back">Tilbage</button></div></div>${err}`;
   const status = t.date===today && t.status ? `<p class="pstatus ${t.status==="sick"?"sick":""}"><b>I dag:</b> ${esc(t.statusText||t.status)}${t.checkIn?` · kom ${hhmm(t.checkIn)}`:""}${t.checkOut?` · gik ${hhmm(t.checkOut)}`:""}${t.location?` · ${esc(t.location)}`:""}</p>` : "";
+  const school = a ? `<p class="pstatus ${a.sick?"sick":""}"><b>Skolen:</b> ${a.schoolDay===false ? "Skolefridag" : a.sick ? "Meldt syg i dag" : a.text ? esc(a.text) : "Intet fravær i dag"}${a.class?` <small>(${esc(a.class)})</small>`:""}</p>` : "";
+  const res = pres.result ? `<ul class="pres-res" role="status">${pres.result.map(r=>`<li><span class="${r.ok?"ok":"bad"}">${r.ok?"✓":"✗"} ${esc(r.label)}:</span> ${esc(r.ok?(r.text||"Meldt syg"):(r.error||"Fejl"))}</li>`).join("")}</ul>` : "";
   const w=canWrite(), unlocked=w && presW().unlocked;
   const rows=(c.days||[]).filter(d=>d.date>=today).map(d=>`<li><span class="pd">${esc(pDate(d.date))}</span><span class="pt">${esc(presDesc(d))}${d.repeat&&d.repeat!=="never"?` <small>${esc(P_REP[d.repeat].toLowerCase())}</small>`:""}${d.comment?`<small class="pc">${esc(d.comment)}</small>`:""}</span>${unlocked&&c.can?.times!==false?`<button type="button" class="btn small" data-pa="edit" data-date="${esc(d.date)}" aria-label="Ret ${esc(pDateLong(d.date))}">Ret</button>`:""}</li>`).join("");
   const vac=(c.vacations||[]).filter(v=>v.start).map(v=>`<li>${esc(v.title)}: ${esc(pDate(v.start))}–${esc(pDate(v.end||v.start))}${v.missingAnswer?` · <b>mangler svar</b> (svar i Aula)`:""}</li>`).join("");
@@ -1806,14 +1827,17 @@ function presHtml(){
       <button type="submit" class="btn primary">Lås op</button><p class="meta">Med koden kan du melde syg og ændre tider. Den låses igen efter få minutter.</p></form>`;
   if(unlocked){
     const b=[];
-    if(c.can?.sick!==false && t.date===today) b.push(t.status==="sick" ? `<button type="button" class="btn" data-pa="unsick">Fortryd sygemelding</button>` : `<button type="button" class="btn primary" data-pa="sick">Meld syg i dag</button>`);
+    const s=sickPlan(c,a,hasPres);
+    if(s.blocked) b.push(`<button type="button" class="btn" disabled aria-disabled="true">${esc(s.blocked)}</button>`);
+    else if(s.label) b.push(`<button type="button" class="btn primary" data-pa="sick">${esc(s.label)}</button>`);
     const u=pres.log?.undo;
     if(u) b.push(`<button type="button" class="btn" data-pa="undo">Fortryd seneste ændring</button>`);
     acts=`<div class="pacts">${b.join("")}</div>${u?`<p class="meta">Seneste ændring: ${esc(u.text||"")} – ${esc(u.byName||"")} kl. ${esc(hm(new Date(u.at)))}</p>`:""}
       <p class="meta">Låst op som ${esc(presW().whoName||"")} · <button type="button" class="linkbtn" data-pa="lock">Lås</button></p>`;
   }
-  return `${c.institution?`<p class="meta">${esc(c.institution)}</p>`:""}${status}
-    <h4 class="ph">Planlagt</h4>${rows?`<ul class="pdays">${rows}</ul>`:`<p class="empty">Ingen planlagte tider.</p>`}
+  const planned = hasPres ? `<h4 class="ph">Planlagt</h4>${rows?`<ul class="pdays">${rows}</ul>`:`<p class="empty">Ingen planlagte tider.</p>`}` : "";
+  return `${c.institution?`<p class="meta">${esc(c.institution)}</p>`:""}${status}${school}${res}
+    ${planned}
     ${vac?`<h4 class="ph">Ferie</h4><ul class="pvac">${vac}</ul>`:""}${acts}${err}`;
 }
 function presEditHtml(c,p){
@@ -1829,20 +1853,54 @@ function presEditHtml(c,p){
     <p class="pwarn" id="pRepWarn"${(d.repeat||"never")==="never"?" hidden":""}>Ændrer ugeskemaet fra ${esc(pDateLong(d.date))} og frem.</p>
     <div class="evbtns"><button type="submit" class="btn primary">Fortsæt</button><button type="button" class="btn" data-pa="back">Annullér</button></div></form>`;
 }
+// Hvad "Meld syg" skal gøre lige nu: begge steder, kun det, der mangler, slået fra (skolefridag) eller intet.
+// Aldrig efter aftenskiftet (kl. 18) – så gælder appen i morgen, og der kan kun meldes syg for i dag.
+function sickPlan(c, a, hasPres){
+  const today=ymd(new Date());
+  if(new Date().getHours()>=eveningHour()) return {};
+  if(a && a.schoolDay===false) return {blocked:"Ikke skoledag i dag"};
+  const kg = hasPres && c.can?.sick!==false && c.today?.date===today && c.today?.status!=="sick";
+  const sc = !!a && !a.sick;
+  const targets=[...(kg?["Komme/Gå"]:[]), ...(sc?["skolen"]:[])];
+  if(!targets.length) return {};
+  const label = kg && sc ? "Meld syg i dag" : sc ? (hasPres ? "Meld syg til skolen" : "Meld syg i dag") : (a ? "Meld syg i Komme/Gå" : "Meld syg i dag");
+  return {label, targets};
+}
 function presConfirm(kind){
   const c=presOf(pres.person), p=person(pres.person), today=ymd(new Date());
-  if(kind==="sick") pres.confirm={kind, ok:"Ja, meld syg", html:`Meld <b>${esc(p.name)}</b> syg i dag?`, warn:"Institutionen får besked med det samme. Sygemeldingen gælder kun i dag."};
-  if(kind==="unsick") pres.confirm={kind, ok:"Ja, fortryd", html:`Fortryd sygemeldingen af <b>${esc(p.name)}</b>?`, warn:"Institutionen ser ændringen med det samme."};
+  if(kind==="sick"){ const s=sickPlan(presOf(pres.person)||NO_PRES, absOf(pres.person), !!presOf(pres.person));
+    pres.confirm={kind, ok:"Ja, meld syg", html:`Meld <b>${esc(p.name)}</b> syg i dag?<br>Sendes til: <b>${esc((s.targets||[]).join(" og "))}</b>`,
+      warn:"Gælder kun i dag og kan ikke fortrydes i appen. En fejl rettes i Aula eller hos skolen."}; }
   if(kind==="undo"){ const u=pres.log?.undo; pres.confirm={kind, ok:"Ja, fortryd", html:`Fortryd: ${esc(u?.text||"")}?`, warn:`Den tidligere værdi skrives tilbage i Aula.`}; }
   if(kind==="day"){ const d=pres.draft, before=presDay(c,d.date);
     pres.confirm={kind, ok:"Ja, gem i Aula", html:`<b>${esc(p.name)}, ${esc(pDateLong(d.date))}</b><br>${esc(presDesc(before))} → <b>${esc(presDesc(d))}</b>${d.comment?`<br>Kommentar: ${esc(d.comment)}`:""}`,
       warn: d.repeat!=="never" ? `${P_REP[d.repeat]} fra ${pDateLong(d.date)}: ugeskemaet ændres fra den dag og frem.` : (before?.repeat && before.repeat!=="never" ? "Dagen er en del af en gentagelse. Kun denne dag ændres." : "")}; }
   pres.mode="confirm"; pres.err=""; presRender();
 }
+// Den samlede sygemelding: svaret har et resultat pr. system – også når den ene del fejlede (så er status 502 kun,
+// hvis intet lykkedes). Det, der lykkedes, vises med det samme; et nyt tryk melder kun det, der mangler.
+async function presSick(){
+  pres.mode="busy"; pres.busyText="Melder syg …"; pres.result=null; presRender();
+  let j={};
+  try{
+    const r=await fetch("api/presence/sick",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},body:JSON.stringify({person:pres.person})});
+    if(r.status===401){ toLogin(); throw new Error("Log ind igen"); }
+    try{ j=await r.json(); }catch{}
+    if(j.child){ const list=state.data.presence||(state.data.presence=[]); const i=list.findIndex(x=>x.person===j.child.person); if(i<0) list.push(j.child); else list[i]=j.child; }
+    if(j.absence){ const list=state.data.absence||(state.data.absence=[]); const i=list.findIndex(x=>x.person===j.absence.person); if(i<0) list.push(j.absence); else list[i]=j.absence; }
+    pres.result = j.results?.length ? j.results : null;
+    pres.err = j.results?.length ? "" : (r.ok ? "" : (j.error||`Fejl ${r.status}`));
+    if(r.ok) toast(j.ok ? "Meldt syg" : "Sygemeldingen lykkedes kun delvist – se panelet");
+  }catch(x){ pres.err=x.message; pres.result=null; }
+  pres.mode="view"; pres.busyText=null;
+  await presStatus(); await presLog();
+  if(state.view==="today" && !state.kiosk) renderToday();
+  presRender();
+}
 async function presDo(){
   const k=pres.confirm.kind, body={person:pres.person};
-  const path = k==="sick"||k==="unsick" ? "api/presence/sick" : k==="undo" ? "api/presence/undo" : "api/presence/day";
-  if(k==="sick"||k==="unsick") body.sick = k==="sick";
+  if(k==="sick") return presSick();
+  const path = k==="undo" ? "api/presence/undo" : "api/presence/day";
   if(k==="day") Object.assign(body, pres.draft);
   pres.mode="busy"; presRender();
   try{
@@ -1861,9 +1919,9 @@ const dBodyEl=document.getElementById("dBody");
 dBodyEl.addEventListener("click", e=>{
   const b=e.target.closest("[data-pa]"); if(!b || !pres) return;
   const a=b.dataset.pa;
-  if(a==="sick"||a==="unsick"||a==="undo") return presConfirm(a);
+  if(a==="sick"||a==="undo") return presConfirm(a);
   if(a==="do") return presDo();
-  if(a==="back"){ pres.mode = pres.mode==="confirm"&&pres.confirm?.kind==="day" ? "edit" : "view"; pres.err=""; return presRender(); }
+  if(a==="back"){ pres.result=null; pres.mode = pres.mode==="confirm"&&pres.confirm?.kind==="day" ? "edit" : "view"; pres.err=""; return presRender(); }
   if(a==="lock"){ fetch("api/presence/write/lock",{method:"POST",headers:{"X-Requested-With":"familieplan"}}).catch(()=>{}).finally(()=>presStatus().then(()=>{ pres.log=null; presRender(); })); return; }
   if(a==="edit"){ const c=presOf(pres.person), d=presDay(c,b.dataset.date)||{date:b.dataset.date};
     pres.draft={date:d.date, entry:d.entry||"08:00", exit:d.exit||"16:00", activity:d.activity??(c.activities||[0])[0], exitWith:d.exitWith||"", comment:d.comment||"", repeat:"never"};

@@ -151,6 +151,7 @@ def penv(cfg, monkeypatch):
     async def opener(_cfg):
         return fake
     monkeypatch.setattr(F, "open_aula_client", opener)
+    monkeypatch.setattr(server, "_now", lambda: dt.datetime.combine(today(), dt.time(9, 0), TZ))   # sygemelding kun før kl. 18
     Path(cfg["output"]).write_text(json.dumps({"events": [], "messages": [], "presence": fetch_all(fake)}))
     return Env(cfg, fake)
 
@@ -248,11 +249,12 @@ def test_undo_writes_the_previous_values_back_and_only_the_latest_change_can_be_
     assert rows[0]["undone"]["by"] == "andreas" and rows[-1]["action"] == "undo"
 
 
-def test_undo_of_a_sick_report_sets_the_child_back_to_present(penv):
+def test_a_sick_report_cannot_be_undone(penv):
     penv.unlock(MONICA)
     penv.post("/api/presence/sick", {"person": "hugo", "sick": True})
-    assert penv.post("/api/presence/undo", {"person": "hugo"}).status_code == 200
-    assert penv.fake.status[HUGO] == 3 and penv.child()["today"]["status"] == "present"
+    assert penv.post("/api/presence/undo", {"person": "hugo"}).status_code == 404       # brugerens beslutning: ingen fortryd
+    assert penv.post("/api/presence/sick", {"person": "hugo", "sick": False}).status_code == 400
+    assert penv.fake.status[HUGO] == SICK and penv.child()["today"]["status"] == "sick"
 
 
 def test_aula_saying_ok_without_saving_is_not_reported_as_saved(penv):
@@ -368,8 +370,3 @@ def test_undo_refuses_when_the_day_was_changed_in_aula_afterwards(penv):
     assert penv.fake.days[(HUGO, today().isoformat())]["exitTime"] == "13:15"     # deres ændring står urørt
 
 
-def test_undo_of_a_sick_report_refuses_when_aula_already_shows_something_else(penv):
-    penv.unlock(ANDREAS)
-    penv.post("/api/presence/sick", {"person": "hugo", "sick": True})
-    penv.fake.status[HUGO] = 3                                               # institutionen har selv rettet det
-    assert penv.post("/api/presence/undo", {"person": "hugo"}).status_code == 409

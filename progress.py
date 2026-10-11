@@ -24,6 +24,7 @@ LABELS = {
     "aula.messages": "Beskeder",
     "aula.albums": "Billeder",
     "aula.presence": "Komme/Gå",
+    "aula.absence": "Skolefravær",
     "kalenderforslag": "Kalenderforslag",
     "vejr": "Vejr",
     "overblik": "Overblik",

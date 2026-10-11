@@ -43,6 +43,7 @@ from fastapi.staticfiles import StaticFiles
 import fetch_family
 import ops
 import presence as presence_mod
+import tabulex as tabulex_mod
 import private as private_mod
 import problems
 import progress
@@ -598,6 +599,11 @@ setInterval(()=>{if(qr.length>1){i=(i+1)%qr.length;const e=document.getElementBy
 </script></body></html>"""
 
 
+def _now() -> datetime:
+    """Klokken nu (testene sætter den, så sygemeldingens aftengrænse ikke afhænger af, hvornår testen kører)."""
+    return datetime.now(TZ)
+
+
 # ---------------------------------------------------------------- app
 def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_auth: bool) -> FastAPI:
     problems.reset()                           # fejllisten ved titlen starter forfra ved hver (gen)start
@@ -864,9 +870,112 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
 
     @app.post("/api/presence/sick")
     async def presence_sick(request: Request):
-        async def act(w, cid, person, body, child, who, now):
-            return await w.set_sick(cid, person, bool(body.get("sick", True)), who, now, child)
-        return await _presence_write(request, act)
+        """Én samlet sygemelding for i dag: Komme/Gå (Aula) og skolen (Tabulex), hver for sig.
+        Lykkes den ene og fejler den anden, vises det pr. system, og et nyt tryk melder kun det manglende.
+        Kan ikke fortrydes i appen (brugerens beslutning). Ikke efter [display] evening_hour, ikke på skolefridage."""
+        if not (settings.presence["write_enabled"] and settings.use_aula):
+            return JSONResponse({"error": "Ændringer i Komme/Gå er slået fra ([presence] write_enabled)."}, status_code=403)
+        who = wgate.who(request.cookies.get(WRITE_COOKIE))
+        if not who:
+            return JSONResponse({"error": "Skriv din kode for at melde syg.", "locked": True}, status_code=403)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Ugyldig forespørgsel."}, status_code=400)
+        if body.get("sick", True) is False:
+            return JSONResponse({"error": "En sygemelding kan ikke fortrydes i appen. Ret den i Aula, eller kontakt skolen."}, status_code=400)
+        now = _now()
+        evening = int(cfg.get("display", {}).get("evening_hour", 18))
+        if now.hour >= evening:
+            return JSONResponse({"error": f"Efter kl. {evening} kan der ikke meldes syg for i dag."}, status_code=409)
+        person, today = str(body.get("person", "")), now.date().isoformat()
+        fam = _family()
+        child = next((c for c in fam.get("presence", []) if c.get("person") == person), None)
+        tab_on = tabulex_mod.settings(cfg)["enabled"]
+        school = next((a for a in fam.get("absence", []) if a.get("person") == person), None) if tab_on else None
+        if child is None and school is None:
+            return JSONResponse({"error": "Barnet har hverken Komme/Gå eller skolefravær."}, status_code=404)
+        if school and school.get("date") == today and school.get("schoolDay") is False:
+            return JSONResponse({"error": "Ikke skoledag i dag."}, status_code=409)
+        want_aula = child is not None and child.get("can", {}).get("sick", True)
+        if child is not None and not want_aula and school is None:
+            return JSONResponse({"error": "Institutionen tillader ikke sygemelding fra forældre."}, status_code=403)
+        try:
+            await asyncio.wait_for(runner.lock.acquire(), settings.presence.get("lock_wait_seconds", 60))
+        except asyncio.TimeoutError:
+            return JSONResponse({"error": "Appen henter fra Aula lige nu. Prøv igen om lidt."}, status_code=503)
+        results, fresh, fresh_school = [], None, None
+        try:
+            fetch_family.auth_hooks.interactive = False
+            async with await fetch_family.open_aula_client(cfg) as client:
+                tab, tab_err = None, None
+                try:
+                    if school is not None:                   # log ind i skolen først: er det en skoledag?
+                        try:
+                            tab = await tabulex_mod.open_session(client, cfg)
+                            kid = tabulex_mod.match(await tab.children(), people_obj).get(person)
+                            if kid is not None:
+                                live = await tabulex_mod.read_child(tab, person, kid, now.date())
+                                if live["schoolDay"] is False:
+                                    tabulex_mod.patch_family(out_dir / "family.json", live)
+                                    return JSONResponse({"error": "Ikke skoledag i dag.", "absence": live}, status_code=409)
+                        except tabulex_mod.TabulexError as e:
+                            tab_err = e
+                    if want_aula:
+                        before = (child.get("today") or {})
+                        if before.get("date") == today and before.get("status") == "sick":
+                            results.append({"target": "aula", "label": "Komme/Gå", "ok": True, "already": True,
+                                            "text": "Var allerede meldt syg"})
+                        else:
+                            try:
+                                writer = presence_mod.Writer(client, changelog, settings.presence["days_ahead"], settings.presence["edit_days_ahead"])
+                                fresh, _ = await writer.set_sick(await writer.child_id(person, people_obj), person, who, now, child)
+                                results.append({"target": "aula", "label": "Komme/Gå", "ok": True, "text": "Meldt syg"})
+                            except presence_mod.PresenceError as e:
+                                results.append({"target": "aula", "label": "Komme/Gå", "ok": False, "error": e.message})
+                            except fetch_family.LoginRequired:
+                                raise
+                            except Exception as e:  # noqa: BLE001 – Aulas egen fejl vises (renset)
+                                log.warning("Sygemelding i Komme/Gå fejlede for %s: %s", person, type(e).__name__)
+                                results.append({"target": "aula", "label": "Komme/Gå", "ok": False,
+                                                "error": f"Aula afviste sygemeldingen: {problems.scrub(str(e))[:200] or type(e).__name__}"})
+                    if school is not None:
+                        try:
+                            if tab_err:
+                                raise tab_err
+                            fresh_school, already = await tabulex_mod.report_sick_today(tab, person, people_obj, now.date())
+                            results.append({"target": "tabulex", "label": "Skolen", "ok": True, "already": already,
+                                            "text": "Var allerede meldt syg" if already else "Meldt syg"})
+                            if not already:
+                                changelog.add({"at": now.isoformat(timespec="seconds"), "by": who, "person": person, "date": today,
+                                               "action": "sick_school", "before": None, "after": {"sick": True},
+                                               "text": "Sygemeldt til skolen (Tabulex)"})
+                        except tabulex_mod.TabulexError as e:
+                            results.append({"target": "tabulex", "label": "Skolen", "ok": False, "error": e.message})
+                finally:
+                    if tab is not None:
+                        await tab.http.aclose()
+        except fetch_family.LoginRequired:
+            return JSONResponse({"error": "Aula-login er udløbet. Log ind med MitID og prøv igen.", "action": "auth"}, status_code=409)
+        except Exception as e:  # noqa: BLE001 – fx Aula nede: intet er sendt
+            log.warning("Sygemelding fejlede for %s: %s: %s", person, type(e).__name__, problems.scrub(str(e)))
+            return JSONResponse({"error": f"Aula svarede ikke: {problems.scrub(str(e))[:200] or type(e).__name__}"}, status_code=502)
+        finally:
+            runner.lock.release()
+        if fresh:
+            presence_mod.patch_family(out_dir / "family.json", fresh)
+        if fresh_school:
+            tabulex_mod.patch_family(out_dir / "family.json", fresh_school)
+        ok = all(r["ok"] for r in results)
+        log.info("Sygemelding: %s meldte %s syg: %s", who, person,
+                 ", ".join(f"{r['label']} {'ok' if r['ok'] else 'fejl'}" for r in results))
+        body_out = {"ok": ok, "results": results, "child": fresh, "absence": fresh_school,
+                    "text": "Meldt syg" if ok else "Sygemeldingen lykkedes ikke alle steder"}
+        if not any(r["ok"] for r in results):
+            return JSONResponse({**body_out, "error": " · ".join(f"{r['label']}: {r['error']}" for r in results)}, status_code=502)
+        return body_out
 
     @app.post("/api/presence/day")
     async def presence_day(request: Request):

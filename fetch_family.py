@@ -35,6 +35,7 @@ import problems
 import progress
 import messages as msg_analysis
 import presence as presence_mod
+import tabulex as tabulex_mod
 import schedule
 import suggestions as sugg_store
 
@@ -531,14 +532,14 @@ async def open_aula_client(cfg: dict):
 
 
 PART_LABELS = {"tasks": "opgaver", "weekplan": "ugeplanen", "posts": "opslag", "messages": "beskeder", "albums": "billeder",
-               "presence": "komme/gå"}
+               "presence": "komme/gå", "absence": "skolefravær (Tabulex)"}
 
 
 async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.datetime, dump_path: Path | None = None,
                      previous_messages: list[dict] | None = None, full_sweep: bool = True) -> dict:
     acfg = cfg["aula"]
     events: list[dict] = []
-    result: dict = {"tasks": [], "weekplan": [], "posts": [], "messages": [], "albums": [], "presence": []}
+    result: dict = {"tasks": [], "weekplan": [], "posts": [], "messages": [], "albums": [], "presence": [], "absence": []}
     meta = {"full_sweep_done": False}
     timings: dict[str, float] = {}
     t_start = time.perf_counter()
@@ -639,6 +640,9 @@ async def fetch_aula(cfg: dict, people: People, start: dt.datetime, end: dt.date
             ("presence", presence_mod.settings(cfg)["enabled"],
              lambda: presence_mod.fetch(client, profile, owner,      # kun profile.children bruges
                                         dt.datetime.now(TZ).date(), presence_mod.settings(cfg)["days_ahead"])),
+            # Skolefravær fra Tabulex: logger ind via Aula-widget 0047 (tabulex.py). Ingen CPR i family.json.
+            ("absence", tabulex_mod.settings(cfg)["enabled"],
+             lambda: tabulex_mod.fetch(client, people, dt.datetime.now(TZ).date(), cfg)),
         ]
         part_timeout = float(acfg.get("part_timeout", 900))
         for key, enabled, _fn in extras:
@@ -1504,6 +1508,8 @@ def _progress_parts(cfg: dict, use_aula: bool) -> list[str]:
                                              ("messages", "fetch_messages"), ("albums", "fetch_gallery")) if acfg.get(flag, True)]
         if presence_mod.settings(cfg)["enabled"]:
             keys.append("aula.presence")
+        if tabulex_mod.settings(cfg)["enabled"]:
+            keys.append("aula.absence")
     if cfg.get("suggestions", {}).get("enabled", True):
         keys.append("kalenderforslag")
     try:
@@ -1540,7 +1546,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
         kept = [e for e in previous.get("events", []) if e.get("source") == "google" and e.get("calendar") == name and not str(e.get("id", "")).startswith("gc:")]
         events += kept
         log.warning("Beholder %d aftaler fra Google-kalenderen «%s» fra forrige kørsel", len(kept), name)
-    extra_keys = ("tasks", "weekplan", "posts", "messages", "albums", "presence")
+    extra_keys = ("tasks", "weekplan", "posts", "messages", "albums", "presence", "absence")
     extra = {k: previous.get(k, []) for k in extra_keys}
     aula_state, aula_error = "skipped", None
     last_sweep = previous.get("health", {}).get("aula", {}).get("last_full_sweep")
@@ -1622,6 +1628,7 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
         "messages": (private_mod.protect(extra["messages"], private_mod.store_path(cfg)) if private_mod.enabled(cfg) else extra["messages"]),
         "albums": extra["albums"],
         "presence": extra["presence"],          # Komme/Gå pr. barn (presence.py) – aldrig sendt til sprogmodellen
+        "absence": extra["absence"],            # skolefravær i dag pr. barn (tabulex.py) – uden CPR, aldrig til sprogmodellen
         "suggestions": suggestions_list,
         "health": health,
         "weather": weather_data,

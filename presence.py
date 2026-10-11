@@ -6,7 +6,8 @@ af sig selv, når institutionen slår det til.
 
 Skrivning sker kun fra serveren (`Writer`), kun når `[presence] write_enabled = true`, og kun for den, der har låst op
 med sin egen skrivekode (se server.py). Hver ændring læses tilbage fra Aula, før appen siger "gemt", og skrives i en
-ændringslog (`presence_log.json` i secrets/), så den kan fortrydes.
+ændringslog (`presence_log.json` i secrets/). Ændringer af tider kan fortrydes; sygemeldinger kan ikke (brugerens
+beslutning) – en sygemelding går samtidig til skolen via Tabulex (tabulex.py, se server.py `/api/presence/sick`).
 
 Komme/gå-data sendes aldrig til sprogmodellen (brugerens beslutning): briefing.build_digest vælger sine felter ét for
 ét og tager ikke `presence` med.
@@ -34,6 +35,7 @@ NEEDS_NAME = {0, 3}
 STATUS_TEXT = {"not_present": "Ikke kommet", "sick": "Syg", "reported_absent": "Meldt fravær", "present": "Til stede",
                "fieldtrip": "På tur", "sleeping": "Sover", "spare_time_activity": "Til fritidsaktivitet",
                "physical_placement": "Fysisk placering", "checked_out": "Gået hjem", "not_arrived": "Ikke kommet"}
+NOT_UNDOABLE = ("sick", "unsick", "sick_school")       # sygemeldinger (Komme/Gå og skolen) – "unsick" fra ældre logs
 _TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -245,9 +247,10 @@ class ChangeLog:
         self._save(rows)
 
     def last_undoable(self, person: str, today: dt.date) -> dict | None:
-        """Den seneste ændring for barnet, der ikke er fortrudt og ikke handler om en dag, der er gået."""
+        """Den seneste ændring af tider for barnet, der ikke er fortrudt og ikke handler om en dag, der er gået.
+        Sygemeldinger kan aldrig fortrydes (brugerens beslutning) og springes over – de rører ikke dagens tider."""
         for r in reversed(self.load()):
-            if r.get("person") != person or r.get("action") == "undo":
+            if r.get("person") != person or r.get("action") in ("undo", *NOT_UNDOABLE):
                 continue
             if r.get("undone"):
                 return None                        # kun den seneste kan fortrydes – ellers bliver rækkefølgen forkert
@@ -338,25 +341,22 @@ class Writer:
     async def reread(self, child_id: int, person: str, today: dt.date) -> dict | None:
         return await fetch_child(self.client, child_id, person, today, self.days_ahead)
 
-    async def set_sick(self, child_id: int, person: str, sick: bool, by: str, now: dt.datetime, before: dict | None) -> tuple[dict, dict]:
-        """Sygemeld (sick=True) eller fortryd en sygemelding for i dag. Returnerer (barnets nye data, logrækken)."""
+    async def set_sick(self, child_id: int, person: str, by: str, now: dt.datetime, before: dict | None) -> tuple[dict, dict]:
+        """Sygemeld barnet for i dag. Returnerer (barnets nye data, logrækken). Kan ikke fortrydes i appen
+        (brugerens beslutning) – en fejlagtig sygemelding rettes i Aula."""
         from aula.models.presence import PresenceState
         today = now.date()
         if before is not None and not before.get("can", {}).get("sick", True):
             raise PresenceError("Institutionen tillader ikke sygemelding fra forældre.", 403)
         was = ((before or {}).get("today") or {}).get("status")
-        if sick:
-            target = PresenceState.SICK
-        else:                                   # tilbage til det, barnet var før, hvis vi ved det; ellers "Ikke kommet"
-            target = PresenceState.PRESENT if was == "present" else PresenceState.NOT_PRESENT
+        target = PresenceState.SICK
         await self.client.update_presence_status([child_id], target)
         fresh = await self.reread(child_id, person, today)
         got = ((fresh or {}).get("today") or {}).get("status")
         if got != target.name.lower():
             raise PresenceError("Aula modtog ændringen, men viser den ikke endnu. Tjek i Aula, før du stoler på den.", 502)
         row = self.log.add({"at": now.isoformat(timespec="seconds"), "by": by, "person": person, "date": today.isoformat(),
-                            "action": "sick" if sick else "unsick", "before": {"status": was}, "after": {"status": got},
-                            "text": "Sygemeldt" if sick else "Sygemelding fortrudt"})
+                            "action": "sick", "before": {"status": was}, "after": {"status": got}, "text": "Sygemeldt i Komme/Gå"})
         return fresh, row
 
     async def set_day(self, child_id: int, person: str, body: dict, child: dict, by: str, now: dt.datetime,
@@ -392,43 +392,22 @@ class Writer:
         if not row:
             raise PresenceError("Der er ingen ændring at fortryde.", 404)
         await self._still_ours(child_id, person, row, now.date())
-        if row["action"] in ("sick", "unsick"):
-            from aula.models.presence import PresenceState
-            was = (row.get("before") or {}).get("status")
-            if row["date"] != now.date().isoformat():
-                raise PresenceError("En sygemelding kan kun fortrydes samme dag.")
-            target = {"sick": PresenceState.SICK, "present": PresenceState.PRESENT}.get(was, PresenceState.NOT_PRESENT)
-            await self.client.update_presence_status([child_id], target)
-            fresh = await self.reread(child_id, person, now.date())
-            if ((fresh or {}).get("today") or {}).get("status") != target.name.lower():
-                raise PresenceError("Aula modtog fortrydelsen, men viser den ikke endnu. Tjek i Aula.", 502)
-        else:
-            before = row.get("before")
-            if not before or not before.get("entry"):
-                raise PresenceError("Dagen havde ingen tider før ændringen, så den kan ikke rulles tilbage herfra. Ret den i stedet.")
-            act = before.get("activity")
-            body = {**before, "repeat": before.get("repeat") or "never",
-                    "activity": act if act is not None else (0 if before.get("exitWith") else 2)}
-            fresh, _ = await self.set_day(child_id, person, body, {**child, "pickup": list({*child.get("pickup", []),
-                                                                     *([before["exitWith"]] if before.get("exitWith") else [])})},
-                                          by, now, action="undo")
-            self.log.mark_undone(row["id"], by, now.isoformat(timespec="seconds"))
-            return fresh, row
+        before = row.get("before")
+        if not before or not before.get("entry"):
+            raise PresenceError("Dagen havde ingen tider før ændringen, så den kan ikke rulles tilbage herfra. Ret den i stedet.")
+        act = before.get("activity")
+        body = {**before, "repeat": before.get("repeat") or "never",
+                "activity": act if act is not None else (0 if before.get("exitWith") else 2)}
+        fresh, _ = await self.set_day(child_id, person, body, {**child, "pickup": list({*child.get("pickup", []),
+                                                                 *([before["exitWith"]] if before.get("exitWith") else [])})},
+                                      by, now, action="undo")
         self.log.mark_undone(row["id"], by, now.isoformat(timespec="seconds"))
-        self.log.add({"at": now.isoformat(timespec="seconds"), "by": by, "person": person, "date": row["date"], "action": "undo",
-                      "before": row.get("after"), "after": row.get("before"), "text": f"Fortrød: {row.get('text', '')}"})
         return fresh, row
-
 
     async def _still_ours(self, child_id: int, person: str, row: dict, today: dt.date) -> None:
         """Fortryd kun, hvis Aula stadig viser det, vi selv skrev – ellers overskrives en ændring, en anden har lavet siden."""
         changed = PresenceError("Dagen er ændret siden (i Aula eller af en anden), så den kan ikke fortrydes herfra. Ret den i stedet.", 409)
         after = row.get("after") or {}
-        if row["action"] in ("sick", "unsick"):
-            fresh = await self.reread(child_id, person, today)
-            if ((fresh or {}).get("today") or {}).get("status") != after.get("status"):
-                raise changed
-            return
         date = dt.date.fromisoformat(row["date"])
         cur = None
         for wt in await self.client.get_presence_templates([child_id], date, date) or []:

@@ -35,6 +35,7 @@ class FakeServer:
         self.pwho: tuple[str, str] | None = None
         self.pfail: tuple[int, str] | None = None        # (status, fejltekst) for næste skrivning
         self.pundo: dict | None = None
+        self.sfail: dict | None = None                   # sygemelding: {"aula"|"tabulex": fejltekst} for næste forsøg
         self.calls: list[tuple[str, str, dict | None]] = []
 
     # ---- opsætning
@@ -130,6 +131,31 @@ class FakeServer:
             return self._presence(route, path, m, body or {})
         route.fulfill(status=404, body="")
 
+    def _sick(self, route, body):
+        """Den samlede sygemelding: et resultat pr. system. self.sfail = {"aula"|"tabulex": fejltekst} for delvise fejl."""
+        person = body.get("person")
+        child = next((c for c in self.family.get("presence", []) if c["person"] == person), None)
+        school = next((a for a in self.family.get("absence", []) if a["person"] == person), None)
+        results, fail = [], self.sfail or {}
+        if child is not None and child["today"].get("status") != "sick":
+            if "aula" in fail:
+                results.append({"target": "aula", "label": "Komme/Gå", "ok": False, "error": fail["aula"]})
+            else:
+                child["today"] = {**child["today"], "status": "sick", "statusText": "Syg"}
+                results.append({"target": "aula", "label": "Komme/Gå", "ok": True, "text": "Meldt syg"})
+        if school is not None and not school["sick"]:
+            if "tabulex" in fail:
+                results.append({"target": "tabulex", "label": "Skolen", "ok": False, "error": fail["tabulex"]})
+            else:
+                school.update(sick=True, reason="Sygdom", text="Meldt syg")
+                results.append({"target": "tabulex", "label": "Skolen", "ok": True, "text": "Meldt syg"})
+        self.sfail = None
+        ok = all(r["ok"] for r in results)
+        out = {"ok": ok, "results": results, "child": child, "absence": school}
+        if not any(r["ok"] for r in results):
+            return self._json(route, {**out, "error": "Intet lykkedes"}, 502)
+        return self._json(route, out)
+
     def _presence(self, route, path, m, body):
         if path == "/api/presence/write/status":
             return self._json(route, {**self.pw, "unlocked": bool(self.pwho), "who": self.pwho and self.pwho[0],
@@ -150,12 +176,10 @@ class FakeServer:
             st, msg = self.pfail
             self.pfail = None
             return self._json(route, {"error": msg}, st)
-        child = next(c for c in self.family["presence"] if c["person"] == body.get("person"))
         if path == "/api/presence/sick":
-            child["today"] = {**child["today"], "status": "sick" if body.get("sick") else "not_present",
-                              "statusText": "Syg" if body.get("sick") else "Ikke kommet"}
-            text = "Sygemeldt" if body.get("sick") else "Sygemelding fortrudt"
-        elif path == "/api/presence/day":
+            return self._sick(route, body)
+        child = next(c for c in self.family["presence"] if c["person"] == body.get("person"))
+        if path == "/api/presence/day":
             day = next(d for d in child["days"] if d["date"] == body["date"])
             day.update({k: body[k] for k in ("entry", "exit", "activity", "exitWith", "comment", "repeat")})
             text = f"{body['entry']}–{body['exit']}"

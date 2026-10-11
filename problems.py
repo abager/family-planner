@@ -24,6 +24,7 @@ _SECRETS = [
     (re.compile(r"(?i)\b(lat|lon|latitude|longitude)(\s*[=:]\s*)-?\d+(\.\d+)?"), r"\1\2***"),
     (re.compile(r"AIza[0-9A-Za-z_-]{20,}"), "***"),                     # Google API-nøgle
     (re.compile(r"sk-ant-[0-9A-Za-z_-]{10,}"), "***"),                  # Anthropic API-nøgle
+    (re.compile(r"(?<!\d)[0-3]\d[01]\d{3}-?\d{4}(?!\d)"), "***"),          # CPR-nummer (Tabulex bruger det i adresser)
 ]
 
 _lock = threading.Lock()
