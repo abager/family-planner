@@ -5,18 +5,38 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (school absence via Tabulex – one combined sick report)
+- New `tabulex.py`: logs into Tabulex ("Fravær – forældreindberetning") with Aula's own widget token (widget 0047),
+  the same way the Aula portal link does – no extra MitID. Login verified against the real Tabulex with a read-only
+  probe; the sick report itself is only tested against a simulated Tabulex.
+- `[tabulex] enabled` (off by default): today's school absence per child is fetched with the normal cycle (own progress
+  bar "Skolefravær") into `family.json` → `absence` (school, class, school day, sick, reason – never the CPR number).
+- "Meld syg i dag" is now one action for both systems: Komme/Gå and the school are tried independently, the panel
+  shows the result per system, and pressing again sends only what is missing ("Meld syg til skolen").
+  Tabulex registers the adult whose Aula login the server uses as sender; the app's log records who pressed.
+- No sick report after `[display] evening_hour` (18) and none on days Tabulex says are not school days (the button
+  is disabled with "Ikke skoledag i dag").
+- School status is shown read-only in the panel and on the child's line, the kiosk included
+  ("Syg · ikke meldt til skolen", "Syg hos skolen · ikke i Komme/Gå").
+- The CPR number is never stored: children are looked up again at each login and the number only lives in memory.
+  Error texts never contain addresses, `problems.scrub` removes CPR-shaped numbers, and a log filter strips them
+  from httpx/httpcore logging.
+
+### Removed
+- Taking back or undoing a sick report (user decision, also for Komme/Gå). A wrong sick report is corrected in Aula
+  or with the school. Undo of changed times is unchanged and skips sick reports.
+
 ### Added (Komme/Gå from Aula)
 - Each child with Komme/Gå gets a line under the name in I dag (phones: a strip above the list) and in the kiosk
   column: today's real status ("Kom 07.52", "Syg", "Gået hjem 14.52"), otherwise the plan ("Hentes 15.30 af Mor").
   Children whose institution has no Komme/Gå are skipped and appear by themselves once it is switched on.
 - Tapping the line opens a panel: status, planned times for the next week (with repeats and comments), vacations.
 - With `[presence] write_enabled = true` and a personal write code per adult (`FAMILIEPLAN_WRITE_CODE_<ID>`), parents
-  can report a child sick today (and take it back), change entry/exit time, pickup type, who picks up and the comment
+  can report a child sick today, change entry/exit time, pickup type, who picks up and the comment
   for a day – just that day, weekly or every other week – and undo the latest change. Every change asks for
   confirmation, is read back from Aula before it is reported as saved, and is logged with who made it
   (`secrets/presence_log.json`). The kiosk only shows; it can never write.
-- Not possible (Aula/package limits): sick reports for a future day, creating vacations. Tabulex absence reporting
-  is not included yet.
+- Not possible (Aula/package limits): sick reports for a future day, creating vacations.
 - Komme/Gå data is never sent to the language model.
 - Self-test checks the write codes when writing is on.
 

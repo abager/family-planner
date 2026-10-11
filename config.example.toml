@@ -187,3 +187,10 @@ days_ahead = 7           # planlagte tider så mange dage frem i appen
 edit_days_ahead = 60     # så langt frem kan en dag ændres
 unlock_minutes = 10      # skrivekoden udløber efter så mange minutter (og når skærmen slukker)
 lock_wait_seconds = 60   # så længe en ændring venter på en igangværende hentning, før den beder dig prøve igen
+
+# Skolefravær fra Tabulex ("Fravær – forældreindberetning", tabulex.py). Logger ind med Aulas widget-adgang – intet
+# ekstra login. Med [presence] write_enabled + skrivekode går "Meld syg i dag" til både Komme/Gå og skolen.
+# Kun i dag, kun før [display] evening_hour, ikke på skolefridage, kan ikke fortrydes. CPR gemmes aldrig.
+[tabulex]
+enabled = false          # slå til, og se først, om skolens status passer med Tabulex
+request_timeout = 30     # sekunder pr. kald til Tabulex

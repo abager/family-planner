@@ -116,7 +116,8 @@ familie_regler.md (free text)   ─┘                                     └�
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Praktisk info", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
 | `private.py` | Storage and gating of private threads |
-| `presence.py` | Aula Komme/Gå: per-child fetch (status, planned days, pickup list, vacations, permissions), validated writes (sick, day/repeat, undo) read back from Aula, change log |
+| `presence.py` | Aula Komme/Gå: per-child fetch (status, planned days, pickup list, vacations, permissions), validated writes (sick, day/repeat, undo of times) read back from Aula, change log |
+| `tabulex.py` | Tabulex school absence: login via Aula widget token 0047 (SAML → WS-Fed forms), today's absence + school days, sick report today; never stores CPR |
 | `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
 | `selftest.py` | Checks a real setup end-to-end (Aula login, Google write, ntfy, permissions) |
 | `web/index.html` | The whole frontend (~170 KB, inline CSS/JS). Contains demo data used when no server is present |
@@ -308,8 +309,7 @@ User decisions: all three children are covered (Hugo and Carla have it now, Leo 
 are skipped silently and appear by themselves); all write actions; only the two adults may write, with **one write code
 each** (`FAMILIEPLAN_WRITE_CODE_<ID>`, adults = `role = "adult"`) so the log knows who; repeats (weekly / every 2
 weeks) included; the kiosk shows Komme/Gå read-only; not sent to the AI; fetched with the normal 15-minute cycle (no
-faster polling). Tabulex ("Fravær – forældreindberetning") later: one sick report must then reach both systems – the
-sick action is one server action so a second target can be added there.
+faster polling). Tabulex: see the next section – one sick report reaches both systems.
 
 - Read: the `presence` part in `fetch_aula` (own progress bar `aula.presence`, `[presence] enabled`). Per child:
   `get_daily_overview`, `get_presence_templates` (today..+`days_ahead`), `get_presence_configuration` (once for all),
@@ -335,9 +335,45 @@ sick action is one server action so a second target can be added there.
   (phone list), `.k-pres` (kiosk, via `kDetail`, never actions). Panel = `#detail` with `presHtml` modes
   view / edit / confirm / busy, delegated handlers on `#dBody` (`data-pa`, `data-pform`). `canWrite()` is false on the
   kiosk and without a server. The write cookie is locked on `visibilitychange` → hidden.
+- Sick reports cannot be undone or taken back (user decision, Oct 2026): `set_sick` only sets SICK; `sick: false` → 400;
+  `ChangeLog.last_undoable` skips `NOT_UNDOABLE` rows (`sick`, `unsick` from old logs, `sick_school`).
 - **Only tested against a simulated Aula** (`tests/presence_fake.py`, built from the package's own models). Unverified:
   the real response shapes, and above all how Aula treats editing one day of a repeating series via `template_id`.
 
+
+## Tabulex school absence (`tabulex.py`, Oct 2026)
+
+User decisions: one combined sick report (Komme/Gå + Tabulex); Tabulex registers the adult whose Aula login the server
+uses (Andreas); today only (Tabulex also allows tomorrow after 18 – not offered); both targets tried independently with a
+result per system and a retry that sends only what is missing; no undo of any sick report; non-school day → button
+disabled "Ikke skoledag i dag"; hidden after `[display] evening_hour`; school status shown read-only, kiosk included.
+
+- Login (verified 11/10-2026 with a read-only probe against the real Tabulex): `aulaToken.getAulaToken&widgetId=0047`
+  via the package's private `widgets._get_bearer_token` (pinned aula==1.12.0) → POST `SSO_URL` with `aulaToken`,
+  `userProfile=guardian`, `isMobileApp=false` (without the two extras the login stops at a 200 page) → IdP → HTML form
+  with `SAMLResponse` → ACS → foraeldre.tabulex.net → `prp.php` → form with `wresult` → `FedAuth` + `XSRF-TOKEN` cookies.
+  `_auto_form` only submits forms carrying `SAMLResponse`/`wresult`. No session is kept: new login per fetch and per write.
+- API (`foraeldre.tabulex.net`, AngularJS app; all JSON, `X-XSRF-TOKEN` header from the cookie): `GET
+  /api/PersonsAdgangTilBoern`, `GET /api/Fravaer/Idag/{cpr}`, `GET /api/Fravaer/skoledage/{cpr}`, `PUT
+  /api/Fravaer/MeldSygIdag/` body `{"Cpr": …}` (also `MeldSygImorgen`, unused). There is no endpoint to take a report back.
+- `is_sick` mirrors Tabulex's own page: half-day setting → grade > 6 needs first AND last lesson "Sygdom", else first;
+  otherwise `Dag != null` and `Aarsag == "Sygdom"`.
+- CPR: the URL id. Never stored – `match()` maps children to people by first name (`People.by_aula_name`) at each
+  login. Errors are built in `tabulex.py` without URLs (`_http_error`); `problems.scrub` removes CPR-shaped numbers;
+  `_NoCpr` filters httpx/httpcore log records. `tests/test_tabulex.py` asserts no CPR in family.json, the log, answers
+  or captured logs (the log test fails if the filter is removed).
+- Read: extra part `absence` in `fetch_aula` (progress `aula.absence`), `family.json` → `absence`:
+  `{person, school, class, date, schoolDay, sick, reason, text}`. Not in `briefing.build_digest`.
+- Write: `server.py` `/api/presence/sick` (own handler, not `_presence_write`): gates as Komme/Gå (write_enabled + write
+  cookie), refuses after evening_hour (`server._now`, patched in tests) and when the stored or live school day is
+  false; under `runner.lock` opens Aula once, logs into Tabulex first (live school-day check), then Komme/Gå
+  (`Writer.set_sick`), then Tabulex (`report_sick_today`: read → PUT → read back). Response `{ok, results:[{target,
+  label, ok, already?, text|error}], child, absence}`; 502 only when nothing succeeded. Log row `sick_school`.
+- Frontend: `absOf` (only today's entry), `NO_PRES` placeholder for a child with Tabulex but no Komme/Gå, `presLine`
+  takes the school entry, `sickPlan` decides label/targets/disabled, `presSick` handles partial results (`pres.result`).
+  A Tabulex-only child gets a line only when something is registered (no Komme/Gå line to tap otherwise).
+- **Only the login and reading are verified for real.** The PUT and its read-back are only tested against
+  `tests/tabulex_fake.py` (built from a real HAR and the probe output).
 ## Day view heading
 
 The visible "I dag / fredag 9. oktober" heading above the overview is gone (user decision, Oct 2026: the

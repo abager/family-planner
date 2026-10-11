@@ -350,11 +350,24 @@ Appen henter Komme/Gå fra Aula for børn, hvis institution (SFO, klub, børneha
 
 1. Sæt én skrivekode pr. voksen i `.env`: `FAMILIEPLAN_WRITE_CODE_ANDREAS` og `FAMILIEPLAN_WRITE_CODE_MONICA` (navnet er personens `id` fra `[[people]]` med store bogstaver). Mindst 4 tegn, forskellige, og ikke de samme som adgangskoden eller koden til private samtaler.
 2. Sæt `[presence] write_enabled = true` i `config.toml`, og genstart serveren. Kør gerne `python server.py --selftest --no-notify` – den tjekker koderne.
-3. I panelet skriver du din kode. Så kan du **melde syg i dag** (og fortryde det), **rette en dag** (kommetid, gåtid, afhentning, hvem der henter, kommentar – kun denne dag, hver uge eller hver anden uge) og **fortryde den seneste ændring**.
+3. I panelet skriver du din kode. Så kan du **melde syg i dag** (se *Sygemelding* nedenfor), **rette en dag** (kommetid, gåtid, afhentning, hvem der henter, kommentar – kun denne dag, hver uge eller hver anden uge) og **fortryde den seneste ændring af tider**.
 
 Hver ændring skal bekræftes, læses tilbage fra Aula, før appen siger "Gemt i Aula", og skrives i `secrets/presence_log.json` med hvem der gjorde det og værdien før (rettigheder 600, serveres aldrig). Koden udløber efter `unlock_minutes` (standard 10) og når skærmen slukker; fem forkerte forsøg spærrer i fem minutter. Henter appen fra Aula, når du gemmer, venter ændringen op til `lock_wait_seconds` (60) – ellers beder appen dig prøve igen.
 
-Ikke muligt (Aula/pakken kan det ikke): sygemelding frem i tid og oprettelse af ferie. Fravær til skolen via Tabulex ("Fravær – forældreindberetning") er ikke med endnu. Komme/gå-data sendes aldrig til familieassistenten (sprogmodellen).
+Ikke muligt (Aula/pakken kan det ikke): sygemelding frem i tid og oprettelse af ferie. Komme/gå-data sendes aldrig til familieassistenten (sprogmodellen).
+
+## Sygemelding og skolefravær (Tabulex)
+
+Med `[tabulex] enabled = true` henter appen også skolens fravær fra Tabulex ("Fravær – forældreindberetning") – samme sted, som Aulas link åbner. Appen logger selv ind med Aulas widget-adgang, så der skal ikke bruges ekstra MitID.
+
+- **Én knap, begge steder:** "Meld syg i dag" sender til Komme/Gå og til skolen. De to forsøges hver for sig; panelet viser ✓/✗ for hvert sted. Fejlede det ene, står der fx "Meld syg til skolen" – tryk igen, så sendes kun det, der mangler.
+- **Kun i dag og kun før kl. 18** (`[display] evening_hour`). På dage, hvor skolen har fri, er knappen slået fra ("Ikke skoledag i dag").
+- **Kan ikke fortrydes i appen** – heller ikke i Komme/Gå. En forkert sygemelding rettes i Aula eller hos skolen.
+- I Tabulex står den voksne, hvis Aula-login serveren bruger, som afsender. Appens log viser, hvem der trykkede.
+- **Skolens status** ("Skolen: Meldt syg i dag", "Skolefridag", "Lovligt fravær") vises i panelet og på barnets linje – også på kiosken, kun til at læse.
+- **CPR-numre gemmes aldrig.** Tabulex bruger dem som id, men appen slår børnene op på ny ved hvert login; de findes kun i hukommelsen under kaldet og aldrig i `family.json`, logs eller fejlbeskeder.
+
+**Første gang:** slå `[tabulex] enabled` til og se, om skolens status passer med Tabulex. Selve sygemeldingen til Tabulex er kun afprøvet mod en simulering – kan først prøves for alvor på en rigtig sygedag. Tjek bagefter i Tabulex.
 
 **Første gang:** prøv en ændring af tider på en uvigtig dag og tjek den i Aula. Hvordan Aula behandler ændring af én dag i en gentagen serie, er kun afprøvet mod en simulering.
 
