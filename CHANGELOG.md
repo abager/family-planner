@@ -22,6 +22,15 @@ All notable changes to this project. Versions are git tags. The format is loosel
   Error texts never contain addresses, `problems.scrub` removes CPR-shaped numbers, and a log filter strips them
   from httpx/httpcore logging.
 
+### Fixed (Komme/Gå "Går selv")
+- Days where the child goes home alone showed nothing: Aula stores that exit as an interval
+  (`selfDeciderStartTime`/`-EndTime`) without `exitTime`, which the aula package does not read. `day_entry` now takes
+  them from the raw answer (`selfFrom`/`selfTo`); the line shows "Går selv 14.00–14.30".
+- Saving or undoing a "Går selv" day no longer fails the read-back ("viser den ikke endnu"): comparisons use the end
+  of the interval. The package sends one time for both ends, so the confirmation warns when an interval becomes one time.
+- The edit form always offers the day's own pickup type, even if the institution's list lacks it.
+- The log now says why a child gets no Komme/Gå ("ingen data for …", unmatched Aula child).
+
 ### Removed
 - Taking back or undoing a sick report (user decision, also for Komme/Gå). A wrong sick report is corrected in Aula
   or with the school. Undo of changed times is unchanged and skips sick reports.

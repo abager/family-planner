@@ -1026,7 +1026,7 @@ button,a,.chip,.pill{touch-action:manipulation}
   "messages":[{ "id":"m1", "subject":"…", "from":"…", "timestamp":"ISO", "unread":true, "text":"…", "people":["p3"]|["family"] }],
   "presence":[{ "person":"p3", "institution":"…", "today":{ "date":"YYYY-MM-DD", "status":"present|sick|checked_out|…", "statusText":"…",
                 "checkIn":"HH:MM", "checkOut":"HH:MM", "entry":"HH:MM", "exit":"HH:MM", "exitWith":"Navn (Mor)" },
-                "days":[{ "date":"YYYY-MM-DD", "entry":"HH:MM", "exit":"HH:MM", "activity":0, "exitWith":"…", "comment":"…",
+                "days":[{ "date":"YYYY-MM-DD", "entry":"HH:MM", "exit":"HH:MM"|null, "selfFrom":"HH:MM", "selfTo":"HH:MM" (går selv), "activity":0, "exitWith":"…", "comment":"…",
                 "repeat":"never|weekly|every_2_weeks", "vacation":false }], "pickup":["Navn (Mor)"], "vacations":[…],
                 "can":{ "sick":true, "times":true }, "activities":[0,1,2,3] }],   (Komme/Gå, kun børn med modulet)
   "absence":[{ "person":"p3", "school":"…", "class":"3A", "date":"YYYY-MM-DD", "schoolDay":true|false|null, "sick":false,
@@ -1746,17 +1746,21 @@ const presDay = (c,key) => (c?.days||[]).find(d=>d.date===key) || null;
 const pWho = n => { const m=/\(([^)]+)\)\s*$/.exec(n||""); return m ? m[1] : String(n||"").split(" ")[0]; };   // "Mor Test (Mor)" → "Mor"
 const pDate = key => { const d=new Date(key+"T12:00"); return `${DAYS[d.getDay()].slice(0,3)} ${d.getDate()}/${d.getMonth()+1}`; };
 const pDateLong = key => { const d=new Date(key+"T12:00"); return `${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`; };
+// Gåtiden. "Går selv" gemmer Aula som et tidsrum (selfFrom–selfTo), ofte uden almindelig gåtid.
+const pExit = d => d ? (d.exit || d.selfTo || d.selfFrom || null) : null;
+const pSelf = d => d.selfFrom && d.selfTo && d.selfFrom!==d.selfTo ? `${hhmm(d.selfFrom)}–${hhmm(d.selfTo)}` : hhmm(pExit(d));
 function presPlan(d){
   if(!d) return "";
   if(d.vacation) return "Ferie";
-  if(!d.exit) return "";
-  const t=hhmm(d.exit);
-  return d.activity===0 ? `Hentes ${t}${d.exitWith?` af ${pWho(d.exitWith)}`:""}` : d.activity===1 ? `Går selv ${t}`
+  if(!pExit(d)) return "";
+  const t=hhmm(pExit(d));
+  return d.activity===0 ? `Hentes ${t}${d.exitWith?` af ${pWho(d.exitWith)}`:""}` : d.activity===1 ? `Går selv ${pSelf(d)}`
        : d.activity===2 ? `Sendes hjem ${t}` : d.activity===3 ? `Går hjem med ${pWho(d.exitWith)} ${t}` : `Går ${t}`;
 }
 function presDesc(d){              // "08.00–15.30 · Hentes af Mor Test (Mor)" – til panelet og bekræftelsen
   if(!d || !d.entry) return d?.vacation ? "Ferie" : "Ingen tider";
-  return `${hhmm(d.entry)}–${hhmm(d.exit)} · ${P_ACT[d.activity]||"Går"}${d.exitWith&&P_NAME.has(d.activity)?` ${d.exitWith}`:""}`;
+  if(d.activity===1 && (d.selfFrom||d.selfTo)) return `${hhmm(d.entry)} · Går selv ${pSelf(d)}`;
+  return `${hhmm(d.entry)}–${hhmm(pExit(d))} · ${P_ACT[d.activity]||"Går"}${d.exitWith&&P_NAME.has(d.activity)?` ${d.exitWith}`:""}`;
 }
 // Linjen i banen/kolonnen: dagens faktiske status (kun i dag), ellers planen for dagen. null = intet at vise.
 function presLine(c, day, a){
@@ -1841,7 +1845,7 @@ function presHtml(){
     ${vac?`<h4 class="ph">Ferie</h4><ul class="pvac">${vac}</ul>`:""}${acts}${err}`;
 }
 function presEditHtml(c,p){
-  const d=pres.draft, acts=(c.activities||[0,1,2,3]).filter(a=>P_ACT[a]);
+  const d=pres.draft, acts=[...new Set([...(c.activities||[0,1,2,3]), ...(d.activity!=null?[d.activity]:[])])].filter(a=>P_ACT[a]).sort();   // dagens egen form altid med
   const who=(c.pickup||[]).map(n=>`<option${n===d.exitWith?" selected":""}>${esc(n)}</option>`).join("");
   return `<form class="pedit" data-pform="edit" novalidate><h4 class="ph">${esc(pDateLong(d.date))}</h4>
     <div class="prow"><label>Kommer<input type="time" id="pEntry" value="${esc(d.entry||"08:00")}" required autofocus></label>
@@ -1874,7 +1878,8 @@ function presConfirm(kind){
   if(kind==="undo"){ const u=pres.log?.undo; pres.confirm={kind, ok:"Ja, fortryd", html:`Fortryd: ${esc(u?.text||"")}?`, warn:`Den tidligere værdi skrives tilbage i Aula.`}; }
   if(kind==="day"){ const d=pres.draft, before=presDay(c,d.date);
     pres.confirm={kind, ok:"Ja, gem i Aula", html:`<b>${esc(p.name)}, ${esc(pDateLong(d.date))}</b><br>${esc(presDesc(before))} → <b>${esc(presDesc(d))}</b>${d.comment?`<br>Kommentar: ${esc(d.comment)}`:""}`,
-      warn: d.repeat!=="never" ? `${P_REP[d.repeat]} fra ${pDateLong(d.date)}: ugeskemaet ændres fra den dag og frem.` : (before?.repeat && before.repeat!=="never" ? "Dagen er en del af en gentagelse. Kun denne dag ændres." : "")}; }
+      warn: [d.repeat!=="never" ? `${P_REP[d.repeat]} fra ${pDateLong(d.date)}: ugeskemaet ændres fra den dag og frem.` : (before?.repeat && before.repeat!=="never" ? "Dagen er en del af en gentagelse. Kun denne dag ændres." : ""),
+             d.activity===1 && before?.selfFrom && before?.selfTo && before.selfFrom!==before.selfTo ? `Aulas tidsrum ${hhmm(before.selfFrom)}–${hhmm(before.selfTo)} bliver til ét tidspunkt (${hhmm(d.exit)}).` : ""].filter(Boolean).join(" ")}; }
   pres.mode="confirm"; pres.err=""; presRender();
 }
 // Den samlede sygemelding: svaret har et resultat pr. system – også når den ene del fejlede (så er status 502 kun,
@@ -1924,7 +1929,7 @@ dBodyEl.addEventListener("click", e=>{
   if(a==="back"){ pres.result=null; pres.mode = pres.mode==="confirm"&&pres.confirm?.kind==="day" ? "edit" : "view"; pres.err=""; return presRender(); }
   if(a==="lock"){ fetch("api/presence/write/lock",{method:"POST",headers:{"X-Requested-With":"familieplan"}}).catch(()=>{}).finally(()=>presStatus().then(()=>{ pres.log=null; presRender(); })); return; }
   if(a==="edit"){ const c=presOf(pres.person), d=presDay(c,b.dataset.date)||{date:b.dataset.date};
-    pres.draft={date:d.date, entry:d.entry||"08:00", exit:d.exit||"16:00", activity:d.activity??(c.activities||[0])[0], exitWith:d.exitWith||"", comment:d.comment||"", repeat:"never"};
+    pres.draft={date:d.date, entry:d.entry||"08:00", exit:pExit(d)||"16:00", activity:d.activity??(c.activities||[0])[0], exitWith:d.exitWith||"", comment:d.comment||"", repeat:"never"};
     pres.mode="edit"; pres.err=""; presRender(); }
 });
 dBodyEl.addEventListener("change", e=>{

@@ -370,3 +370,33 @@ def test_undo_refuses_when_the_day_was_changed_in_aula_afterwards(penv):
     assert penv.fake.days[(HUGO, today().isoformat())]["exitTime"] == "13:15"     # deres ændring står urørt
 
 
+
+
+# ---------------------------------------------------------------- "Går selv" (Aulas tidsrum)
+def test_goes_home_alone_is_read_from_aulas_interval_when_there_is_no_exit_time():
+    fake = FakePresenceAula(today())
+    fake.days[(CARLA, today().isoformat())].update(activityType=1, exitTime=None, exitWith=None,
+                                                   selfDeciderStartTime="14:00:00", selfDeciderEndTime="14:30:00")
+    day = next(c for c in fetch_all(fake) if c["person"] == "carla")["days"][0]
+    assert (day["exit"], day["selfFrom"], day["selfTo"], day["activity"]) == (None, "14:00", "14:30", 1)
+    assert P.exit_of(day) == "14:30" and P.describe_day(day) == "08:00 · Går selv 14:00–14:30"
+
+
+def test_hugo_missing_from_komme_gaa_is_explained_in_the_log(caplog):
+    caplog.set_level("INFO", logger="familieplanner.presence")
+    fetch_all(FakePresenceAula(today(), with_presence=(CARLA,)))
+    assert "ingen data for hugo" in caplog.text
+
+
+def test_changing_a_day_to_go_home_alone_is_read_back_from_the_interval_and_can_be_undone(penv):
+    penv.fake.self_decider = True
+    Path(penv.cfg["output"]).write_text(json.dumps({"events": [], "messages": [], "presence": fetch_all(penv.fake)}))
+    penv.unlock(ANDREAS)
+    r = penv.post("/api/presence/day", _day(activity=1, exitWith=None, exit="14:30"))
+    assert r.status_code == 200, r.text                                 # ikke "viser den ikke endnu"
+    d = penv.child()["days"][0]
+    assert (d["exit"], d["selfFrom"], d["selfTo"]) == (None, "14:30", "14:30") and "14:30" in r.json()["text"]
+    r = penv.post("/api/presence/day", _day(activity=1, exitWith=None, exit="15:00"))
+    assert r.status_code == 200
+    assert penv.post("/api/presence/undo", {"person": "hugo"}).status_code == 200      # før-værdien har ingen exitTime
+    assert penv.child()["days"][0]["selfTo"] == "14:30"

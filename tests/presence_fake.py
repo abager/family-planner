@@ -34,6 +34,7 @@ class FakePresenceAula:
         self.permissions = {c: {"report_sick": "editable", "pickup_times": "editable", "pickup_type": "editable"}
                             for c in self.with_presence}
         self.calls: list[tuple] = []
+        self.self_decider = False                                    # tilbyder institutionen "Går selv"?
         self.fail_write: Exception | None = None
         self.ignore_writes = False                                   # Aula svarer ok, men gemmer intet
         self.opened = 0
@@ -82,7 +83,7 @@ class FakePresenceAula:
                 continue
             mods = [{"moduleType": m, "permission": p} for m, p in self.permissions[cid].items()]
             out.append(PresenceConfiguration.from_dict({"uniStudentId": cid, "presenceConfiguration": {
-                "institution": {"name": "SFO Testhuset"}, "pickup": True, "goHomeWith": True, "selfDecider": False,
+                "institution": {"name": "SFO Testhuset"}, "pickup": True, "goHomeWith": True, "selfDecider": self.self_decider,
                 "dashboardModuleSettings": [{"presenceDashboardContext": "guardian_dashboard", "presenceModules": mods}]}}))
         return out
 
@@ -125,6 +126,8 @@ class FakePresenceAula:
             self.days[key] = {"id": old.get("id", template_id), "byDate": d.isoformat(), "repeatPattern": rp,
                               "repeatFromDate": by_date.isoformat() if step else None, "activityType": act,
                               "entryTime": entry_time, "exitTime": exit_time, "exitWith": exit_with, "comment": comment or ""}
+            if act == 1:          # som Aula (og pakken, der sender exitStartTime = exitEndTime): tidsrum, ingen exitTime
+                self.days[key].update(exitTime=None, selfDeciderStartTime=exit_time, selfDeciderEndTime=exit_time)
             if not step:
                 break
             d += dt.timedelta(days=step)

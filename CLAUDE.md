@@ -335,6 +335,10 @@ faster polling). Tabulex: see the next section – one sick report reaches both 
   (phone list), `.k-pres` (kiosk, via `kDetail`, never actions). Panel = `#detail` with `presHtml` modes
   view / edit / confirm / busy, delegated handlers on `#dBody` (`data-pa`, `data-pform`). `canWrite()` is false on the
   kiosk and without a server. The write cookie is locked on `visibilitychange` → hidden.
+- "Går selv" (activity 1): Aula keeps the exit as `selfDeciderStartTime`/`selfDeciderEndTime` (seen in Aula's own JS and
+  real data, `exitTime` null); the package ignores them, so `day_entry` reads `t._raw` → `selfFrom`/`selfTo`.
+  `exit_of()` (Python) / `pExit()` (JS) = exit or the interval's end; `_same_day` compares with it. Writing goes through
+  the package, which sends `exitStartTime = exitEndTime = exit_time` – an interval becomes one time (UI warns).
 - Sick reports cannot be undone or taken back (user decision, Oct 2026): `set_sick` only sets SICK; `sick: false` → 400;
   `ChangeLog.last_undoable` skips `NOT_UNDOABLE` rows (`sick`, `unsick` from old logs, `sick_school`).
 - **Only tested against a simulated Aula** (`tests/presence_fake.py`, built from the package's own models). Unverified:

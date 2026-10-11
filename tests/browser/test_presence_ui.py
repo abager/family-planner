@@ -214,3 +214,19 @@ def test_the_kiosk_shows_komme_gaa_read_only(make_page, site):
     assert "Planlagt" in body and "Din kode" not in body and "Meld syg" not in body
     assert "Skolen: Intet fravær i dag" in body                         # skolens status, også kun til at læse
     assert page.locator('#kPeople .k-person[data-person="leo"] .k-pres').count() == 0
+
+
+def test_goes_home_alone_shows_aulas_interval_on_the_line_and_in_the_panel(make_page, site):
+    page, fake, _ = open_app(make_page, site)
+    day = next(d for d in fake.family["presence"][1]["days"] if d["date"] == NOW.date().isoformat())
+    day.update(activity=1, exit=None, exitWith=None, selfFrom="14:00", selfTo="14:30")   # Carlas institution har ikke 1 på listen
+    page.reload(); page.wait_for_timeout(500)
+    assert "Går selv 14.00–14.30" in line(page, "carla")
+    open_panel(page, "carla")
+    assert "08.00 · Går selv 14.00–14.30" in page.inner_text("#dBody")
+    unlock(page)
+    page.locator("[data-pa=edit]").first.click()
+    assert page.input_value("#pExit") == "14:30"
+    page.click(".pedit button[type=submit]")
+    page.wait_for_timeout(200)
+    assert "bliver til ét tidspunkt" in page.inner_text("#dBody")

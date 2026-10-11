@@ -115,10 +115,14 @@ def _activities(config) -> list[int]:
 
 
 def day_entry(t) -> dict:
-    """En DayTemplate fra Aula → det, appen gemmer for en dag."""
+    """En DayTemplate fra Aula → det, appen gemmer for en dag.
+    "Går selv" (activity 1): Aula gemmer gåtiden som et tidsrum (selfDeciderStartTime/-EndTime) og ofte ingen exitTime.
+    Pakken læser ikke de felter, så de tages fra det rå svar (selfFrom/selfTo)."""
     act = _enum_value(t.activity_type)
     sta = t.spare_time_activity
+    raw = getattr(t, "_raw", None) or {}
     return {"date": _date(t.by_date), "templateId": t.id, "entry": hhmm(t.entry_time), "exit": hhmm(t.exit_time),
+            "selfFrom": hhmm(raw.get("selfDeciderStartTime")), "selfTo": hhmm(raw.get("selfDeciderEndTime")),
             "activity": act if isinstance(act, int) else None, "exitWith": t.exit_with or None, "comment": t.comment or None,
             "repeat": _repeat(t.repeat_pattern), "repeatFrom": _date(t.repeat_from_date), "repeatTo": _date(t.repeat_to_date),
             "vacation": bool(t.is_on_vacation),
@@ -162,6 +166,7 @@ async def fetch_child(client, child_id: int, person: str, today: dt.date, days_a
     templates = await _safe(lambda: client.get_presence_templates([child_id], today, today + dt.timedelta(days=days_ahead)),
                             "planlagte tider", person)
     if ov is None and not templates:
+        log.info("Komme/Gå: ingen data for %s (Aula gav hverken dagens status eller planlagte tider)", person)
         return None
     if config is None:
         configs = await _safe(lambda: client.get_presence_configuration([child_id]), "opsætning", person) or []
@@ -194,6 +199,9 @@ async def fetch_child(client, child_id: int, person: str, today: dt.date, days_a
 async def fetch(client, profile, owner: dict[int, str], today: dt.date, days_ahead: int = 7) -> list[dict]:
     """Komme/Gå for alle børn i profilen, der matcher en person i config. Rækkefølgen følger Aulas."""
     ids = [c.id for c in profile.children if c.id in owner]
+    for c in profile.children:
+        if c.id not in owner:
+            log.info("Komme/Gå: barnet %s i Aula matcher ingen person – springes over", (c.name or "?").split()[0])
     configs = {}
     if ids:
         for c in await _safe(lambda: client.get_presence_configuration(ids), "opsætning", "alle børn") or []:
@@ -304,10 +312,17 @@ def validate_day(body: dict, child: dict, today: dt.date, edit_days_ahead: int) 
             "comment": comment or None, "repeat": repeat}
 
 
+def exit_of(d: dict | None) -> str | None:
+    """Gåtiden for en dag – for "Går selv" slutningen af Aulas tidsrum, hvis der ikke er en almindelig gåtid."""
+    if not d:
+        return None
+    return d.get("exit") or d.get("selfTo") or d.get("selfFrom")
+
+
 def _same_day(a: dict | None, want: dict) -> bool:
     if not a:
         return False
-    return (a.get("entry") == want["entry"] and a.get("exit") == want["exit"] and a.get("activity") == want["activity"]
+    return (a.get("entry") == want.get("entry") and exit_of(a) == exit_of(want) and a.get("activity") == want.get("activity")
             and (a.get("exitWith") or None) == (want.get("exitWith") or None)
             and (a.get("comment") or None) == (want.get("comment") or None))
 
@@ -320,9 +335,11 @@ def describe_day(d: dict | None) -> str:
     """'08:00–15:30 · Hentes af Monica (Mor)' – til loggen og bekræftelsen."""
     if not d or not d.get("entry"):
         return "ingen tider"
+    if d.get("activity") == 1 and d.get("selfFrom") and d.get("selfTo") and d["selfFrom"] != d["selfTo"]:
+        return f"{d['entry']} · Går selv {d['selfFrom']}–{d['selfTo']}"
     act = ACTIVITY_TEXT.get(d.get("activity"), "")
     who = f" {d['exitWith']}" if d.get("exitWith") else ""
-    return f"{d['entry']}–{d['exit']}" + (f" · {act}{who}" if act else "")
+    return f"{d['entry']}–{exit_of(d)}" + (f" · {act}{who}" if act else "")
 
 
 class Writer:
@@ -396,7 +413,7 @@ class Writer:
         if not before or not before.get("entry"):
             raise PresenceError("Dagen havde ingen tider før ændringen, så den kan ikke rulles tilbage herfra. Ret den i stedet.")
         act = before.get("activity")
-        body = {**before, "repeat": before.get("repeat") or "never",
+        body = {**before, "exit": exit_of(before), "repeat": before.get("repeat") or "never",
                 "activity": act if act is not None else (0 if before.get("exitWith") else 2)}
         fresh, _ = await self.set_day(child_id, person, body, {**child, "pickup": list({*child.get("pickup", []),
                                                                  *([before["exitWith"]] if before.get("exitWith") else [])})},
