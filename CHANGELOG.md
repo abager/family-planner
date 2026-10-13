@@ -28,6 +28,9 @@ All notable changes to this project. Versions are git tags. The format is loosel
   them from the raw answer (`selfFrom`/`selfTo`); the line shows "Går selv 14.00–14.30".
 - Saving or undoing a "Går selv" day no longer fails the read-back ("viser den ikke endnu"): comparisons use the end
   of the interval. The package sends one time for both ends, so the confirmation warns when an interval becomes one time.
+- A child who is in Tabulex but has no Komme/Gå (Hugo) gets a line on school days in today's view –
+  "Skole · intet fravær", "Skole · Lovligt fravær" or "Syg" – so the panel and "Meld syg i dag" can be reached.
+  Hidden on days without school and after the evening switch.
 - The edit form always offers the day's own pickup type, even if the institution's list lacks it.
 - The log now says why a child gets no Komme/Gå ("ingen data for …", unmatched Aula child).
 

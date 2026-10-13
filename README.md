@@ -365,6 +365,7 @@ Med `[tabulex] enabled = true` henter appen også skolens fravær fra Tabulex ("
 - **Kan ikke fortrydes i appen** – heller ikke i Komme/Gå. En forkert sygemelding rettes i Aula eller hos skolen.
 - I Tabulex står den voksne, hvis Aula-login serveren bruger, som afsender. Appens log viser, hvem der trykkede.
 - **Skolens status** ("Skolen: Meldt syg i dag", "Skolefridag", "Lovligt fravær") vises i panelet og på barnets linje – også på kiosken, kun til at læse.
+- **Børn uden Komme/Gå** (fx et barn, der går i klub) får linjen "Skole · intet fravær" på skoledage. Tryk på den for at melde syg til skolen.
 - **CPR-numre gemmes aldrig.** Tabulex bruger dem som id, men appen slår børnene op på ny ved hvert login; de findes kun i hukommelsen under kaldet og aldrig i `family.json`, logs eller fejlbeskeder.
 
 **Første gang:** slå `[tabulex] enabled` til og se, om skolens status passer med Tabulex. Selve sygemeldingen til Tabulex er kun afprøvet mod en simulering – kan først prøves for alvor på en rigtig sygedag. Tjek bagefter i Tabulex.

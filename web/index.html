@@ -1775,12 +1775,13 @@ function presLine(c, day, a){
   if(now && t.status==="reported_absent") return {text:"Meldt fravær", cls:"sick"};
   if(now && t.status==="checked_out") return {text:`Gået hjem${t.checkOut?` ${hhmm(t.checkOut)}`:""}`, cls:"out"};
   if(now && P_IN.has(t.status)) return {text:[t.status==="present"?(t.checkIn?`Kom ${hhmm(t.checkIn)}`:"Til stede"):t.statusText, plan].filter(Boolean).join(" · "), cls:"in"};
+  if(c===NO_PRES && sch && sch.schoolDay!==false) return {text:`Skole · ${sch.text || "intet fravær"}`, cls:""};   // kun i Tabulex (Hugo): ellers intet at trykke på for at melde syg
   return plan ? {text:plan, cls:""} : null;
 }
 function presButton(p, day, cls, keyFn){
   const a=absOf(p.id), c=presOf(p.id) || (a ? NO_PRES : null); if(!c) return "";
   const l=presLine(c,day,a); if(!l) return "";
-  return `<button type="button" class="${cls} ${l.cls}" ${keyFn(()=>openPresence(p.id))}><span class="sronly">Komme/Gå for ${esc(p.name)}: </span>${esc(l.text)}</button>`;
+  return `<button type="button" class="${cls} ${l.cls}" ${keyFn(()=>openPresence(p.id))}><span class="sronly">${c===NO_PRES?"Skole":"Komme/Gå"} for ${esc(p.name)}: </span>${esc(l.text)}</button>`;
 }
 
 // ----- panelet

@@ -230,3 +230,30 @@ def test_goes_home_alone_shows_aulas_interval_on_the_line_and_in_the_panel(make_
     page.click(".pedit button[type=submit]")
     page.wait_for_timeout(200)
     assert "bliver til ét tidspunkt" in page.inner_text("#dBody")
+
+
+
+def test_a_child_only_in_tabulex_gets_a_school_line_today_and_can_be_reported_sick(make_page, site):
+    page, fake, _ = open_app(make_page, site)
+    fake.family["presence"] = [c for c in fake.family["presence"] if c["person"] != "hugo"]      # som Hugo: ingen Komme/Gå
+    page.reload(); page.wait_for_timeout(500)
+    assert line(page, "hugo").endswith("Skole · intet fravær")
+    open_panel(page)
+    unlock(page)
+    assert "Planlagt" not in page.inner_text("#dBody")
+    page.click("[data-pa=sick]")
+    assert "Sendes til: skolen" in page.inner_text("#dBody")
+    page.click("[data-pa=do]")
+    page.wait_for_timeout(400)
+    assert "✓ Skolen" in page.inner_text("#dBody") and line(page, "hugo").endswith("Syg")
+
+
+def test_the_school_line_is_hidden_on_a_day_without_school_and_shows_other_absence(make_page, site):
+    page, fake, _ = open_app(make_page, site)
+    fake.family["presence"] = [c for c in fake.family["presence"] if c["person"] != "hugo"]
+    fake.family["absence"][1].update(reason="Lovligt", text="Lovligt fravær")
+    page.reload(); page.wait_for_timeout(500)
+    assert line(page, "hugo").endswith("Skole · Lovligt fravær")
+    fake.family["absence"][1]["schoolDay"] = False
+    page.reload(); page.wait_for_timeout(500)
+    assert line(page, "hugo") == ""

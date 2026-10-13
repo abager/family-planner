@@ -375,7 +375,8 @@ disabled "Ikke skoledag i dag"; hidden after `[display] evening_hour`; school st
   label, ok, already?, text|error}], child, absence}`; 502 only when nothing succeeded. Log row `sick_school`.
 - Frontend: `absOf` (only today's entry), `NO_PRES` placeholder for a child with Tabulex but no Komme/Gå, `presLine`
   takes the school entry, `sickPlan` decides label/targets/disabled, `presSick` handles partial results (`pres.result`).
-  A Tabulex-only child gets a line only when something is registered (no Komme/Gå line to tap otherwise).
+  A Tabulex-only child (Hugo has no Komme/Gå) gets the line "Skole · intet fravær" / "Skole · <reason>" / "Syg" in
+  today's view on school days (not when `schoolDay` is false, not after evening_hour) – the only way to his panel.
 - **Only the login and reading are verified for real.** The PUT and its read-back are only tested against
   `tests/tabulex_fake.py` (built from a real HAR and the probe output).
 ## Day view heading
