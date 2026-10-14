@@ -5,6 +5,7 @@ Brug:
   python fetch_family.py                 # hent én gang (første gang: MitID-login via QR i terminalen)
   python fetch_family.py --watch 900     # hent hvert 15. minut
   python fetch_family.py --no-aula       # kun Google (godt til at teste opsætningen)
+  python fetch_family.py --dump-posts    # diagnose: rå opslag + notifikationer, og en struktur-fil uden familiedata
 """
 from __future__ import annotations
 
@@ -1130,6 +1131,82 @@ async def _api_json(client, query: str) -> dict:
     return resp.json()
 
 
+# ---------------------------------------------------------------- Diagnose: læst-status på opslag (--dump-posts)
+POSTS_DUMP = Path("aula_posts_dump.json")            # rå data – familiens data, aldrig i git
+POSTS_SHAPE = Path("aula_posts_struktur.txt")        # kun feltnavne og typer – kan deles uden familiedata
+
+
+def _json_shape(data, path: str = "", out: dict | None = None) -> dict:
+    """Saml alle feltstier i noget JSON med deres typer. Tekster og tal vises aldrig, kun typen.
+    Sandt/falsk tælles, fordi en læst-markering typisk er et bool-felt. Lister slås sammen som `[]`,
+    og nøgler, der er id'er (kun cifre), skrives som `<id>`, så ingen data slipper med i stinavnet."""
+    out = {} if out is None else out
+    if isinstance(data, dict):
+        if not data:
+            out.setdefault(path or ".", {"types": set(), "true": 0, "false": 0})["types"].add("{}")
+        for k, v in data.items():
+            key = "<id>" if str(k).isdigit() else str(k)
+            _json_shape(v, f"{path}.{key}" if path else key, out)
+        return out
+    if isinstance(data, list):
+        if not data:
+            out.setdefault(f"{path}[]", {"types": set(), "true": 0, "false": 0})["types"].add("tom liste")
+        for v in data:
+            _json_shape(v, f"{path}[]", out)
+        return out
+    e = out.setdefault(path or ".", {"types": set(), "true": 0, "false": 0})
+    if isinstance(data, bool):
+        e["types"].add("bool"); e["true" if data else "false"] += 1
+    else:
+        e["types"].add({type(None): "null", int: "tal", float: "tal", str: "tekst"}.get(type(data), type(data).__name__))
+    return out
+
+
+def _shape_text(sections: dict) -> str:
+    lines = ["Struktur af Aulas opslag og notifikationer (kun feltnavne og typer – ingen tekster, navne eller id'er).",
+             "Sandt/falsk tælles, så det kan ses, hvilke felter der kan være en læst-markering.", ""]
+    for title, data in sections.items():
+        lines.append(f"== {title}")
+        if isinstance(data, dict) and "error" in data and len(data) == 1:
+            lines += [f"  fejl: {data['error']}", ""]
+            continue
+        for path, e in sorted(_json_shape(data).items()):
+            bools = f"   (sand {e['true']} / falsk {e['false']})" if "bool" in e["types"] else ""
+            lines.append(f"  {path}  {' | '.join(sorted(e['types']))}{bools}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+async def dump_posts(cfg: dict, limit: int = 20, out_dir: Path = Path(".")) -> tuple[Path, Path]:
+    """Gem rå opslag og notifikationer fra Aula, så vi kan finde læst-status for opslag.
+    Læser kun (GET) – samme kald som Aulas egen app laver, når feedet og klokken vises. Hvert kald
+    prøves for sig, så en fejl i det ene ikke skjuler det andet."""
+    from urllib.parse import urlencode
+    async with await open_aula_client(cfg) as client:
+        profile = await client.get_profile()
+        child_ids = [c.id for c in profile.children]
+        codes = sorted({str((c._raw or {}).get("institutionProfile", {}).get("institutionCode"))
+                        for c in profile.children if (c._raw or {}).get("institutionProfile", {}).get("institutionCode")})
+        calls = {
+            "opslag (posts.getAllPosts)": [("method", "posts.getAllPosts"), ("parent", "profile"), ("index", 0), ("limit", limit),
+                                           *[("institutionProfileIds[]", i) for i in profile.institution_profile_ids]],
+            "notifikationer (notifications.getNotificationsForActiveProfile)": [
+                ("method", "notifications.getNotificationsForActiveProfile"), ("offset", 0), ("limit", 50),
+                *[("activeChildrenIds[]", i) for i in child_ids], *[("activeInstitutionCodes[]", c) for c in codes]],
+        }
+        raw: dict = {}
+        for title, params in calls.items():
+            try:
+                raw[title] = await _api_json(client, urlencode(params))
+            except Exception as e:  # noqa: BLE001
+                raw[title] = {"error": f"{type(e).__name__}: {e}"}
+            log.info("Diagnose: %s %s", title, "fejlede" if "error" in raw[title] and len(raw[title]) == 1 else "hentet")
+    dump, shape = out_dir / POSTS_DUMP, out_dir / POSTS_SHAPE
+    dump.write_text(json.dumps(raw, ensure_ascii=False, indent=1, default=str), "utf-8")
+    shape.write_text(_shape_text(raw), "utf-8")
+    return dump, shape
+
+
 def _thread_sig(raw: dict, per_thread: int) -> str:
     """Fingeraftryk af en tråd i trådlisten. Ændrer Aula noget ved tråden (ny besked, læst, deltagere …), ændres det."""
     return hashlib.sha1(f"{per_thread}|{json.dumps(raw, sort_keys=True, default=str)}".encode()).hexdigest()[:16]
@@ -1677,6 +1754,8 @@ def main() -> None:
     ap.add_argument("--no-aula", action="store_true", help="spring Aula over")
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("--dump-aula", action="store_true", help="gem rå kalenderdata i aula_dump.json til fejlsøgning")
+    ap.add_argument("--dump-posts", action="store_true",
+                    help="gem rå opslag og notifikationer i aula_posts_dump.json og kun feltnavne i aula_posts_struktur.txt")
     args = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
@@ -1690,6 +1769,11 @@ def main() -> None:
     if loaded:
         logging.getLogger("familieplanner").info("Læste fra .env: %s", ", ".join(loaded))
     cfg = tomllib.loads(cfg_path.read_text("utf-8"))
+
+    if args.dump_posts:
+        dump, shape = asyncio.run(dump_posts(cfg))
+        print(f"Rå data (del ikke): {dump}\nKun feltnavne og typer (kan deles): {shape}")
+        return
 
     async def loop():
         while True:

@@ -8,6 +8,8 @@ web/media/
 aula_dump.json
 weekplan.json
 aula_feed.json
+aula_posts_dump.json
+aula_posts_struktur.txt
 __pycache__/
 
 # Tilstand, som serveren skriver ved siden af family.json (familiens data – aldrig i git)

@@ -51,5 +51,7 @@ repos:
             .*session\.key|
             aula_dump\.json|
             aula_feed\.json|
+            aula_posts_dump\.json|
+            aula_posts_struktur\.txt|
             weekplan\.json
           )$

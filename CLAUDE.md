@@ -126,7 +126,7 @@ Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
 `private_messages.json`, `ai_last_invalid.json`, `presence_log.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
 `web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, `web/home_location.json`, `web/weather_cache.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
-`weekplan.json`.
+`aula_posts_dump.json`, `aula_posts_struktur.txt` (from `--dump-posts`), `weekplan.json`.
 
 ## Commands
 

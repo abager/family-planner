@@ -80,6 +80,8 @@ Skemaet gøres læsevenligt (`schedule.py`): fagene skrives ud (DAN → Dansk), 
 
 Fejlsøgning: `fetch_family.py --dump-aula` gemmer rå kalenderdata for ±3 dage i `aula_dump.json`.
 
+Diagnose af læst-status på opslag: `fetch_family.py --dump-posts` henter de nyeste opslag og notifikationer (kun læsning) og gemmer de rå data i `aula_posts_dump.json` – familiens data, del den ikke. Samtidig skrives `aula_posts_struktur.txt` med kun feltnavne og typer (ingen tekster, navne eller id'er; sandt/falsk tælles). Det er den fil, der kan deles. Begge filer holdes ude af git og Docker.
+
 ## Beskeder
 
 Fanen "Beskeder" virker som en mailklient: kompakt liste til venstre, den valgte besked i fuld bredde til højre med hele tråden (nyeste først, ældre foldet sammen). Søg, filtrér på ulæste, "Skal gøres" eller "Med datoer", og brug ↑/↓ til at bladre. På mobil åbner beskeden i fuld skærm. Beskeder, du har åbnet, markeres som set på den enhed (de forbliver ulæste i Aula).

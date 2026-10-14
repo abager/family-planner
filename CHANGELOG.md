@@ -5,6 +5,14 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (diagnose: read status on Aula posts)
+- `fetch_family.py --dump-posts`: read-only fetch of the newest posts (`posts.getAllPosts`) and notifications
+  (`notifications.getNotificationsForActiveProfile`). Raw data → `aula_posts_dump.json`; field names and types only
+  (bool fields counted, id-like keys masked) → `aula_posts_struktur.txt`, which is safe to share. Purpose: find where
+  Aula keeps the read/new status of posts – the pinned `aula` 1.12.0 `Post` model has no such field and no
+  mark-as-read for posts (only for message threads). Both files are in .gitignore, .dockerignore, the no-family-data
+  hook and (the raw dump) `server.DENY_NAMES`.
+
 ### Added (school absence via Tabulex – one combined sick report)
 - New `tabulex.py`: logs into Tabulex ("Fravær – forældreindberetning") with Aula's own widget token (widget 0047),
   the same way the Aula portal link does – no extra MitID. Login verified against the real Tabulex with a read-only

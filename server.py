@@ -58,7 +58,7 @@ WRITE_COOKIE = "fp_write"
 DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json",
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json", "ai_last_invalid.json",
-              "home_location.json", "weather_cache.json", "presence_log.json",
+              "home_location.json", "weather_cache.json", "presence_log.json", "aula_posts_dump.json",
 }
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
