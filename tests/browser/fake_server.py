@@ -91,6 +91,10 @@ class FakeServer:
             return self._json(route, self.home)
         if path == "/api/messages/read":
             return self._json(route, {"enabled": True, "queued": len(body["ids"])})
+        if path == "/api/posts/read":
+            if getattr(self, "fail_posts_read", False):
+                return self._json(route, {"error": "nej"}, 500)
+            return self._json(route, {"marked": len(body["ids"])})
         if path == "/api/calendar" and m == "GET":
             return self._json(route, self.cal)
         if path == "/api/calendar/events":

@@ -45,6 +45,7 @@ import ops
 import presence as presence_mod
 import tabulex as tabulex_mod
 import private as private_mod
+import posts_read
 import problems
 import progress
 import suggestions as sugg
@@ -58,7 +59,7 @@ WRITE_COOKIE = "fp_write"
 DENY_NAMES = {"private_messages.json", "suggestions_state.json", "learned_rules.json", "server_state.json", "config.toml", "aula_tokens.json",
               "session.key", "google_service_account.json", ".env",
               "ai_cache.json", "ai_usage.json", "ai_last_invalid.json",
-              "home_location.json", "weather_cache.json", "presence_log.json", "aula_posts_dump.json",
+              "home_location.json", "weather_cache.json", "presence_log.json", "aula_posts_dump.json", "posts_read.json",
 }
 PUBLIC_PATHS = {"/login", "/api/health", "/favicon.svg", "/favicon-32.png", "/apple-touch-icon.png", "/favicon.ico",
                 "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"}      # ikoner og manifest indeholder intet hemmeligt og hentes uden cookie
@@ -1035,6 +1036,27 @@ def create_app(cfg: dict, settings: Settings, password: str, secret: bytes, no_a
         if not (settings.mark_read and settings.use_aula):
             return {"enabled": False, "queued": 0}
         return {"enabled": True, "queued": marker.add(ids)}
+
+    # ----- opslag: læst/ulæst er appens egen, fælles status (posts_read.py) – intet skrives til Aula
+    posts_store = posts_read.Store(out_dir / posts_read.FILE)
+
+    @app.post("/api/posts/read")
+    async def posts_mark_read(request: Request):
+        try:
+            body = await request.json()
+        except ValueError:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        ids = body.get("ids") if isinstance(body, dict) else None
+        if not (isinstance(ids, list) and 0 < len(ids) <= 50 and all(isinstance(i, str) and posts_read.ID_RE.fullmatch(i) for i in ids)):
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        try:
+            known = {p.get("id") for p in json.loads((out_dir / "family.json").read_text("utf-8")).get("posts", [])}
+        except (OSError, ValueError):
+            known = set()
+        marked = posts_store.mark(ids, known)                 # kun opslag, vi selv har hentet – ikke vilkårlige id'er
+        if marked:
+            posts_read.patch_family(out_dir / "family.json", marked)
+        return {"marked": len(marked)}
 
     # ----- kalender: opret, afvis, fortryd, fjern
     store = sugg.Store(out_dir / "suggestions_state.json")

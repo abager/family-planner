@@ -239,3 +239,25 @@ def test_an_aula_outage_is_a_problem_with_a_login_link_until_aula_works_again(cf
     fake_aula.down = False
     go(cfg, use_aula=True)
     assert not [x for x in problems.snapshot() if x["area"] == "aula"]
+
+
+# ---------------------------------------------------------------- læst/ulæst på opslag (posts_read.py)
+def _post(n, when):
+    return {"id": f"post:{n}", "title": f"Opslag {n}", "author": "Lærer", "timestamp": when, "important": False,
+            "text": "Kort besked.", "images": [], "attachments": 0, "groups": [], "people": ["family"], "source": "aula"}
+
+
+def test_posts_carry_the_shared_read_status_into_family_json(cfg, fake_aula):
+    old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=2)).isoformat()
+    fake_aula.posts = [_post(1, old)]
+    go(cfg, use_aula=True)
+    assert [p["unread"] for p in family(cfg)["posts"]] == [False]            # alt, der fandtes, da funktionen kom, er læst
+    new = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=1)).isoformat()
+    fake_aula.posts = [_post(2, new), _post(1, old)]
+    go(cfg, use_aula=True)
+    assert [(p["id"], p["unread"]) for p in family(cfg)["posts"]] == [("post:2", True), ("post:1", False)]
+    import posts_read
+    store = posts_read.Store(Path(cfg["output"]).with_name(posts_read.FILE))
+    store.mark(["post:2"], known={"post:1", "post:2"})
+    go(cfg, use_aula=True)
+    assert [p["unread"] for p in family(cfg)["posts"]] == [False, False]      # markeringen holder på tværs af hentninger

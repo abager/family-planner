@@ -217,6 +217,20 @@ def test_mark_read_validates_ids(env):
         assert env.post("/api/messages/read", bad).status_code == 400
 
 
+def test_posts_are_marked_read_for_everyone_and_family_json_is_patched(env):
+    posts = [{"id": "post:1", "timestamp": "2026-10-15T10:00:00+00:00", "unread": True},
+             {"id": "post:2", "timestamp": "2026-10-15T11:00:00+00:00", "unread": True}]
+    (env.out / "family.json").write_text(json.dumps({"events": [], "messages": [], "posts": posts}))
+    assert env.post("/api/posts/read", {"ids": ["post:1", "post:999"]}).json() == {"marked": 1}   # kun opslag, vi har hentet
+    assert env.post("/api/posts/read", {"ids": ["post:1"]}).json() == {"marked": 0}              # allerede læst
+    fam = json.loads((env.out / "family.json").read_text("utf-8"))
+    assert [p["unread"] for p in fam["posts"]] == [False, True]
+    assert json.loads((env.out / "posts_read.json").read_text("utf-8"))["read"] == ["post:1"]
+    for bad in ({"ids": []}, {"ids": ["msg:1"]}, {"ids": ["post:1"] * 51}, {"ids": "post:1"}, {"ids": ["post:../x"]}, {}):
+        assert env.post("/api/posts/read", bad).status_code == 400
+    assert env.c.post("/api/posts/read", json={"ids": ["post:2"]}).status_code in (401, 403)       # uden X-Requested-With
+
+
 def test_calendar_state_names_the_target_calendar_and_its_default_people(env):
     cal = env.c.get("/api/calendar").json()
     assert cal["enabled"] and cal["calendar_name"] == "Familiekalender" and cal["default_people"] == ["family"]

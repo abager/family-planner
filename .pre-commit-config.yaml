@@ -38,6 +38,7 @@ repos:
             web/briefing.*\.json|
             web/server_state\.json|
             web/suggestions_state\.json|
+            web/posts_read\.json|
             web/learned_rules\.json|
             .*ai_cache\.json|
             .*ai_usage\.json|

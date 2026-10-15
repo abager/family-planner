@@ -5,6 +5,20 @@ All notable changes to this project. Versions are git tags. The format is loosel
 
 ## [Unreleased]
 
+### Added (read status on Aula posts)
+- New `posts_read.py`: shared, app-only read status for posts in `web/posts_read.json`. Aula has no per-post read flag,
+  and its single `profileLastSeenPostDate` moves on every `posts.getAllPosts` call (seen with `--dump-posts`), so
+  nothing is read from or written to Aula. Posts already present when the feature starts count as read; newer posts
+  are unread until someone marks them. An older post that shows up later is not "new". No baseline is set while the
+  feed is empty (e.g. Aula down on the first run).
+- `POST /api/posts/read` (only ids of posts we fetched, ≤ 50) marks posts read and patches family.json at once, so all
+  devices see it. Status is applied right before family.json is written, with no await in between, so a mark can't be
+  overwritten by an older status.
+- Feed: blue dot and left edge on unread posts, count on the Feed button (top and bottom nav), filter "Ulæste opslag",
+  button "Markér som læst" (manual only, cannot be undone – user's decision). No swipe on posts: cards contain image
+  carousels that already use horizontal swipes. A failed save puts the post back as unread with a toast. Kiosk unchanged.
+- `web/posts_read.json` is in .gitignore, .dockerignore, the no-family-data hook and `server.DENY_NAMES`.
+
 ### Added (diagnose: read status on Aula posts)
 - `fetch_family.py --dump-posts`: read-only fetch of the newest posts (`posts.getAllPosts`) and notifications
   (`notifications.getNotificationsForActiveProfile`). Raw data → `aula_posts_dump.json`; field names and types only

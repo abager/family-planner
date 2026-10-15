@@ -19,6 +19,7 @@ pytest.ini
 *.zip
 web/server_state.json
 web/suggestions_state.json
+web/posts_read.json
 web/learned_rules.json
 private_messages.json
 presence_log.json

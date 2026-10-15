@@ -260,6 +260,16 @@ Ulæste beskeder har en blå prik i margenen og fed skrift, og i læseruden et "
 - **I Aula:** med serveren kører markeringen også i Aula (`mark_read_in_aula = true` under `[server]`), og alle enheder ser den som læst. Kaldet køres i baggrunden, samles og prøves igen, hvis Aula svarer med en fejl; hvis Aula-loginet er udløbet, venter markeringerne. Slå det fra med `mark_read_in_aula = false`, så gælder markeringen kun på den enhed, hvor du læste beskeden.
 - Bemærk: Aulas "læst" kan være synlig for andre (fx afsender). Det er ikke afprøvet. Der findes ikke noget kald til at markere som *ulæst* igen.
 
+### Opslag
+
+Opslag i Feedet har deres egen læst-status. Aula har ingen læst-markering pr. opslag – kun én "set til"-dato for hele feedet, og den flytter sig, hver gang appen henter opslag – så statussen ligger i appen (`web/posts_read.json`) og skrives ikke til Aula.
+
+- Statussen er **fælles for husstanden**: markerer én et opslag som læst, er det læst på alle enheder.
+- Ulæste opslag har en blå prik foran titlen og en blå kant. Feed-knappen viser antallet, og filteret **Ulæste opslag** viser kun dem.
+- Et opslag bliver kun læst, når nogen trykker **Markér som læst** – ikke når det vises eller åbnes. Det kan ikke fortrydes. Der er ingen stryge-markering på opslag, fordi man stryger i billedkarrusellerne.
+- Da funktionen kom, blev alle opslag, appen allerede havde, regnet som læste. Kun opslag, der er nyere end det, kan være ulæste.
+- Kioskvisningen viser ingen status.
+
 ## iPad, telefon og computer
 
 Layoutet tilpasser sig skærmen:

@@ -74,6 +74,7 @@ def fake_aula(monkeypatch):
 
     class Fake:
         messages: list = []
+        posts: list = []
         prev = None
         down = False
 
@@ -82,7 +83,9 @@ def fake_aula(monkeypatch):
             if self.down:
                 raise RuntimeError("Aula er nede")
             import copy
-            return aula_payload(copy.deepcopy(self.messages))
+            payload = aula_payload(copy.deepcopy(self.messages))
+            payload["posts"] = copy.deepcopy(self.posts)
+            return payload
 
     f = Fake()
     monkeypatch.setattr(F, "fetch_aula", f)

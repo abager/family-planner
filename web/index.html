@@ -424,6 +424,12 @@ dialog .long{white-space:pre-line;max-height:55vh;overflow:auto}
 .cbody .txt.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .more{all:unset;cursor:pointer;color:var(--accent);font-weight:700;font-size:.9rem;margin-top:4px;display:inline-block}
 .cfoot{font-size:.8rem;color:var(--muted);padding:0 14px 12px}
+/* Ulæst opslag: blå prik foran titlen og blå kant til venstre (samme blå som ulæste beskeder). Falmer væk ved "Markér som læst". */
+.card.post{transition:box-shadow .3s}
+.card.post.unread{box-shadow:inset 4px 0 0 #2F6FDE}
+.cbody h3 .udot{display:inline-block;width:0;height:10px;border-radius:50%;background:#2F6FDE;margin-right:0;vertical-align:middle;transform:scale(0);opacity:0;transition:transform .3s ease,opacity .3s ease,width .3s ease,margin .3s ease}
+.card.post.unread h3 .udot{width:10px;margin-right:8px;transform:scale(1);opacity:1}
+.pread{margin:10px 0 0 -10px}
 .extract{list-style:none;margin:10px 0 0;padding:10px 0 0;border-top:1px dashed var(--line)}
 .extract li{display:flex;gap:8px;align-items:flex-start;font-size:.9rem;padding:3px 0}
 .extract .ic{margin-top:.2em;color:var(--accent)}
@@ -867,7 +873,7 @@ button,a,.chip,.pill{touch-action:manipulation}
       <button id="v-today" aria-pressed="true"><svg class="ic navic" aria-hidden="true"><use href="#i-today"/></svg><span>I dag</span></button>
       <button id="v-week" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-week"/></svg><span>Ugen</span></button>
       <button id="v-mail" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-msg"/></svg><span>Beskeder</span><span class="count hidden" id="unreadCount"></span></button>
-      <button id="v-aula" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-photo"/></svg><span>Feed</span></button>
+      <button id="v-aula" aria-pressed="false"><svg class="ic navic" aria-hidden="true"><use href="#i-photo"/></svg><span>Feed</span><span class="count hidden" id="feedCount"></span></button>
     </div>
     <div class="people" id="people" aria-label="Vis personer"></div>
     <div class="weeknav hidden" id="weeknav">
@@ -943,6 +949,7 @@ button,a,.chip,.pill{touch-action:manipulation}
         <button data-ft="all" aria-pressed="true">Alle</button>
         <button data-ft="post" aria-pressed="false"><svg class="ic"><use href="#i-post"/></svg>Opslag</button>
         <button data-ft="album" aria-pressed="false"><svg class="ic"><use href="#i-photo"/></svg>Billeder</button>
+        <button data-ft="unread" aria-pressed="false">Ulæste opslag</button>
       </div>
       <div id="feed"></div>
     </div>
@@ -1165,7 +1172,7 @@ function demoData(){
   ];
   const pic = (sky,ground,sun) => "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"><rect width="400" height="400" fill="${sky}"/><circle cx="300" cy="110" r="46" fill="${sun}"/><path d="M0 280 Q100 220 200 270 T400 250 V400 H0Z" fill="${ground}"/><path d="M0 330 Q120 300 240 330 T400 320 V400 H0Z" fill="#00000022"/></svg>`);
   const posts = [
-    {id:"po1",title:"Motionsdag fredag",author:"Skolens ledelse",timestamp:at(0,9,12),important:true,images:[pic("#BFE3C9","#4E9A62","#FFD166")],text:"Fredag er det motionsdag for hele skolen. Eleverne skal have løbetøj, drikkedunk og en god madpakke med. Skoledagen slutter kl. 12.",people:["hugo","carla"]},
+    {id:"po1",title:"Motionsdag fredag",author:"Skolens ledelse",timestamp:at(0,9,12),important:true,unread:true,images:[pic("#BFE3C9","#4E9A62","#FFD166")],text:"Fredag er det motionsdag for hele skolen. Eleverne skal have løbetøj, drikkedunk og en god madpakke med. Skoledagen slutter kl. 12.",people:["hugo","carla"]},
     {id:"po2",title:"Billeder fra turen til stranden",author:"Stuen Mælkebøtten",timestamp:at(1,14,40),important:false,text:"Sikke en dejlig dag vi havde! Børnene byggede sandslotte og fandt krabber.",people:["leo"],images:[pic("#9FD3F0","#F2D38C","#FFE27A"),pic("#7FB8E6","#E9C57A","#FFFFFF"),pic("#F6B38E","#6FA38B","#FFE9A8")]},
     {id:"po3",title:"Forældremøde i 6. klasse",author:"Klasselæreren",timestamp:at(1,8,5),important:false,text:"Vi holder forældremøde torsdag d. 15. kl. 19. Dagsorden følger.",people:["hugo"]}
   ];
@@ -1230,7 +1237,7 @@ async function load(){
   }
   if(state.data.demo && !state.briefing.day) state.briefing.day = demoBriefing();
   // Uændrede data forstyrrer ikke feed og beskeder (rulleposition, karruseller). Kun hjørnet med status opdateres.
-  const sig=[state.data.generated,state.briefing.day?.generated,state.briefing.week?.generated,state.server?.runs,state.server?.aula,state.server?.pending_reads,arr("messages").filter(m=>m.unread).length,Object.keys(state.cal.created).length,state.cal.dismissed.length,(state.data.suggestions||[]).length,(state.cal.learned||[]).map(r=>r.id+r.enabled).join(",")].join("|");
+  const sig=[state.data.generated,state.briefing.day?.generated,state.briefing.week?.generated,state.server?.runs,state.server?.aula,state.server?.pending_reads,arr("messages").filter(m=>m.unread).length,arr("posts").filter(p=>p.unread).length,Object.keys(state.cal.created).length,state.cal.dismissed.length,(state.data.suggestions||[]).length,(state.cal.learned||[]).map(r=>r.id+r.enabled).join(",")].join("|");
   lastLoad=Date.now();
   if(sig===lastSig && (state.view==="aula"||state.view==="mail")){ renderChrome(); return; }
   lastSig=sig;
@@ -2049,7 +2056,7 @@ function renderAula(){
   const items=[
     ...arr("posts").map(p=>({...p,kind:"post"})),
     ...arr("albums").map(a=>({...a,kind:"album"}))
-  ].filter(x=>personVisible(x.people) && (state.feedType==="all"||state.feedType===x.kind))
+  ].filter(x=>personVisible(x.people) && (state.feedType==="all"||state.feedType===x.kind||(state.feedType==="unread"&&x.kind==="post"&&x.unread)))
    .sort((a,b)=>(b.timestamp||"").localeCompare(a.timestamp||""));
   const terms=feedTerms(), shown=terms.length ? items.filter(x=>terms.every(t=>feedHay(x).includes(t))) : items;
   document.getElementById("fcount").textContent = terms.length ? `${shown.length} af ${items.length}` : "";
@@ -2058,21 +2065,25 @@ function renderAula(){
   box.innerHTML = shown.map(x=>{
     const imgs=x.images||[], open=state.expanded.has(x.id)||terms.length>0, long=(x.text||"").length>220;      // under søgning vises hele teksten, så træffet kan ses
     const kindBadge = x.kind==="album" ? `<span class="kind album">${icon("photo")}Album</span>` : `<span class="kind post">${icon("post")}Opslag</span>`;
-    return `<article class="card ${x.kind}">
+    const un = x.kind==="post" && x.unread;
+    return `<article class="card ${x.kind}${un?" unread":""}" data-pid="${esc(x.id)}">
       <div class="chead"><div class="avs">${pavsFor(x.people)}</div>
         <div class="who"><b>${esc(x.author||"Aula")}</b><span>${esc(whoText(x.people))} · ${when(x.timestamp)}</span></div>${kindBadge}</div>
       ${imgs.length?`${carousel(x.id, imgs)}
         ${x.kind==="album"?`<button class="open-album" data-open="${esc(x.id)}">${icon("photo")} Se ${imgs.length>1?`alle ${imgs.length} billeder`:"billedet"} i stor visning</button>`:""}
         ${x.imageCount>imgs.length?`<div class="pcount">${imgs.length} af ${x.imageCount} billeder hentet – resten ligger i Aulas galleri</div>`:""}`:""}
-      <div class="cbody">${x.important?`<span class="flag" style="margin:0 0 6px;display:inline-block">Vigtigt</span> `:""}<h3>${esc(x.title)}</h3>
+      <div class="cbody">${x.important?`<span class="flag" style="margin:0 0 6px;display:inline-block">Vigtigt</span> `:""}${un?`<span class="sronly">Ulæst opslag</span>`:""}<h3>${x.kind==="post"?`<span class="udot" aria-hidden="true"></span>`:""}${esc(x.title)}</h3>
         ${x.text ? `${long&&!open ? `<p class="txt clamp">${esc(flatText(x.text))}</p>` : `<div class="txt rich">${richHTML(x.text)}</div>`}
         ${long&&!terms.length?`<button class="more" data-more="${esc(x.id)}">${open?"Vis mindre":"Læs mere"}</button>`:""}` : `<p class="meta">Ingen tekst – åbn tråden i Aula</p>`}
-        ${extracted(x)}${x.kind==="post"?calOptsHTML(x.cal)+changeOptsHTML(x.id):""}</div>
+        ${extracted(x)}${x.kind==="post"?calOptsHTML(x.cal)+changeOptsHTML(x.id):""}
+        ${un?`<button class="rbtn pread" data-pread="${esc(x.id)}">${icon("check")} Markér som læst</button>`:""}</div>
       ${x.attachments?`<div class="cfoot">${x.attachments} vedhæftning(er) – se dem i Aula</div>`:""}
     </article>`;
   }).join("") || (terms.length
     ? `<p class="empty">Intet opslag eller billede matcher «${esc(state.feedQ.trim())}». Søgningen dækker de ${items.length} nyeste, appen har hentet fra Aula – ældre findes i Aula.</p>`
+    : state.feedType==="unread" ? `<p class="empty">Ingen ulæste opslag.</p>`
     : `<p class="empty">Intet at vise. Prøv at vælge flere personer eller "Alle".</p>`);
+  box.querySelectorAll("[data-pread]").forEach(b=>b.onclick=()=>markPostRead(b.dataset.pread));
   if(terms.length) box.querySelectorAll(".cbody h3, .cbody .txt, .chead .who b").forEach(el=>highlightIn(el, terms));
   box.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>{const id=b.dataset.more; state.expanded.has(id)?state.expanded.delete(id):state.expanded.add(id); renderAula();});
   const byId = Object.fromEntries(shown.map(x=>[x.id,x]));
@@ -2082,6 +2093,23 @@ function renderAula(){
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{const x=byId[b.dataset.open]; openLightbox(x.images,0,x.title);});
 }
 document.querySelectorAll("[data-ft]").forEach(b=>b.onclick=()=>{state.feedType=b.dataset.ft; renderAula();});
+// Læst/ulæst på opslag er fælles for husstanden og gemmes på serveren (posts_read.py). Kun manuelt, kan ikke fortrydes.
+async function markPostRead(id){
+  const p=arr("posts").find(x=>x.id===id); if(!p||!p.unread) return;
+  p.unread=false; paintPostRead(id); updateBadge();
+  if(state.data.demo) return;
+  try{
+    const r=await fetch("api/posts/read",{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"familieplan"},body:JSON.stringify({ids:[id]})});
+    if(r.status===401){ toLogin(); return; }
+    if(!r.ok) throw new Error(r.status);
+  }catch{ p.unread=true; renderAula(); updateBadge(); toast("Kunne ikke gemme lige nu – opslaget står stadig som ulæst."); }
+}
+function paintPostRead(id){
+  const card=[...document.querySelectorAll("#feed [data-pid]")].find(c=>c.dataset.pid===id); if(!card) return;
+  card.classList.remove("unread"); card.querySelector(".sronly")?.remove();
+  const b=card.querySelector("[data-pread]"); if(b){ b.classList.add("fading"); setTimeout(()=>b.remove(),320); }
+  if(state.feedType==="unread") setTimeout(renderAula,320);
+}
 document.getElementById("fsearch").addEventListener("input", e=>{ state.feedQ=e.target.value; renderAula(); });
 document.getElementById("fsearch").addEventListener("keydown", e=>{ if(e.key==="Escape" && e.target.value){ e.preventDefault(); e.target.value=""; state.feedQ=""; renderAula(); } });
 // Et ugeplanpunkt tæller som opgave, hvis det er mærket som lektie/opgave/husk – ellers er det en kommentar
@@ -2471,6 +2499,8 @@ document.addEventListener("keydown", e=>{
 function updateBadge(){
   const unread=arr("messages").filter(isUnread).length, badge=document.getElementById("unreadCount");
   badge.textContent=unread; badge.classList.toggle("hidden",!unread);
+  const posts=arr("posts").filter(p=>p.unread).length, fb=document.getElementById("feedCount");
+  fb.textContent=posts; fb.classList.toggle("hidden",!posts);
 }
 // ---------- Kioskvisning
 state.kiosk=false;

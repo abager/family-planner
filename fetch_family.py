@@ -33,6 +33,7 @@ import activities
 import homework
 import private as private_mod
 import problems
+import posts_read
 import progress
 import messages as msg_analysis
 import presence as presence_mod
@@ -1712,6 +1713,11 @@ async def run_once(cfg: dict, use_aula: bool, dump: bool = False, full: bool = F
         "settings": {"hidePrivate": cfg.get("aula", {}).get("hide_private", True), "eveningHour": int(cfg.get("display", {}).get("evening_hour", 18)),
                      "lessonMinutes": lesson_minutes(cfg)},
     }
+    try:                                                    # læst/ulæst på opslag (posts_read.py) – lige før skrivning, uden await imellem,
+        # så en markering fra serveren ikke kan nå at blive overskrevet af en ældre status
+        posts_read.Store(out_path.with_name(posts_read.FILE)).apply(extra["posts"])
+    except Exception as e:  # noqa: BLE001 – må aldrig vælte hentningen
+        log.warning("Kunne ikke sætte læst-status på opslag: %s", e)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")

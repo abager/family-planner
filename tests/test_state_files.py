@@ -10,7 +10,7 @@ import server
 ROOT = Path(__file__).resolve().parents[1]
 STATE_FILES = ["web/server_state.json", "web/suggestions_state.json", "web/learned_rules.json",
                "web/ai_cache.json", "web/ai_usage.json", "secrets/ai_last_invalid.json",
-               "web/home_location.json", "web/weather_cache.json"]
+               "web/home_location.json", "web/weather_cache.json", "web/posts_read.json"]
 
 
 def _hook_pattern() -> re.Pattern:

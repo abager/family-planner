@@ -49,7 +49,7 @@ One concept, one word. New UI text uses exactly these terms; don't introduce syn
 | **Husk og lektier** | The list of things to do (today view: focus day + 2 days, grouped by day, each task once on the first day `kTaskActive` says it applies – same as the kiosk, whose column is just "Husk") | Husk og frister |
 | **Frist** | Only a due *date* ("frist torsdag"), never a category | |
 | **Praktisk info** | Deviations and practical info: omlagt dag, vikar, lukkedag, skolefoto (briefing section too; in the today view a chip in the lanes' "Hele dagen" row) | Vigtig info, Særligt |
-| **Feed** | The tab with Aula posts and albums; filters *Alle · Opslag · Billeder* | Alt |
+| **Feed** | The tab with Aula posts and albums; filters *Alle · Opslag · Billeder · Ulæste opslag* | Alt |
 | **Beskeder** / **Private samtaler** | Messages / the locked private threads | |
 | **Familiekalenderen** | The family's Google calendar, everywhere in UI text (fixed word, not the configured name). Only a link that opens Google's site says "Åbn i Google Kalender" | Google Kalender (as name), kalenderen |
 | **Føj til familiekalenderen** / **Tilføj** | Heading once / the action button and dialog submit | Opret i kalender, oprettes |
@@ -116,6 +116,7 @@ familie_regler.md (free text)   ─┘                                     └�
 | `briefing.py`, `offline_briefing.py` | Day/week overview ("Husk", "Skal gøres", "Praktisk info", "Kommende frister"); AI with rule-based fallback |
 | `suggestions.py` | State of created/applied/dismissed calendar items and Google Calendar writes/reads (service account) |
 | `private.py` | Storage and gating of private threads |
+| `posts_read.py` | Shared read/unread for Aula posts (app-only, `web/posts_read.json`): posts older than the start (`since`) are read, newer are unread until marked via `POST /api/posts/read`; applied right before family.json is written; nothing is written to Aula (Aula's `profileLastSeenPostDate` moves on every fetch) |
 | `presence.py` | Aula Komme/Gå: per-child fetch (status, planned days, pickup list, vacations, permissions), validated writes (sick, day/repeat, undo of times) read back from Aula, change log |
 | `tabulex.py` | Tabulex school absence: login via Aula widget token 0047 (SAML → WS-Fed forms), today's absence + school days, sick report today; never stores CPR |
 | `ops.py` | Push via ntfy, stale-data alerts, watchdog for background tasks |
@@ -125,7 +126,7 @@ familie_regler.md (free text)   ─┘                                     └�
 Runtime files (all git-ignored; in Docker they live in the `/data` volume):
 `config.toml`, `.env`, `secrets/` (`aula_tokens.json`, `google_service_account.json`, `session.key`,
 `private_messages.json`, `ai_last_invalid.json`, `presence_log.json`), `web/family.json`, `web/briefing*.json`, `web/media/`, `web/server_state.json`,
-`web/suggestions_state.json`, `web/ai_cache.json`, `web/ai_usage.json`, `web/home_location.json`, `web/weather_cache.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
+`web/suggestions_state.json`, `web/posts_read.json`, `web/ai_cache.json`, `web/ai_usage.json`, `web/home_location.json`, `web/weather_cache.json`, and debug dumps `aula_dump.json`, `aula_feed.json`,
 `aula_posts_dump.json`, `aula_posts_struktur.txt` (from `--dump-posts`), `weekplan.json`.
 
 ## Commands
